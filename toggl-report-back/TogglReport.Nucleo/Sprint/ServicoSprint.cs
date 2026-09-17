@@ -1,21 +1,46 @@
 using RelatorioToggl.Configuracao;
 using RelatorioToggl.Consultas;
+using RelatorioToggl.Jira;
 using RelatorioToggl.Relatorios;
 using RelatorioToggl.Toggl;
 using System.Globalization;
 using System.Text.RegularExpressions;
 
-namespace RelatorioToggl.Sprints;
+namespace RelatorioToggl.Sprint;
 
 public static class ServicoSprint
 {
     private static readonly Regex PadraoCodigo = new(@"^(TEL - \d+)(?: - (.+))?$", RegexOptions.Compiled);
 
+    public static List<string> ExtrairCodigosJira(Dictionary<string, List<RegistroTempoDto>> registrosPorUsuario)
+    {
+        HashSet<string> codigos = new(StringComparer.OrdinalIgnoreCase);
+
+        foreach (List<RegistroTempoDto> registros in registrosPorUsuario.Values)
+        {
+            foreach (RegistroTempoDto registro in registros)
+            {
+                if (registro.Duracao < 0)
+                    continue;
+
+                string normalizada = ServicoAgrupamento.NormalizarDescricaoTel((registro.Descricao ?? "").Trim());
+                Match correspondencia = PadraoCodigo.Match(normalizada);
+                if (correspondencia.Success)
+                    codigos.Add(correspondencia.Groups[1].Value.Replace(" ", ""));
+            }
+        }
+
+        return codigos.ToList();
+    }
+
     public static ResultadoSprint Montar(
-        Sprint sprint,
+        DadosSprint sprint,
         List<ConfiguracaoUsuarioToggl> usuariosSelecionados,
         ResultadoConsulta consulta,
-        ConfiguracaoCategoriasSprint categorias)
+        ConfiguracaoCategoriasSprint categorias,
+        Dictionary<string, IssueJira>? issuesPorCodigo = null,
+        ConfiguracaoResponsabilidadeSprint? responsabilidade = null,
+        ConfiguracaoMapeamentoJiraToggl? mapeamento = null)
     {
         int diasUteis = ContarDiasUteis(sprint.DataInicio, sprint.DataFim);
 
@@ -166,15 +191,32 @@ public static class ServicoSprint
                 (codigo, descricao) = SepararCodigo(chave);
             }
 
+            bool tinhaCodigoParaBuscar = !agrupada && issuesPorCodigo is not null && codigo.Length > 0;
+            IssueJira? issueJira = tinhaCodigoParaBuscar
+                ? issuesPorCodigo!.GetValueOrDefault(codigo.Replace(" ", ""))
+                : null;
+            bool jiraIndisponivel = tinhaCodigoParaBuscar && issueJira is null;
+
+            AplicarFallbackJira(linhasEmConstrucao, agrupada, issueJira, mapeamento, usuariosSelecionados);
+
+            (string? grupoResponsavelStatus, bool situacaoSemGrupoResponsavel) = DeterminarGrupoResponsavel(issueJira?.Situacao, responsabilidade);
+
             foreach (SlotColaborador[] linha in linhasEmConstrucao)
             {
                 tarefas.Add(new LinhaTarefaSprint(
                     codigo,
                     descricao,
                     agrupada,
-                    CriarBloco(linha[0]),
+                    CriarBloco(linha[0], issueJira),
                     CriarBloco(linha[1]),
-                    CriarBloco(linha[2])));
+                    CriarBloco(linha[2]),
+                    issueJira?.Prioridade,
+                    issueJira?.Situacao,
+                    issueJira?.UrlIssue,
+                    jiraIndisponivel,
+                    issueJira?.SituacaoCategoria,
+                    grupoResponsavelStatus,
+                    situacaoSemGrupoResponsavel));
             }
         }
 
@@ -281,8 +323,74 @@ public static class ServicoSprint
         return DiasUteis.Entre(inicio, fim).Count();
     }
 
-    private static BlocoCategoriaSprint CriarBloco(SlotColaborador slot) =>
-        new(0m, slot.Segundos, slot.NomeExibicao, slot.Sigla, slot.Cor);
+    private static (string? Grupo, bool SituacaoSemGrupoResponsavel) DeterminarGrupoResponsavel(string? situacao, ConfiguracaoResponsabilidadeSprint? responsabilidade)
+    {
+        if (situacao is null || responsabilidade is null)
+            return (null, false);
 
-    private readonly record struct SlotColaborador(string? NomeExibicao, string? Sigla, string? Cor, long Segundos);
+        if (responsabilidade.StatusDev.Contains(situacao, StringComparer.OrdinalIgnoreCase))
+            return ("dev", false);
+
+        if (responsabilidade.StatusRev.Contains(situacao, StringComparer.OrdinalIgnoreCase))
+            return ("rev", false);
+
+        if (responsabilidade.StatusQa.Contains(situacao, StringComparer.OrdinalIgnoreCase))
+            return ("qa", false);
+
+        bool responsabilidadeConfigurada = responsabilidade.StatusDev.Count > 0
+            || responsabilidade.StatusRev.Count > 0
+            || responsabilidade.StatusQa.Count > 0;
+
+        return (null, responsabilidadeConfigurada);
+    }
+
+    private static void AplicarFallbackJira(
+        List<SlotColaborador[]> linhasEmConstrucao,
+        bool agrupada,
+        IssueJira? issueJira,
+        ConfiguracaoMapeamentoJiraToggl? mapeamento,
+        List<ConfiguracaoUsuarioToggl> usuariosSelecionados)
+    {
+        if (agrupada || issueJira is null || mapeamento is null || linhasEmConstrucao.Count == 0)
+            return;
+
+        AplicarFallbackCategoria(linhasEmConstrucao, 0, issueJira.Responsavel, mapeamento, usuariosSelecionados);
+        AplicarFallbackCategoria(linhasEmConstrucao, 1, issueJira.RevisadoPor, mapeamento, usuariosSelecionados);
+    }
+
+    private static void AplicarFallbackCategoria(
+        List<SlotColaborador[]> linhasEmConstrucao,
+        int categoria,
+        string? nomeJira,
+        ConfiguracaoMapeamentoJiraToggl mapeamento,
+        List<ConfiguracaoUsuarioToggl> usuariosSelecionados)
+    {
+        if (string.IsNullOrWhiteSpace(nomeJira))
+            return;
+
+        bool categoriaJaPreenchida = linhasEmConstrucao.Any(linha => linha[categoria].NomeExibicao is not null);
+        if (categoriaJaPreenchida)
+            return;
+
+        if (!mapeamento.Mapeamento.TryGetValue(nomeJira, out EntradaMapeamentoJiraToggl? entrada))
+            return;
+
+        if (!string.IsNullOrWhiteSpace(entrada.ChaveToggl))
+        {
+            ConfiguracaoUsuarioToggl? usuario = usuariosSelecionados.FirstOrDefault(u => u.Chave == entrada.ChaveToggl);
+            if (usuario is null)
+                return;
+
+            linhasEmConstrucao[0][categoria] = new SlotColaborador(usuario.NomeExibicao, usuario.Sigla, usuario.Cor, 0);
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(entrada.Sigla))
+            return;
+
+        linhasEmConstrucao[0][categoria] = new SlotColaborador(nomeJira, entrada.Sigla, entrada.Cor, 0);
+    }
+
+    private static BlocoCategoriaSprint CriarBloco(SlotColaborador slot, IssueJira? issueJira = null) =>
+        new(issueJira?.EstimativaEsforcoHoras ?? 0m, slot.Segundos, slot.NomeExibicao, slot.Sigla, slot.Cor, issueJira?.EstimativaOriginalHoras);
 }

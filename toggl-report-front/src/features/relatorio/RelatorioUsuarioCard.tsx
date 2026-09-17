@@ -1,7 +1,6 @@
 import type { ReactNode } from 'react';
 import { formatarDuracao } from '../../utils/duracao';
 import { formatarInicioLocal } from '../../utils/datas';
-import { BadgeSigla } from '../../components/BadgeSigla';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { curarPorDescricao, ordenarPorTag } from './curadoria';
 import type { Agrupamento, RelatorioUsuarioToggl } from '../../api/tipos';
@@ -62,8 +61,7 @@ export function RelatorioUsuarioCard({
         <Accordion expanded={expandido} onChange={onAlternar} disableGutters>
             <AccordionSummary expandIcon={<ExpandMoreIcon />}>
                 <Stack direction="row" spacing={2} sx={{ alignItems: 'center', width: '100%', pr: 2, flexWrap: 'wrap' }}>
-                    <BadgeSigla sigla={usuario.sigla} cor={usuario.cor} nome={usuario.nomeExibicao} />
-                    <Typography sx={{ fontWeight: 600, color: 'primary.main', flexGrow: 1, minWidth: 0 }}>
+                    <Typography sx={{ flexGrow: 1, minWidth: 0 }}>
                         {usuario.nomeExibicao}
                     </Typography>
                     <Chip

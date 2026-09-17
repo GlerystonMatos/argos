@@ -2,32 +2,33 @@ import { useState } from 'react';
 import type { ReactNode } from 'react';
 import { formatarPeriodo } from '../../utils/datas';
 import { rotularAgrupamento } from '../../utils/rotulos';
-import { BadgeSigla } from '../../components/BadgeSigla';
 import { useNotificacao } from '../../hooks/useNotificacao';
 import { DialogoConfirmacao } from '../../components/DialogoConfirmacao';
 import { BotaoComCarregamento } from '../../components/BotaoComCarregamento';
 
 import type {
     Agrupamento,
-    UsuarioTogglResumo,
     ConsultarResponse,
+    OrigemConsultaSprint,
 } from '../../api/tipos';
 
 import {
     Card,
     Alert,
     Stack,
-    Table,
     Divider,
     Checkbox,
-    TableRow,
-    TableBody,
-    TableCell,
     Typography,
     CardContent,
-    TableContainer,
+    ToggleButton,
     FormControlLabel,
+    ToggleButtonGroup,
 } from '@mui/material';
+
+interface OrigemConsultaProps {
+    valor: OrigemConsultaSprint;
+    onChange: (valor: OrigemConsultaSprint) => void;
+}
 
 interface ConsultaPanelProps {
     dataInicio: string;
@@ -35,10 +36,11 @@ interface ConsultaPanelProps {
     agrupamento?: Agrupamento;
     tagsDetalhadas?: string[];
     categorias?: { dev: string[]; rev: string[]; qa: string[] };
-    usuariosSelecionados: UsuarioTogglResumo[];
+    responsabilidade?: { statusDev: string[]; statusRev: string[]; statusQa: string[] };
+    origemConsulta?: OrigemConsultaProps;
     resultado: ConsultarResponse | null;
     consultando: boolean;
-    executar: (dataInicio: string, dataFim: string, forcarConsultaApi: boolean) => Promise<ConsultarResponse>;
+    executar: (dataInicio: string, dataFim: string, forcarConsultaApi: boolean, origem?: OrigemConsultaSprint) => Promise<ConsultarResponse>;
     onVoltar: () => void;
     onConcluida: (resposta: ConsultarResponse) => void;
 }
@@ -47,13 +49,21 @@ function temDadoAproveitavel(resposta: ConsultarResponse): boolean {
     return resposta.usuarios.some((usuario) => usuario.quantidadeRegistros !== null);
 }
 
+const ROTULO_CONSULTAR: Record<OrigemConsultaSprint, string> = {
+    nenhum: 'Consultar',
+    toggl: 'Forçar Toggl',
+    jira: 'Forçar Jira',
+    ambos: 'Forçar Toggl e Jira',
+};
+
 export function ConsultaPanel({
     dataInicio,
     dataFim,
     agrupamento,
     tagsDetalhadas,
     categorias,
-    usuariosSelecionados,
+    responsabilidade,
+    origemConsulta,
     resultado,
     consultando,
     executar,
@@ -63,10 +73,14 @@ export function ConsultaPanel({
     const { notificarErro } = useNotificacao();
     const [forcarConsultaApi, setForcarConsultaApi] = useState(false);
     const [confirmandoConsultaForcada, setConfirmandoConsultaForcada] = useState(false);
+    const rotuloConsultar = origemConsulta ? ROTULO_CONSULTAR[origemConsulta.valor] : 'Consultar';
+    const vaiForcarToggl = origemConsulta
+        ? origemConsulta.valor === 'toggl' || origemConsulta.valor === 'ambos'
+        : forcarConsultaApi;
 
     async function consultarAgora(): Promise<void> {
         try {
-            const resposta = await executar(dataInicio, dataFim, forcarConsultaApi);
+            const resposta = await executar(dataInicio, dataFim, forcarConsultaApi, origemConsulta?.valor);
             if (temDadoAproveitavel(resposta)) {
                 onConcluida(resposta);
             }
@@ -76,7 +90,7 @@ export function ConsultaPanel({
     }
 
     function aoClicarConsultar(): void {
-        if (forcarConsultaApi) {
+        if (vaiForcarToggl) {
             setConfirmandoConsultaForcada(true);
             return;
         }
@@ -103,52 +117,62 @@ export function ConsultaPanel({
                     ) : undefined}
                     {tagsDetalhadas !== undefined ? (
                         <Typography variant="body2" color="text.secondary">
-                            Tags detalhadas: {tagsDetalhadas.length > 0 ? tagsDetalhadas.join(', ') : '(nenhuma)'}
+                            Tags para detalhar por descrição: {tagsDetalhadas.length > 0 ? tagsDetalhadas.join(', ') : '(nenhuma)'}
                         </Typography>
                     ) : undefined}
                     {categorias !== undefined ? (
                         <Stack spacing={0.25}>
-                            <Typography variant="body2" color="text.secondary">Categorias de tarefa:</Typography>
+                            <Typography variant="body2" color="text.secondary">Tags para identificar responsáveis:</Typography>
                             <Typography variant="body2" color="text.secondary">DEV: {categorias.dev.length > 0 ? categorias.dev.join(', ') : '(nenhuma)'}</Typography>
                             <Typography variant="body2" color="text.secondary">REV: {categorias.rev.length > 0 ? categorias.rev.join(', ') : '(nenhuma)'}</Typography>
                             <Typography variant="body2" color="text.secondary">QA: {categorias.qa.length > 0 ? categorias.qa.join(', ') : '(nenhuma)'}</Typography>
                         </Stack>
                     ) : undefined}
+                    {responsabilidade !== undefined ? (
+                        <Stack spacing={0.25}>
+                            <Typography variant="body2" color="text.secondary">Status para identificar responsáveis:</Typography>
+                            <Typography variant="body2" color="text.secondary">DEV: {responsabilidade.statusDev.length > 0 ? responsabilidade.statusDev.join(', ') : '(nenhum)'}</Typography>
+                            <Typography variant="body2" color="text.secondary">REV: {responsabilidade.statusRev.length > 0 ? responsabilidade.statusRev.join(', ') : '(nenhum)'}</Typography>
+                            <Typography variant="body2" color="text.secondary">QA: {responsabilidade.statusQa.length > 0 ? responsabilidade.statusQa.join(', ') : '(nenhum)'}</Typography>
+                        </Stack>
+                    ) : undefined}
 
-                    <Stack spacing={0.5}>
-                        <Typography variant="body2" color="text.secondary">
-                            Usuários do Toggl selecionados:
-                        </Typography>
-                        {usuariosSelecionados.length === 0 ? (
-                            <Alert severity="warning">Nenhum usuário do Toggl selecionado. Marque ao menos um na aba "Usuários".</Alert>
-                        ) : (
-                            <TableContainer>
-                                <Table size="small">
-                                    <TableBody>
-                                        {usuariosSelecionados.map((usuario) => (
-                                            <TableRow key={usuario.chave}>
-                                                <TableCell sx={{ py: 0.5 }}>{usuario.nomeExibicao}</TableCell>
-                                                <TableCell sx={{ py: 0.5, width: '1%' }}>
-                                                    <BadgeSigla sigla={usuario.sigla} cor={usuario.cor} nome={usuario.nomeExibicao} />
-                                                </TableCell>
-                                            </TableRow>
-                                        ))}
-                                    </TableBody>
-                                </Table>
-                            </TableContainer>
-                        )}
-                    </Stack>
+                    {origemConsulta !== undefined ? (
+                        <Stack spacing={0.5}>
+                            <Typography variant="body2" color="text.secondary">Forçar nova consulta em:</Typography>
+                            <ToggleButtonGroup
+                                size="small"
+                                exclusive
+                                value={origemConsulta.valor}
+                                disabled={consultando}
+                                onChange={(_evento, valor: OrigemConsultaSprint | null) => {
+                                    if (valor) origemConsulta.onChange(valor);
+                                }}>
+                                <ToggleButton value="nenhum">Nenhum</ToggleButton>
+                                <ToggleButton value="toggl">Toggl</ToggleButton>
+                                <ToggleButton value="jira">Jira</ToggleButton>
+                                <ToggleButton value="ambos">Ambos</ToggleButton>
+                            </ToggleButtonGroup>
+                            <Typography variant="caption" color="text.secondary">
+                                Nenhum: usa o cache do Toggl e do Jira quando disponível. Toggl: força nova consulta
+                                ao Toggl (Jira do cache). Jira: força atualização do Jira (Toggl do cache). Ambos:
+                                força os dois.
+                            </Typography>
+                        </Stack>
+                    ) : undefined}
 
                     <Divider />
 
-                    <FormControlLabel
-                        control={
-                            <Checkbox
-                                checked={forcarConsultaApi}
-                                onChange={(evento) => setForcarConsultaApi(evento.target.checked)}
-                                disabled={consultando} />
-                        }
-                        label="Forçar nova consulta à API (ignora o cache local)" />
+                    {origemConsulta === undefined ? (
+                        <FormControlLabel
+                            control={
+                                <Checkbox
+                                    checked={forcarConsultaApi}
+                                    onChange={(evento) => setForcarConsultaApi(evento.target.checked)}
+                                    disabled={consultando} />
+                            }
+                            label="Forçar nova consulta à API (ignora o cache local)" />
+                    ) : undefined}
 
                     <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
                         <BotaoComCarregamento onClick={onVoltar} disabled={consultando}>
@@ -158,7 +182,7 @@ export function ConsultaPanel({
                             variant="contained"
                             carregando={consultando}
                             onClick={aoClicarConsultar}>
-                            Consultar
+                            {rotuloConsultar}
                         </BotaoComCarregamento>
                     </Stack>
 

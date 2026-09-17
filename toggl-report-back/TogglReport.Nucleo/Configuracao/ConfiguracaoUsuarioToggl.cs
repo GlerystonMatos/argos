@@ -13,4 +13,6 @@ public class ConfiguracaoUsuarioToggl
     public string Cor { get; set; } = "";
 
     public bool Selecionado { get; set; } = true;
+
+    public bool Administrador { get; set; }
 }

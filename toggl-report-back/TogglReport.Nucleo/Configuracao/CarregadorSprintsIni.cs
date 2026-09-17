@@ -7,13 +7,13 @@ public static class CarregadorSprintsIni
 {
     private const string PrefixoSecaoSprint = "Sprint:";
 
-    public static List<Sprint> Carregar(string caminho)
+    public static List<DadosSprint> Carregar(string caminho)
     {
         if (!File.Exists(caminho))
-            return new List<Sprint>();
+            return new List<DadosSprint>();
 
         Dictionary<string, Dictionary<string, string>> secoes = AnalisadorIni.Analisar(caminho);
-        List<Sprint> sprints = new();
+        List<DadosSprint> sprints = new();
 
         foreach ((string nomeSecao, Dictionary<string, string> valores) in secoes)
         {
@@ -21,7 +21,7 @@ public static class CarregadorSprintsIni
                 continue;
 
             string chave = nomeSecao.Substring(PrefixoSecaoSprint.Length);
-            sprints.Add(new Sprint
+            sprints.Add(new DadosSprint
             {
                 Chave = chave,
                 Nome = AnalisadorIni.ObterOuPadrao(valores, "Nome", chave),
@@ -38,11 +38,11 @@ public static class CarregadorSprintsIni
         return sprints;
     }
 
-    public static void Salvar(string caminho, List<Sprint> sprints)
+    public static void Salvar(string caminho, List<DadosSprint> sprints)
     {
         StringBuilder sb = new();
 
-        foreach (Sprint sprint in sprints)
+        foreach (DadosSprint sprint in sprints)
         {
             sb.AppendLine($"[{PrefixoSecaoSprint}{sprint.Chave}]");
             sb.AppendLine($"Nome={sprint.Nome}");

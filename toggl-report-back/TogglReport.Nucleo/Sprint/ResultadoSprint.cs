@@ -1,3 +1,3 @@
-namespace RelatorioToggl.Sprints;
+namespace RelatorioToggl.Sprint;
 
 public record ResultadoSprint(CabecalhoSprint Cabecalho, List<LinhaTarefaSprint> Tarefas, List<LinhaColaboradorSprint> Colaboradores);

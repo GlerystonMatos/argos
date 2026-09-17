@@ -1,6 +1,6 @@
 namespace RelatorioToggl.Configuracao;
 
-public class Sprint
+public class DadosSprint
 {
     public string Chave { get; set; } = "";
 

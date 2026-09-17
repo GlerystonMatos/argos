@@ -11,6 +11,13 @@ public static class ServicoUsuariosToggl
     public static bool SiglaEmUso(List<ConfiguracaoUsuarioToggl> usuarios, string sigla, ConfiguracaoUsuarioToggl? ignorar)
         => usuarios.Any(u => u != ignorar && u.Sigla.Length > 0 && u.Sigla.Equals(sigla, StringComparison.OrdinalIgnoreCase));
 
+    public static void DesmarcarOutrosAdministradores(List<ConfiguracaoUsuarioToggl> usuarios, ConfiguracaoUsuarioToggl novoAdministrador)
+    {
+        foreach (ConfiguracaoUsuarioToggl usuario in usuarios)
+            if (usuario != novoAdministrador && usuario.Administrador)
+                usuario.Administrador = false;
+    }
+
     public static string GerarChaveUnica(string nome, List<ConfiguracaoUsuarioToggl> usuariosExistentes)
         => ServicoChaves.GerarChaveUnica(nome, usuariosExistentes.Select(u => u.Chave), "usuario");
 

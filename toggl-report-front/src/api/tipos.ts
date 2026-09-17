@@ -10,8 +10,8 @@ export interface ParametrosConfiguracao {
 export interface AtualizarParametrosRequest {
     agrupamento: Agrupamento;
     tagsDetalhadas: string[];
-    dataInicio: string;
-    dataFim: string;
+    dataInicio: string | null;
+    dataFim: string | null;
 }
 
 export interface UsuarioTogglResumo {
@@ -21,6 +21,7 @@ export interface UsuarioTogglResumo {
     sigla: string;
     cor: string;
     selecionado: boolean;
+    administrador: boolean;
 }
 
 export interface CriarUsuarioTogglRequest {
@@ -30,6 +31,7 @@ export interface CriarUsuarioTogglRequest {
     sigla: string;
     cor: string;
     selecionado?: boolean;
+    administrador?: boolean;
 }
 
 export interface EditarUsuarioTogglRequest {
@@ -39,6 +41,29 @@ export interface EditarUsuarioTogglRequest {
     sigla?: string | null;
     cor?: string | null;
     selecionado?: boolean | null;
+    administrador?: boolean | null;
+}
+
+export interface TagsTogglResponse {
+    tags: string[];
+    veioDoCache: boolean;
+    atualizadoEm: string;
+}
+
+export interface ListaJiraResponse {
+    nomes: string[];
+    veioDoCache: boolean;
+    atualizadoEm: string;
+}
+
+export interface CoresJira {
+    coresStatus: Record<string, string>;
+    coresPrioridade: Record<string, string>;
+}
+
+export interface AtualizarCoresJiraRequest {
+    coresStatus?: Record<string, string> | null;
+    coresPrioridade?: Record<string, string> | null;
 }
 
 export interface ValidarTokenResponse {
@@ -64,6 +89,13 @@ export interface ConsultarRequest {
     forcarConsultaApi?: boolean;
 }
 
+export type OrigemConsultaSprint = 'nenhum' | 'toggl' | 'jira' | 'ambos';
+
+export interface ConsultarSprintRequest extends ConsultarRequest {
+    chaveSprint: string;
+    origem?: OrigemConsultaSprint;
+}
+
 export interface ConsultarResponse {
     dataInicio: string;
     dataFim: string;
@@ -75,6 +107,62 @@ export interface LinhaDescricao {
     descricao: string;
     segundos: number;
     tag: string | null;
+}
+
+export interface ConfiguracaoJira {
+    urlDominio: string;
+    email: string;
+    tokenMascarado: string;
+    campoEstimativaEsforcoId: string;
+    campoEstimativaEsforcoNome: string;
+    campoRevisadoPorId: string;
+    campoRevisadoPorNome: string;
+}
+
+export interface SalvarConfiguracaoJiraRequest {
+    urlDominio: string;
+    email: string;
+    apiToken?: string | null;
+    campoEstimativaEsforcoId: string;
+    campoEstimativaEsforcoNome: string;
+    campoRevisadoPorId: string;
+    campoRevisadoPorNome: string;
+}
+
+export interface EntradaMapeamentoJiraToggl {
+    chaveToggl: string | null;
+    sigla: string | null;
+    cor: string | null;
+}
+
+export interface MapeamentoJiraToggl {
+    mapeamento: Record<string, EntradaMapeamentoJiraToggl>;
+}
+
+export interface AtualizarMapeamentoJiraTogglRequest {
+    mapeamento?: Record<string, EntradaMapeamentoJiraToggl> | null;
+}
+
+export interface TestarConexaoJiraRequest {
+    urlDominio: string;
+    email: string;
+    apiToken: string;
+}
+
+export interface TestarConexaoJiraResponse {
+    sucesso: boolean;
+    mensagem: string | null;
+}
+
+export interface ObterCamposJiraRequest {
+    urlDominio?: string;
+    email?: string;
+    apiToken?: string;
+}
+
+export interface CampoJira {
+    id: string;
+    nome: string;
 }
 
 export interface RegistroTempoBruto {
@@ -124,10 +212,10 @@ export interface ParametrosGant {
 }
 
 export interface AtualizarParametrosGantRequest {
-    dataInicio: string;
-    dataFim: string;
     tagsSelecionadas: string[];
     agrupamento: Agrupamento;
+    dataInicio: string | null;
+    dataFim: string | null;
 }
 
 export interface Sprint {
@@ -158,6 +246,7 @@ export interface CategoriasSprint {
     qa: string[];
     agrupamento: Agrupamento;
     tagsDetalhadas: string[];
+    corTag: string;
 }
 
 export interface AtualizarCategoriasSprintRequest {
@@ -166,6 +255,7 @@ export interface AtualizarCategoriasSprintRequest {
     qa: string[];
     agrupamento: Agrupamento;
     tagsDetalhadas: string[];
+    corTag: string;
 }
 
 export interface CelulaGant {
@@ -196,6 +286,7 @@ export interface BlocoCategoriaSprint {
     nomeExibicao: string | null;
     sigla: string | null;
     cor: string | null;
+    estimativaOriginalHoras: number | null;
 }
 
 export interface LinhaTarefaSprint {
@@ -205,6 +296,25 @@ export interface LinhaTarefaSprint {
     dev: BlocoCategoriaSprint;
     rev: BlocoCategoriaSprint;
     qa: BlocoCategoriaSprint;
+    prioridade: string | null;
+    situacao: string | null;
+    urlJira: string | null;
+    jiraIndisponivel: boolean;
+    situacaoCategoria: string | null;
+    grupoResponsavelStatus: 'dev' | 'rev' | 'qa' | null;
+    situacaoSemGrupoResponsavel: boolean;
+}
+
+export interface ResponsabilidadeSprint {
+    statusDev: string[];
+    statusRev: string[];
+    statusQa: string[];
+}
+
+export interface AtualizarResponsabilidadeSprintRequest {
+    statusDev: string[];
+    statusRev: string[];
+    statusQa: string[];
 }
 
 export interface CabecalhoSprint {

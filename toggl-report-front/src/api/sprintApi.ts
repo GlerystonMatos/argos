@@ -2,11 +2,11 @@ import { http } from './http';
 
 import type {
     ResultadoSprint,
-    ConsultarRequest,
     ConsultarResponse,
+    ConsultarSprintRequest,
 } from './tipos';
 
-export function consultarSprint(dados: ConsultarRequest): Promise<ConsultarResponse> {
+export function consultarSprint(dados: ConsultarSprintRequest): Promise<ConsultarResponse> {
     return http.post<ConsultarResponse>('/api/sprint/consultas', dados);
 }
 

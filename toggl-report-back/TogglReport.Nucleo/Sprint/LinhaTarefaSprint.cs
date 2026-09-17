@@ -1,3 +1,3 @@
-namespace RelatorioToggl.Sprints;
+namespace RelatorioToggl.Sprint;
 
-public record LinhaTarefaSprint(string Codigo, string Descricao, bool Agrupada, BlocoCategoriaSprint Dev, BlocoCategoriaSprint Rev, BlocoCategoriaSprint Qa);
+public record LinhaTarefaSprint(string Codigo, string Descricao, bool Agrupada, BlocoCategoriaSprint Dev, BlocoCategoriaSprint Rev, BlocoCategoriaSprint Qa, string? Prioridade = null, string? Situacao = null, string? UrlJira = null, bool JiraIndisponivel = false, string? SituacaoCategoria = null, string? GrupoResponsavelStatus = null, bool SituacaoSemGrupoResponsavel = false);

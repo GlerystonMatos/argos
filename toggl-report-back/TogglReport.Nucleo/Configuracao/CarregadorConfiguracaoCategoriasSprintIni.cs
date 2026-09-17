@@ -1,10 +1,8 @@
-using System.Text;
-
 namespace RelatorioToggl.Configuracao;
 
 public static class CarregadorConfiguracaoCategoriasSprintIni
 {
-    private const string SecaoGeral = "Geral";
+    private const string SecaoConsolidada = "SprintCategorias";
 
     public static ConfiguracaoCategoriasSprint Padrao() => new()
     {
@@ -12,43 +10,56 @@ public static class CarregadorConfiguracaoCategoriasSprintIni
         Rev = new List<string>(),
         Qa = new List<string>(),
         Agrupamento = "ambos",
-        TagsDetalhadas = new List<string>()
+        TagsDetalhadas = new List<string>(),
+        CorTag = ""
     };
 
-    public static ConfiguracaoCategoriasSprint Carregar(string caminho)
+    public static ConfiguracaoCategoriasSprint Carregar(string caminhoConsolidado)
     {
-        if (!File.Exists(caminho))
-            return Padrao();
+        if (File.Exists(caminhoConsolidado))
+        {
+            Dictionary<string, Dictionary<string, string>> secoes = AnalisadorIni.Analisar(caminhoConsolidado);
+            if (secoes.TryGetValue(SecaoConsolidada, out Dictionary<string, string>? secao))
+                return Mapear(secao);
+        }
 
-        Dictionary<string, Dictionary<string, string>> secoes = AnalisadorIni.Analisar(caminho);
+        return Padrao();
+    }
+
+    public static void Salvar(string caminhoConsolidado, ConfiguracaoCategoriasSprint configuracao)
+    {
+        Dictionary<string, Dictionary<string, string>> secoes = File.Exists(caminhoConsolidado)
+            ? AnalisadorIni.Analisar(caminhoConsolidado)
+            : new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase);
+
+        secoes[SecaoConsolidada] = ParaValores(configuracao);
+
+        AnalisadorIni.EscreverSecoes(caminhoConsolidado, secoes);
+    }
+
+    private static ConfiguracaoCategoriasSprint Mapear(Dictionary<string, string> valores)
+    {
         ConfiguracaoCategoriasSprint padrao = Padrao();
-
-        if (!secoes.TryGetValue(SecaoGeral, out Dictionary<string, string>? geral))
-            return padrao;
-
         return new ConfiguracaoCategoriasSprint
         {
-            Dev = LerLista(geral, "Dev", padrao.Dev),
-            Rev = LerLista(geral, "Rev", padrao.Rev),
-            Qa = LerLista(geral, "Qa", padrao.Qa),
-            Agrupamento = AnalisadorIni.ObterOuPadrao(geral, "Agrupamento", padrao.Agrupamento),
-            TagsDetalhadas = LerLista(geral, "TagsDetalhadas", padrao.TagsDetalhadas)
+            Dev = LerLista(valores, "Dev", padrao.Dev),
+            Rev = LerLista(valores, "Rev", padrao.Rev),
+            Qa = LerLista(valores, "Qa", padrao.Qa),
+            Agrupamento = AnalisadorIni.ObterOuPadrao(valores, "Agrupamento", padrao.Agrupamento),
+            TagsDetalhadas = LerLista(valores, "TagsDetalhadas", padrao.TagsDetalhadas),
+            CorTag = AnalisadorIni.ObterOuPadrao(valores, "CorTag", padrao.CorTag)
         };
     }
 
-    public static void Salvar(string caminho, ConfiguracaoCategoriasSprint configuracao)
+    private static Dictionary<string, string> ParaValores(ConfiguracaoCategoriasSprint configuracao) => new(StringComparer.OrdinalIgnoreCase)
     {
-        StringBuilder sb = new();
-
-        sb.AppendLine($"[{SecaoGeral}]");
-        sb.AppendLine($"Dev={string.Join(",", configuracao.Dev)}");
-        sb.AppendLine($"Rev={string.Join(",", configuracao.Rev)}");
-        sb.AppendLine($"Qa={string.Join(",", configuracao.Qa)}");
-        sb.AppendLine($"Agrupamento={configuracao.Agrupamento}");
-        sb.AppendLine($"TagsDetalhadas={string.Join(",", configuracao.TagsDetalhadas)}");
-
-        AnalisadorIni.Escrever(caminho, sb.ToString());
-    }
+        ["Dev"] = string.Join(",", configuracao.Dev),
+        ["Rev"] = string.Join(",", configuracao.Rev),
+        ["Qa"] = string.Join(",", configuracao.Qa),
+        ["Agrupamento"] = configuracao.Agrupamento,
+        ["TagsDetalhadas"] = string.Join(",", configuracao.TagsDetalhadas),
+        ["CorTag"] = configuracao.CorTag
+    };
 
     private static List<string> LerLista(Dictionary<string, string> secao, string chave, List<string> valorPadrao)
     {

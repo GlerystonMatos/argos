@@ -1,30 +1,6 @@
+import { obterCredencial, limparCredencial } from './credencial';
+
 export const URL_BASE_API = import.meta.env.VITE_API_URL ?? 'http://localhost:5180';
-
-const CHAVE_CREDENCIAL = 'toggl-report:credencial';
-
-export function obterCredencial(): string | null {
-    try {
-        return sessionStorage.getItem(CHAVE_CREDENCIAL);
-    } catch {
-        return null;
-    }
-}
-
-export function definirCredencial(credencial: string): void {
-    try {
-        sessionStorage.setItem(CHAVE_CREDENCIAL, credencial);
-    } catch {
-        // sessionStorage indisponível (ex.: modo privado) — segue sem persistir
-    }
-}
-
-export function limparCredencial(): void {
-    try {
-        sessionStorage.removeItem(CHAVE_CREDENCIAL);
-    } catch {
-        // ignorar
-    }
-}
 
 export class ErroApi extends Error {
     readonly status: number;
@@ -42,6 +18,26 @@ function tentarInterpretarJson(texto: string): unknown {
     } catch {
         return texto;
     }
+}
+
+function extrairMensagemDeProblemDetails(corpo: unknown): string | undefined {
+    if (typeof corpo !== 'object' || corpo === null) {
+        return undefined;
+    }
+    if ('detail' in corpo && typeof corpo.detail === 'string' && corpo.detail.length > 0) {
+        return corpo.detail;
+    }
+    if ('title' in corpo && typeof corpo.title === 'string' && corpo.title.length > 0) {
+        return corpo.title;
+    }
+    return undefined;
+}
+
+function extrairMensagemDeErro(corpo: unknown, resposta: Response): string {
+    if (typeof corpo === 'string' && corpo.length > 0) {
+        return corpo;
+    }
+    return extrairMensagemDeProblemDetails(corpo) ?? (resposta.statusText || `Erro HTTP ${resposta.status}`);
 }
 
 interface OpcoesRequisicao {
@@ -106,11 +102,7 @@ async function requisitar<T>(caminho: string, opcoes: OpcoesRequisicao = {}): Pr
     const corpo: unknown = textoCorpo.length > 0 ? tentarInterpretarJson(textoCorpo) : undefined;
 
     if (!resposta.ok) {
-        const mensagem =
-            typeof corpo === 'string' && corpo.length > 0
-                ? corpo
-                : resposta.statusText || `Erro HTTP ${resposta.status}`;
-        throw new ErroApi(mensagem, resposta.status);
+        throw new ErroApi(extrairMensagemDeErro(corpo, resposta), resposta.status);
     }
 
     return corpo as T;

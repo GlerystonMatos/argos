@@ -1,6 +1,11 @@
 import { useCallback } from 'react';
 import { useColecaoCrud } from '../../hooks/useColecaoCrud';
-import type { CriarUsuarioTogglRequest, EditarUsuarioTogglRequest, UsuarioTogglResumo } from '../../api/tipos';
+
+import type {
+    UsuarioTogglResumo,
+    CriarUsuarioTogglRequest, 
+    EditarUsuarioTogglRequest, 
+ } from '../../api/tipos';
 
 import {
     criarUsuario,
@@ -11,7 +16,7 @@ import {
 } from '../../api/usuariosTogglApi';
 
 interface ResultadoUseUsuariosToggl {
-    usuarios: UsuarioTogglResumo[];
+    usuariosToggl: UsuarioTogglResumo[];
     carregando: boolean;
     carregar: () => Promise<UsuarioTogglResumo[]>;
     criar: (dados: CriarUsuarioTogglRequest) => Promise<UsuarioTogglResumo>;
@@ -33,5 +38,5 @@ export function useUsuariosToggl(): ResultadoUseUsuariosToggl {
         return resultado.valido;
     }, []);
 
-    return { usuarios: itens, ...resto, validar };
+    return { usuariosToggl: itens, ...resto, validar };
 }

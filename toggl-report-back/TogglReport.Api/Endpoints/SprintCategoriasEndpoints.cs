@@ -5,14 +5,14 @@ namespace RelatorioToggl.Api.Endpoints;
 
 public static class SprintCategoriasEndpoints
 {
-    public static void MapSprintCategoriasEndpoints(this WebApplication app, string caminhoCategoriasSprint)
+    public static void MapSprintCategoriasEndpoints(this WebApplication app, string caminhoConfiguracoesGerais)
     {
         RouteGroupBuilder grupo = app.MapGroup("/api/sprint/categorias").WithTags("Sprint");
 
         grupo.MapGet("/", () =>
         {
-            ConfiguracaoCategoriasSprint configuracao = CarregadorConfiguracaoCategoriasSprintIni.Carregar(caminhoCategoriasSprint);
-            return Results.Ok(new CategoriasSprintDto(configuracao.Dev, configuracao.Rev, configuracao.Qa, configuracao.Agrupamento, configuracao.TagsDetalhadas));
+            ConfiguracaoCategoriasSprint configuracao = CarregadorConfiguracaoCategoriasSprintIni.Carregar(caminhoConfiguracoesGerais);
+            return Results.Ok(new CategoriasSprintDto(configuracao.Dev, configuracao.Rev, configuracao.Qa, configuracao.Agrupamento, configuracao.TagsDetalhadas, configuracao.CorTag));
         })
         .WithSummary("Obtém o mapeamento global de tags por categoria de tarefa (DEV/REV/QA)");
 
@@ -27,16 +27,17 @@ public static class SprintCategoriasEndpoints
                 Rev = Normalizar(request.Rev),
                 Qa = Normalizar(request.Qa),
                 Agrupamento = request.Agrupamento,
-                TagsDetalhadas = Normalizar(request.TagsDetalhadas)
+                TagsDetalhadas = Normalizar(request.TagsDetalhadas),
+                CorTag = string.IsNullOrWhiteSpace(request.CorTag) ? CarregadorConfiguracaoCategoriasSprintIni.Padrao().CorTag : request.CorTag.Trim()
             };
 
             IResult? erroPersistencia = TratamentoIo.Executar(
-                () => CarregadorConfiguracaoCategoriasSprintIni.Salvar(caminhoCategoriasSprint, configuracao),
+                () => CarregadorConfiguracaoCategoriasSprintIni.Salvar(caminhoConfiguracoesGerais, configuracao),
                 "Não foi possível salvar as categorias.");
             if (erroPersistencia is not null)
                 return erroPersistencia;
 
-            return Results.Ok(new CategoriasSprintDto(configuracao.Dev, configuracao.Rev, configuracao.Qa, configuracao.Agrupamento, configuracao.TagsDetalhadas));
+            return Results.Ok(new CategoriasSprintDto(configuracao.Dev, configuracao.Rev, configuracao.Qa, configuracao.Agrupamento, configuracao.TagsDetalhadas, configuracao.CorTag));
         })
         .WithSummary("Atualiza o mapeamento global de tags por categoria de tarefa (DEV/REV/QA)");
     }

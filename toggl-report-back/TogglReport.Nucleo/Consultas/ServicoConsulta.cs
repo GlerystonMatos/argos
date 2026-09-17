@@ -52,7 +52,7 @@ public static class ServicoConsulta
         };
     }
 
-    public static bool SalvarCache(string caminhoCache, ConfiguracaoApp configuracao, DateTime inicio, DateTime fim,
+    public static CacheConsulta MontarCache(ConfiguracaoApp configuracao, DateTime inicio, DateTime fim,
         Dictionary<string, List<RegistroTempoDto>> registrosPorUsuario, List<string> ordemUsuarios)
     {
         CacheConsulta cache = new()
@@ -75,6 +75,14 @@ public static class ServicoConsulta
                 Registros = registrosPorUsuario[nomeUsuario]
             });
         }
+
+        return cache;
+    }
+
+    public static bool SalvarCache(string caminhoCache, ConfiguracaoApp configuracao, DateTime inicio, DateTime fim,
+        Dictionary<string, List<RegistroTempoDto>> registrosPorUsuario, List<string> ordemUsuarios)
+    {
+        CacheConsulta cache = MontarCache(configuracao, inicio, fim, registrosPorUsuario, ordemUsuarios);
 
         try
         {
