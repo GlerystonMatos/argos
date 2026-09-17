@@ -40,6 +40,58 @@ public class ClienteApiToggl
         }
     }
 
+    public async Task<ResultadoApiToggl<List<string>>> ObterTagsAsync()
+    {
+        try
+        {
+            using HttpResponseMessage respostaMe = await _http.GetAsync("me");
+            if (!respostaMe.IsSuccessStatusCode)
+                return ResultadoApiToggl<List<string>>.Falha($"Erro {(int)respostaMe.StatusCode} ao identificar o workspace (GET /me).");
+
+            string jsonMe = await respostaMe.Content.ReadAsStringAsync();
+            EuBrutoToggl? eu = JsonSerializer.Deserialize<EuBrutoToggl>(jsonMe, OpcoesJson);
+            if (eu is null)
+                return ResultadoApiToggl<List<string>>.Falha("Não foi possível identificar o workspace padrão do usuário administrador.");
+
+            long? idWorkspace = eu.DefaultWorkspaceId;
+            if (idWorkspace is null)
+            {
+                using HttpResponseMessage respostaWorkspaces = await _http.GetAsync("workspaces");
+                if (!respostaWorkspaces.IsSuccessStatusCode)
+                    return ResultadoApiToggl<List<string>>.Falha($"Erro {(int)respostaWorkspaces.StatusCode} ao listar workspaces do usuário administrador.");
+
+                string jsonWorkspaces = await respostaWorkspaces.Content.ReadAsStringAsync();
+                List<WorkspaceBrutoToggl>? workspaces = JsonSerializer.Deserialize<List<WorkspaceBrutoToggl>>(jsonWorkspaces, OpcoesJson);
+                if (workspaces is null || workspaces.Count == 0)
+                    return ResultadoApiToggl<List<string>>.Falha("Não foi possível identificar o workspace padrão do usuário administrador: nenhum workspace encontrado.");
+
+                idWorkspace = workspaces[0].Id;
+            }
+
+            using HttpResponseMessage respostaTags = await _http.GetAsync($"workspaces/{idWorkspace}/tags");
+            if (!respostaTags.IsSuccessStatusCode)
+            {
+                string corpo = await respostaTags.Content.ReadAsStringAsync();
+                return ResultadoApiToggl<List<string>>.Falha($"Erro {(int)respostaTags.StatusCode} ao listar tags: {corpo}");
+            }
+
+            string jsonTags = await respostaTags.Content.ReadAsStringAsync();
+            List<TagBrutoToggl>? tags = JsonSerializer.Deserialize<List<TagBrutoToggl>>(jsonTags, OpcoesJson);
+            List<string> nomes = (tags ?? new List<TagBrutoToggl>())
+                .Select(tag => tag.Name)
+                .Where(nome => !string.IsNullOrWhiteSpace(nome))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(nome => nome, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            return ResultadoApiToggl<List<string>>.Ok(nomes);
+        }
+        catch (Exception ex)
+        {
+            return ResultadoApiToggl<List<string>>.Falha($"Erro de rede: {ex.Message}");
+        }
+    }
+
     public async Task<ResultadoApiToggl<List<RegistroTempoDto>>> ObterRegistrosTempoAsync(DateTime inicioUtc, DateTime fimUtc, bool ehNovaTentativa = false)
     {
         string inicio = Uri.EscapeDataString(inicioUtc.ToString("yyyy-MM-ddTHH:mm:ssZ"));

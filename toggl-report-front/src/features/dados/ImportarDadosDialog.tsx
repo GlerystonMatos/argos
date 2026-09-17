@@ -26,7 +26,7 @@ interface ImportarDadosDialogProps {
 
 const DESCRICAO_PADRAO: ReactNode = (
     <>
-        Nenhum usuário cadastrado ainda. Se você já tem um backup (.zip) da pasta <code>dados/</code>, pode
+        Nenhum usuário do Toggl cadastrado ainda. Se você já tem um backup (.zip) da pasta <code>dados/</code>, pode
         importá-lo agora — ou seguir sem importar e cadastrar tudo manualmente pelo fluxo normal.
     </>
 );

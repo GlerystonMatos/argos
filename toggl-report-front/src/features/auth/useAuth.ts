@@ -1,6 +1,7 @@
+import { ErroApi } from '../../api/http';
 import { useCallback, useEffect, useState } from 'react';
 import { listarUsuarios } from '../../api/usuariosTogglApi';
-import { ErroApi, definirCredencial, limparCredencial, obterCredencial } from '../../api/http';
+import { obterCredencial, definirCredencial, limparCredencial } from '../../api/credencial';
 
 interface ResultadoUseAuth {
     autenticado: boolean;

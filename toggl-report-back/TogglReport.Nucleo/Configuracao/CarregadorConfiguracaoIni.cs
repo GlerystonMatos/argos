@@ -24,7 +24,7 @@ public static class CarregadorConfiguracaoIni
             }
         }
 
-        configuracao.Usuarios = CarregadorUsuariosTogglIni.Carregar(caminhoUsuarios, caminhoMigracaoLegado: caminho);
+        configuracao.Usuarios = CarregadorUsuariosTogglIni.Carregar(caminhoUsuarios);
 
         return existeConfiguracao || configuracao.Usuarios.Count > 0 ? configuracao : null;
     }

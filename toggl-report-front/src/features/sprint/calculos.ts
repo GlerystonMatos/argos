@@ -1,3 +1,4 @@
+import { CORES } from '../../theme';
 import { formatarDuracao } from '../../utils/duracao';
 import type { BlocoCategoriaSprint } from '../../api/tipos';
 
@@ -57,3 +58,40 @@ export function formatarDisponivel(
     const positivo = segundos > 0;
     return { texto: `${negativo ? '-' : ''}${formatarDuracao(Math.abs(segundos))}`, negativo, positivo };
 }
+
+export const COR_INDISPONIVEL = CORES.corIndisponivel;
+
+export const PRIORIDADES: Record<string, string> = {
+    'muito alta': CORES.corPrioridadeMuitoAlta,
+    'alta': CORES.corPrioridadeAlta,
+    'média': CORES.corPrioridadeMedia,
+    'media': CORES.corPrioridadeMedia,
+    'baixa': CORES.corPrioridadeBaixa,
+    'muito baixa': CORES.corPrioridadeMuitoBaixa,
+};
+
+export function infoPrioridade(prioridade: string | null, coresPrioridade: Record<string, string>): { texto: string; cor: string } {
+    if (prioridade === null) return { texto: 'Nenhuma', cor: COR_INDISPONIVEL };
+    const corConfigurada = coresPrioridade[prioridade];
+    const corPadrao = PRIORIDADES[prioridade.trim().toLowerCase()];
+    return { texto: prioridade, cor: corConfigurada ?? corPadrao ?? COR_INDISPONIVEL };
+}
+
+export function corDaSituacao(situacao: string | null, coresStatus: Record<string, string>): string {
+    if (situacao === null) return COR_INDISPONIVEL;
+    return coresStatus[situacao] ?? COR_INDISPONIVEL;
+}
+
+const ORDEM_PRIORIDADE = ['muito alta', 'alta', 'média', 'baixa', 'muito baixa'];
+
+export function ordemPrioridade(prioridade: string | null): number {
+    if (prioridade === null) return ORDEM_PRIORIDADE.length;
+    const indice = ORDEM_PRIORIDADE.indexOf(prioridade.trim().toLowerCase());
+    return indice === -1 ? ORDEM_PRIORIDADE.length : indice;
+}
+
+export const GRUPOS: { rotulo: string; nomeLongo: string; bloco: 'dev' | 'rev' | 'qa' }[] = [
+    { rotulo: 'DEV', nomeLongo: 'Desenvolvimento', bloco: 'dev' },
+    { rotulo: 'REV', nomeLongo: 'Revisão', bloco: 'rev' },
+    { rotulo: 'QA', nomeLongo: 'Qualidade', bloco: 'qa' },
+];

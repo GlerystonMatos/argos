@@ -1,8 +1,6 @@
 import type { ReactNode } from 'react';
-import { CampoTags } from './CampoTags';
 import { useEffect, useState } from 'react';
 import type { Agrupamento } from '../api/tipos';
-import { SelectAgrupamento } from './SelectAgrupamento';
 import { useNotificacao } from '../hooks/useNotificacao';
 import { BotaoComCarregamento } from './BotaoComCarregamento';
 import { periodoEhValido, ultimos30Dias } from '../utils/datas';
@@ -93,7 +91,6 @@ export function ParametrosFormBase({
     }, []);
 
     const periodoValido = periodoEhValido(dataInicio, dataFim);
-    const mostraTags = agrupamento === 'tag' || agrupamento === 'ambos';
 
     function confirmar(): void {
         if (!periodoValido) {
@@ -117,20 +114,9 @@ export function ParametrosFormBase({
                 <Stack spacing={3}>
                     <Typography variant="h6">{titulo}</Typography>
 
-                    <SelectAgrupamento
-                        value={agrupamento}
-                        onChange={setAgrupamento}
-                        disabled={carregandoInicial} />
-
-                    {mostraTags ? (
-                        <CampoTags
-                            value={tags}
-                            onChange={setTags}
-                            disabled={carregandoInicial}
-                            label="Tags para detalhar por descrição"
-                            placeholder="Digite uma tag e pressione Enter (ou clique fora do campo)"
-                            helperText="Tags nesta lista aparecem detalhadas por descrição, as demais ficam agrupadas por tag" />
-                    ) : undefined}
+                    <Typography variant="body2" color="text.secondary">
+                        Agrupamento e tags para detalhar por descrição agora são definidos na aba Configurações.
+                    </Typography>
 
                     <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
                         <TextField

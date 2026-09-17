@@ -11,4 +11,6 @@ public class ConfiguracaoCategoriasSprint
     public string Agrupamento { get; set; } = "ambos";
 
     public List<string> TagsDetalhadas { get; set; } = new();
+
+    public string CorTag { get; set; } = "";
 }

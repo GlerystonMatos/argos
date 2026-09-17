@@ -4,34 +4,34 @@ public static class CaminhosDados
 {
     private const string NomePasta = "dados";
 
-    private const string NomeArquivoConfiguracao = "TogglRelatorioParametros.ini";
-
-    private const string NomeArquivoConfiguracaoAntigo = "TogglReport.ini";
+    private const string NomeArquivoConfiguracao = "RelatorioParametros.ini";
 
     private const string NomeArquivoUsuarios = "TogglUsuarios.ini";
 
-    private const string NomeArquivoSprints = "TogglSprints.ini";
+    private const string NomeArquivoSprints = "Sprints.ini";
 
-    private const string NomeArquivoCategoriasSprint = "TogglSprintCategorias.ini";
+    private const string NomeArquivoCacheSprint = "SprintData.ini";
 
-    private const string NomeArquivoCacheSprint = "TogglSprintData.ini";
+    private const string NomeArquivoCache = "RelatorioData.ini";
 
-    private const string NomeArquivoCache = "TogglRelatorioData.ini";
+    private const string NomeArquivoParametrosGant = "GantParametros.ini";
 
-    private const string NomeArquivoCacheAntigo = "ToggleData.ini";
+    private const string NomeArquivoCacheGant = "GantData.ini";
 
-    private const string NomeArquivoParametrosGant = "TogglGantParametros.ini";
+    private const string NomeArquivoJiraSprintData = "JiraSprintData.ini";
 
-    private const string NomeArquivoParametrosGantAntigo = "ToggleGantParametros.ini";
+    private const string NomeArquivoCacheTagsToggl = "TogglTagsCache.ini";
 
-    private const string NomeArquivoCacheGant = "TogglGantData.ini";
+    private const string NomeArquivoCacheListasJira = "JiraListasCache.ini";
 
-    private const string NomeArquivoCacheGantAntigo = "ToggleGantData.ini";
+    private const string NomeArquivoCoresJira = "JiraCores.ini";
+
+    private const string NomeArquivoConfiguracoesGerais = "ConfiguracoesGerais.ini";
 
     public static string PastaDados(string diretorioBase) => Path.Combine(diretorioBase, NomePasta);
 
     public static string CaminhoConfiguracao(string diretorioBase) =>
-        CaminhoComMigracao(diretorioBase, NomeArquivoConfiguracao, NomeArquivoConfiguracaoAntigo);
+        Path.Combine(PastaDados(diretorioBase), NomeArquivoConfiguracao);
 
     public static string CaminhoUsuarios(string diretorioBase) =>
         Path.Combine(PastaDados(diretorioBase), NomeArquivoUsuarios);
@@ -39,38 +39,30 @@ public static class CaminhosDados
     public static string CaminhoSprints(string diretorioBase) =>
         Path.Combine(PastaDados(diretorioBase), NomeArquivoSprints);
 
-    public static string CaminhoCategoriasSprint(string diretorioBase) =>
-        Path.Combine(PastaDados(diretorioBase), NomeArquivoCategoriasSprint);
-
     public static string CaminhoCacheSprint(string diretorioBase) =>
         Path.Combine(PastaDados(diretorioBase), NomeArquivoCacheSprint);
 
     public static string CaminhoCache(string diretorioBase) =>
-        CaminhoComMigracao(diretorioBase, NomeArquivoCache, NomeArquivoCacheAntigo);
+        Path.Combine(PastaDados(diretorioBase), NomeArquivoCache);
 
     public static string CaminhoParametrosGant(string diretorioBase) =>
-        CaminhoComMigracao(diretorioBase, NomeArquivoParametrosGant, NomeArquivoParametrosGantAntigo);
+        Path.Combine(PastaDados(diretorioBase), NomeArquivoParametrosGant);
 
     public static string CaminhoCacheGant(string diretorioBase) =>
-        CaminhoComMigracao(diretorioBase, NomeArquivoCacheGant, NomeArquivoCacheGantAntigo);
+        Path.Combine(PastaDados(diretorioBase), NomeArquivoCacheGant);
 
-    private static string CaminhoComMigracao(string diretorioBase, string nomeArquivoNovo, string nomeArquivoAntigo)
-    {
-        string pasta = PastaDados(diretorioBase);
-        string caminhoNovo = Path.Combine(pasta, nomeArquivoNovo);
-        string caminhoAntigo = Path.Combine(pasta, nomeArquivoAntigo);
+    public static string CaminhoJiraSprintData(string diretorioBase) =>
+        Path.Combine(PastaDados(diretorioBase), NomeArquivoJiraSprintData);
 
-        if (!File.Exists(caminhoNovo) && File.Exists(caminhoAntigo))
-        {
-            try
-            {
-                File.Move(caminhoAntigo, caminhoNovo);
-            }
-            catch (Exception excecao) when (excecao is IOException or UnauthorizedAccessException)
-            {
-            }
-        }
+    public static string CaminhoCacheTagsToggl(string diretorioBase) =>
+        Path.Combine(PastaDados(diretorioBase), NomeArquivoCacheTagsToggl);
 
-        return caminhoNovo;
-    }
+    public static string CaminhoCacheListasJira(string diretorioBase) =>
+        Path.Combine(PastaDados(diretorioBase), NomeArquivoCacheListasJira);
+
+    public static string CaminhoCoresJira(string diretorioBase) =>
+        Path.Combine(PastaDados(diretorioBase), NomeArquivoCoresJira);
+
+    public static string CaminhoConfiguracoesGerais(string diretorioBase) =>
+        Path.Combine(PastaDados(diretorioBase), NomeArquivoConfiguracoesGerais);
 }

@@ -1,144 +1,77 @@
 import { CORES } from '../../theme';
 import type { ReactNode } from 'react';
 import { useSprint } from './useSprint';
-import { formatarData } from '../../utils/datas';
 import SearchIcon from '@mui/icons-material/Search';
-import { FONTE_MARCA } from '../../utils/tipografia';
-import { formatarDuracao } from '../../utils/duracao';
-import type { CategoriasSprint } from '../../api/tipos';
+import { useEffect, useMemo, useState } from 'react';
+import { SprintDialogInfo } from './SprintDialogInfo';
+import { obterCoresJira } from '../../api/coresJiraApi';
+import { SprintLinhaTarefa } from './SprintLinhaTarefa';
 import { AvisoCache } from '../../components/AvisoCache';
-import { BadgeSigla } from '../../components/BadgeSigla';
 import { useNotificacao } from '../../hooks/useNotificacao';
-import { Fragment, useEffect, useMemo, useState } from 'react';
+import { SprintCardCapacidade } from './SprintCardCapacidade';
 import { CabecalhoView } from '../../components/CabecalhoView';
+import { SprintCardColaboradores } from './SprintCardColaboradores';
 import { lerTachados, gravarTachados, idLinhaTarefa } from './tachados';
 import { EsqueletoCarregando } from '../../components/EsqueletoCarregando';
 import { BotaoComCarregamento } from '../../components/BotaoComCarregamento';
-
-import {
-    contarDigitos,
-    formatarCodigo,
-    formatarDisponivel,
-    formatarHoraResumida,
-    calcularColisaoPosicao,
-} from './calculos';
+import type { CategoriasSprint, ResponsabilidadeSprint } from '../../api/tipos';
+import { GRUPOS, contarDigitos, ordemPrioridade, calcularColisaoPosicao } from './calculos';
 
 import {
     Box,
     Table,
     Alert,
     Stack,
-    Dialog,
     Button,
     Tooltip,
-    Checkbox,
     TableRow,
     TextField,
     TableBody,
     TableCell,
     TableHead,
-    Typography,
-    DialogTitle,
-    TableFooter,
-    DialogContent,
-    DialogActions,
+    Autocomplete,
+    TableSortLabel,
     TableContainer,
 } from '@mui/material';
+
+type CampoOrdenacao = 'prioridade' | 'situacao';
+const NENHUMA = 'Nenhuma';
 
 interface SprintViewProps {
     chaveSprint: string;
     onVoltar: () => void;
     veioDoCache?: boolean;
     categorias?: CategoriasSprint | null;
+    responsabilidade?: ResponsabilidadeSprint | null;
 }
-
-const COR_PENDENTE = CORES.corPendente;
-const COR_CONCLUIDO = CORES.corConcluido;
-const COR_TAG = CORES.corTag;
 
 const LARGURA_CELULA = '2.5rem';
 
-const GRUPOS: { rotulo: string; nomeLongo: string; bloco: 'dev' | 'rev' | 'qa' }[] = [
-    { rotulo: 'DEV', nomeLongo: 'Desenvolvimento', bloco: 'dev' },
-    { rotulo: 'REV', nomeLongo: 'Revisão', bloco: 'rev' },
-    { rotulo: 'QA', nomeLongo: 'Qualidade', bloco: 'qa' },
-];
-
-function BadgeTexto({ texto, cor }: { texto: string; cor: string }): ReactNode {
-    return (
-        <Box
-            component="span"
-            sx={{
-                px: 0.75,
-                py: 0.1,
-                borderRadius: 0,
-                fontWeight: 700,
-                minWidth: '3rem',
-                fontSize: '0.75rem',
-                textAlign: 'center',
-                display: 'inline-block',
-                textTransform: 'uppercase',
-                fontFamily: FONTE_MARCA,
-                bgcolor: cor,
-                color: 'common.black',
-            }}>
-            {texto}
-        </Box>
-    );
-}
-
-function EtiquetaFixa({ texto, cor }: { texto: string; cor: string }): ReactNode {
-    return (
-        <Typography variant="body2" sx={{ color: cor, whiteSpace: 'nowrap' }}>
-            {texto}
-        </Typography>
-    );
-}
-
-function ParInfo({ rotulo, valor }: { rotulo: string; valor: string }): ReactNode {
-    return (
-        <Stack spacing={0} sx={{ flexShrink: 0 }}>
-            <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary', whiteSpace: 'nowrap' }}>
-                {rotulo}
-            </Typography>
-            <Typography
-                variant="h6"
-                sx={{ color: 'primary.main', fontWeight: 700, lineHeight: 1.2, whiteSpace: 'nowrap' }}>
-                {valor}
-            </Typography>
-        </Stack>
-    );
-}
-
-function DestaqueInfo({ rotulo, valor, cor }: { rotulo: string; valor: string; cor: string }): ReactNode {
-    return (
-        <Box
-            sx={{
-                px: 1.5,
-                py: 0.75,
-                borderRadius: 1,
-                border: 2,
-                borderColor: cor,
-                minWidth: 96,
-                flexShrink: 0,
-            }}>
-            <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', whiteSpace: 'nowrap' }}>
-                {rotulo}
-            </Typography>
-            <Typography variant="h6" sx={{ color: cor, fontWeight: 700, lineHeight: 1.2, whiteSpace: 'nowrap' }}>
-                {valor}
-            </Typography>
-        </Box>
-    );
-}
-
-export function SprintView({ chaveSprint, onVoltar, veioDoCache = false, categorias }: SprintViewProps): ReactNode {
+export function SprintView({ chaveSprint, onVoltar, veioDoCache = false, categorias, responsabilidade }: SprintViewProps): ReactNode {
     const { notificarErro } = useNotificacao();
-    const { resultado, carregando, carregar } = useSprint();
-    const [dialogoInfoAberto, setDialogoInfoAberto] = useState(false);
-    const [buscaAberta, setBuscaAberta] = useState(false);
     const [termoBusca, setTermoBusca] = useState('');
+    const [buscaAberta, setBuscaAberta] = useState(false);
+    const { resultado, carregando, carregar } = useSprint();
+    const corTag = categorias?.corTag || CORES.corIndisponivel;
+    const [dialogoInfoAberto, setDialogoInfoAberto] = useState(false);
+    const [destacadas, setDestacadas] = useState<Set<string>>(new Set());
+    const [coresStatus, setCoresStatus] = useState<Record<string, string>>({});
+    const [coresPrioridade, setCoresPrioridade] = useState<Record<string, string>>({});
     const [tachados, setTachados] = useState<Set<string>>(() => lerTachados(chaveSprint));
+    const [filtrosAbertos, setFiltrosAbertos] = useState(false);
+    const [filtroPrioridades, setFiltroPrioridades] = useState<string[]>([]);
+    const [filtroSituacoes, setFiltroSituacoes] = useState<string[]>([]);
+    const [filtroColaboradores, setFiltroColaboradores] = useState<string[]>([]);
+    const [ordenacao, setOrdenacao] = useState<{ campo: CampoOrdenacao; direcao: 'asc' | 'desc' } | null>(null);
+
+    useEffect(() => {
+        obterCoresJira()
+            .then((dados) => {
+                setCoresStatus(dados.coresStatus);
+                setCoresPrioridade(dados.coresPrioridade);
+            })
+            .catch(() => { });
+    }, []);
 
     useEffect(() => {
         carregar(chaveSprint).catch((erro: unknown) =>
@@ -163,6 +96,18 @@ export function SprintView({ chaveSprint, onVoltar, veioDoCache = false, categor
         });
     }
 
+    function alternarDestaque(id: string): void {
+        setDestacadas((atual) => {
+            const novo = new Set(atual);
+            if (novo.has(id)) {
+                novo.delete(id);
+            } else {
+                novo.add(id);
+            }
+            return novo;
+        });
+    }
+
     const cabecalho = resultado?.cabecalho;
     const tarefas = resultado?.tarefas ?? [];
     const larguraCodigo = tarefas.reduce((maximo, tarefa) => Math.max(maximo, contarDigitos(tarefa.codigo)), 0);
@@ -183,18 +128,87 @@ export function SprintView({ chaveSprint, onVoltar, veioDoCache = false, categor
         });
     }, [tarefas, colisaoPorLinha]);
 
-    const tarefasFiltradas = termoBusca.trim()
-        ? tarefasComId.filter(({ linha }) =>
-            `${linha.codigo} ${linha.descricao}`.toLowerCase().includes(termoBusca.trim().toLowerCase()),
-        )
-        : tarefasComId;
+    const opcoesPrioridade = useMemo(() => {
+        const vistos = new Set<string>();
+        tarefas.forEach((linha) => { if (!linha.agrupada) vistos.add(linha.prioridade ?? NENHUMA); });
+        return Array.from(vistos).sort(
+            (a, b) => ordemPrioridade(a === NENHUMA ? null : a) - ordemPrioridade(b === NENHUMA ? null : b),
+        );
+    }, [tarefas]);
+
+    const opcoesSituacao = useMemo(() => {
+        const vistos = new Set<string>();
+        tarefas.forEach((linha) => { if (!linha.agrupada) vistos.add(linha.situacao ?? NENHUMA); });
+        return Array.from(vistos).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+    }, [tarefas]);
+
+    const opcoesColaborador = useMemo(() => {
+        const vistos = new Set<string>();
+        tarefas.forEach((linha) => {
+            [linha.dev, linha.rev, linha.qa].forEach((bloco) => {
+                if (bloco.nomeExibicao) vistos.add(bloco.nomeExibicao);
+            });
+        });
+        return Array.from(vistos).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+    }, [tarefas]);
+
+    const filtrosVazios = filtroPrioridades.length === 0
+        && filtroSituacoes.length === 0
+        && filtroColaboradores.length === 0;
+    const buscaOuFiltrosAtivos = Boolean(termoBusca.trim()) || !filtrosVazios;
+
+    function limparFiltros(): void {
+        setFiltroPrioridades([]);
+        setFiltroSituacoes([]);
+        setFiltroColaboradores([]);
+    }
+
+    function limparOrdenacao(): void {
+        setOrdenacao(null);
+    }
+
+    function alternarOrdenacao(campo: CampoOrdenacao): void {
+        setOrdenacao((atual) => {
+            if (!atual || atual.campo !== campo) return { campo, direcao: 'asc' };
+            if (atual.direcao === 'asc') return { campo, direcao: 'desc' };
+            return null;
+        });
+    }
+
+    const tarefasFiltradas = useMemo(() => {
+        let lista = termoBusca.trim()
+            ? tarefasComId.filter(({ linha }) =>
+                `${linha.codigo} ${linha.descricao}`.toLowerCase().includes(termoBusca.trim().toLowerCase()),
+            )
+            : tarefasComId;
+
+        if (filtroPrioridades.length > 0) {
+            lista = lista.filter(({ linha }) => !linha.agrupada && filtroPrioridades.includes(linha.prioridade ?? NENHUMA));
+        }
+        if (filtroSituacoes.length > 0) {
+            lista = lista.filter(({ linha }) => !linha.agrupada && filtroSituacoes.includes(linha.situacao ?? NENHUMA));
+        }
+        if (filtroColaboradores.length > 0) {
+            lista = lista.filter(({ linha }) =>
+                [linha.dev, linha.rev, linha.qa].some((bloco) => bloco.nomeExibicao && filtroColaboradores.includes(bloco.nomeExibicao)),
+            );
+        }
+
+        if (ordenacao) {
+            const sinal = ordenacao.direcao === 'asc' ? 1 : -1;
+            lista = [...lista].sort((a, b) => ordenacao.campo === 'prioridade'
+                ? sinal * (ordemPrioridade(a.linha.prioridade) - ordemPrioridade(b.linha.prioridade))
+                : sinal * (a.linha.situacao ?? '').localeCompare(b.linha.situacao ?? '', 'pt-BR'));
+        }
+
+        return lista;
+    }, [tarefasComId, termoBusca, filtroPrioridades, filtroSituacoes, filtroColaboradores, ordenacao]);
+
     const colaboradores = resultado?.colaboradores ?? [];
-    const totalPendentes = colaboradores.reduce((soma, colaborador) => soma + colaborador.tarefasPendentes, 0);
-    const totalConcluidas = colaboradores.reduce((soma, colaborador) => soma + colaborador.tarefasConcluidas, 0);
 
     return (
         <Stack spacing={2}>
-            <CabecalhoView titulo="Acompanhamento do sprint">
+            <CabecalhoView titulo="Acompanhamento do Sprint">
                 <Button variant="outlined" onClick={() => setDialogoInfoAberto(true)}>
                     Informações
                 </Button>
@@ -208,6 +222,12 @@ export function SprintView({ chaveSprint, onVoltar, veioDoCache = false, categor
                     }}>
                     {buscaAberta ? 'Fechar busca' : 'Buscar por descrição'}
                 </BotaoComCarregamento>
+                <BotaoComCarregamento onClick={() => setFiltrosAbertos((a) => !a)}>
+                    {filtrosAbertos ? 'Fechar filtros' : 'Filtros'}
+                </BotaoComCarregamento>
+                <Button variant="outlined" onClick={limparOrdenacao} disabled={ordenacao === null}>
+                    Limpar ordenação
+                </Button>
                 <BotaoComCarregamento onClick={onVoltar}>Voltar</BotaoComCarregamento>
             </CabecalhoView>
 
@@ -221,144 +241,51 @@ export function SprintView({ chaveSprint, onVoltar, veioDoCache = false, categor
                     autoFocus />
             ) : undefined}
 
-            {cabecalho ? (
-                <Box
-                    sx={{
-                        display: 'flex',
-                        flexWrap: 'nowrap',
-                        gap: 3,
-                        p: 1.5,
-                        border: 1,
-                        borderColor: 'divider',
-                        borderRadius: 1,
-                        alignItems: 'center',
-                        overflowX: 'auto',
-                    }}>
-                    <ParInfo rotulo="Sprint" valor={cabecalho.nome} />
-                    <ParInfo rotulo="Horas/dia" valor={String(cabecalho.horasPorDia)} />
-                    <ParInfo rotulo="Dias úteis" valor={String(cabecalho.diasUteis)} />
-                    <ParInfo rotulo="Margem" valor={`${cabecalho.margem} h`} />
-                    <ParInfo rotulo="Início" valor={formatarData(cabecalho.dataInicio)} />
-                    <ParInfo rotulo="Fim" valor={formatarData(cabecalho.dataFim)} />
-                    <Box sx={{ display: 'flex', flexWrap: 'nowrap', gap: 1.5, ml: 'auto', flexShrink: 0 }}>
-                        <DestaqueInfo
-                            rotulo="Pendentes"
-                            valor={String(cabecalho.tarefasPendentes)}
-                            cor={COR_PENDENTE} />
-                        <DestaqueInfo
-                            rotulo="Concluído"
-                            valor={String(cabecalho.tarefasConcluidas)}
-                            cor={COR_CONCLUIDO} />
-                        <DestaqueInfo
-                            rotulo="Capacidade"
-                            valor={`${cabecalho.ct} h`}
-                            cor="primary.main" />
-                    </Box>
-                </Box>
+            {filtrosAbertos ? (
+                <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1 }}>
+                    <Autocomplete
+                        multiple
+                        size="small"
+                        options={opcoesPrioridade.filter((opcao) => !filtroPrioridades.includes(opcao))}
+                        value={filtroPrioridades}
+                        onChange={(_evento, valor) => setFiltroPrioridades(valor)}
+                        sx={{ minWidth: 220, flex: 1 }}
+                        renderInput={(parametros) => <TextField {...parametros} label="Prioridade" placeholder="Todas" />} />
+                    <Autocomplete
+                        multiple
+                        size="small"
+                        options={opcoesSituacao.filter((opcao) => !filtroSituacoes.includes(opcao))}
+                        value={filtroSituacoes}
+                        onChange={(_evento, valor) => setFiltroSituacoes(valor)}
+                        sx={{ minWidth: 220, flex: 1 }}
+                        renderInput={(parametros) => <TextField {...parametros} label="Status" placeholder="Todos" />} />
+                    <Autocomplete
+                        multiple
+                        size="small"
+                        options={opcoesColaborador.filter((opcao) => !filtroColaboradores.includes(opcao))}
+                        value={filtroColaboradores}
+                        onChange={(_evento, valor) => setFiltroColaboradores(valor)}
+                        sx={{ minWidth: 220, flex: 1 }}
+                        renderInput={(parametros) => <TextField {...parametros} label="Colaborador" placeholder="Todos" />} />
+                    <Button variant="outlined" onClick={limparFiltros} disabled={filtrosVazios}>
+                        Limpar
+                    </Button>
+                </Stack>
             ) : undefined}
+
+            {cabecalho ? <SprintCardCapacidade cabecalho={cabecalho} /> : undefined}
 
             {veioDoCache ? <AvisoCache /> : undefined}
 
             {carregando && !resultado ? <EsqueletoCarregando /> : undefined}
 
-            {colaboradores.length > 0 ? (
-                <Stack spacing={1}>
-                    <Typography variant="subtitle2" sx={{ color: 'text.secondary' }}>
-                        Colaboradores
-                    </Typography>
-                    <TableContainer sx={{ overflowX: 'auto' }}>
-                        <Table size="small">
-                            <TableHead>
-                                <TableRow>
-                                    <TableCell sx={{ py: 0.5 }}>Nome</TableCell>
-                                    <TableCell sx={{ py: 0.5 }}>Sigla</TableCell>
-                                    <TableCell sx={{ py: 0.5 }} align="right">Capacidade</TableCell>
-                                    <TableCell sx={{ py: 0.5 }} align="right">Tempo realizado</TableCell>
-                                    <TableCell sx={{ py: 0.5 }} align="right">Tempo disponível</TableCell>
-                                    <TableCell sx={{ py: 0.5 }} align="right">Quantidade pendentes</TableCell>
-                                    <TableCell sx={{ py: 0.5 }} align="right">Quantidade concluídas</TableCell>
-                                </TableRow>
-                            </TableHead>
-                            <TableBody>
-                                {colaboradores.map((colaborador) => {
-                                    const disponivel = formatarDisponivel(colaborador.td, colaborador.segundosRealizados);
-                                    return (
-                                        <TableRow key={colaborador.nomeExibicao} hover>
-                                            <TableCell sx={{ py: 0.25, whiteSpace: 'nowrap' }}>
-                                                {colaborador.nomeExibicao}
-                                            </TableCell>
-                                            <TableCell sx={{ py: 0.25 }}>
-                                                <BadgeSigla sigla={colaborador.sigla} cor={colaborador.cor} />
-                                            </TableCell>
-                                            <TableCell sx={{ py: 0.25, whiteSpace: 'nowrap' }} align="right">
-                                                {`${colaborador.td} h`}
-                                            </TableCell>
-                                            <TableCell sx={{ py: 0.25, whiteSpace: 'nowrap' }} align="right">
-                                                {formatarDuracao(colaborador.segundosRealizados)}
-                                            </TableCell>
-                                            <TableCell
-                                                sx={{
-                                                    py: 0.25,
-                                                    whiteSpace: 'nowrap',
-                                                    color: disponivel.negativo
-                                                        ? COR_PENDENTE
-                                                        : disponivel.positivo
-                                                            ? COR_CONCLUIDO
-                                                            : undefined,
-                                                }}
-                                                align="right">
-                                                {disponivel.texto}
-                                            </TableCell>
-                                            <TableCell
-                                                sx={{
-                                                    py: 0.25,
-                                                    color: colaborador.tarefasPendentes > 0 ? COR_PENDENTE : undefined,
-                                                }}
-                                                align="right">
-                                                {colaborador.tarefasPendentes}
-                                            </TableCell>
-                                            <TableCell
-                                                sx={{
-                                                    py: 0.25,
-                                                    color: colaborador.tarefasConcluidas > 0 ? COR_CONCLUIDO : undefined,
-                                                }}
-                                                align="right">
-                                                {colaborador.tarefasConcluidas}
-                                            </TableCell>
-                                        </TableRow>
-                                    );
-                                })}
-                            </TableBody>
-                            <TableFooter>
-                                <TableRow>
-                                    <TableCell
-                                        colSpan={5}
-                                        align="right"
-                                        sx={{ py: 0.5, fontWeight: 700, color: 'text.primary', borderTop: 2, borderColor: 'divider' }}>
-                                        Total
-                                    </TableCell>
-                                    <TableCell
-                                        align="right"
-                                        sx={{ py: 0.5, fontWeight: 700, color: totalPendentes > 0 ? COR_PENDENTE : 'text.primary', borderTop: 2, borderColor: 'divider' }}>
-                                        {totalPendentes}
-                                    </TableCell>
-                                    <TableCell
-                                        align="right"
-                                        sx={{ py: 0.5, fontWeight: 700, color: totalConcluidas > 0 ? COR_CONCLUIDO : 'text.primary', borderTop: 2, borderColor: 'divider' }}>
-                                        {totalConcluidas}
-                                    </TableCell>
-                                </TableRow>
-                            </TableFooter>
-                        </Table>
-                    </TableContainer>
-                </Stack>
-            ) : undefined}
+            {colaboradores.length > 0 ? <SprintCardColaboradores colaboradores={colaboradores} /> : undefined}
 
             {resultado && tarefas.length === 0 ? (
                 <Alert severity="warning">Nenhum apontamento encontrado para este sprint.</Alert>
             ) : undefined}
 
-            {resultado && tarefas.length > 0 && tarefasFiltradas.length === 0 && termoBusca.trim() ? (
+            {resultado && tarefas.length > 0 && tarefasFiltradas.length === 0 && buscaOuFiltrosAtivos ? (
                 <Alert severity="info">Nenhuma linha corresponde ao filtro.</Alert>
             ) : undefined}
 
@@ -374,8 +301,22 @@ export function SprintView({ chaveSprint, onVoltar, veioDoCache = false, categor
                         <TableHead>
                             <TableRow>
                                 <TableCell rowSpan={2} sx={{ py: 0.25, width: '1%', px: 0.5 }} />
-                                <TableCell rowSpan={2} sx={{ py: 0.25, width: '1%', px: 0.5, whiteSpace: 'nowrap', verticalAlign: 'bottom' }}>Prioridade</TableCell>
-                                <TableCell rowSpan={2} align="center" sx={{ py: 0.25, width: '1%', px: 0.5, whiteSpace: 'nowrap', verticalAlign: 'bottom' }}>Situação</TableCell>
+                                <TableCell rowSpan={2} sx={{ py: 0.25, width: '1%', px: 0.5, whiteSpace: 'nowrap', verticalAlign: 'bottom' }}>
+                                    <TableSortLabel
+                                        active={ordenacao?.campo === 'prioridade'}
+                                        direction={ordenacao?.campo === 'prioridade' ? ordenacao.direcao : 'asc'}
+                                        onClick={() => alternarOrdenacao('prioridade')}>
+                                        Prioridade
+                                    </TableSortLabel>
+                                </TableCell>
+                                <TableCell rowSpan={2} align="center" sx={{ py: 0.25, width: '1%', px: 0.5, whiteSpace: 'nowrap', verticalAlign: 'bottom' }}>
+                                    <TableSortLabel
+                                        active={ordenacao?.campo === 'situacao'}
+                                        direction={ordenacao?.campo === 'situacao' ? ordenacao.direcao : 'asc'}
+                                        onClick={() => alternarOrdenacao('situacao')}>
+                                        Status
+                                    </TableSortLabel>
+                                </TableCell>
                                 <TableCell rowSpan={2} align="center" sx={{ py: 0.25, width: '1%', px: 0.5, whiteSpace: 'nowrap', verticalAlign: 'bottom' }}>Código</TableCell>
                                 <TableCell rowSpan={2} sx={{ py: 0.25, px: 0.8, verticalAlign: 'bottom' }}>Descrição</TableCell>
                                 {GRUPOS.map((grupo) => (
@@ -409,233 +350,32 @@ export function SprintView({ chaveSprint, onVoltar, veioDoCache = false, categor
                             </TableRow>
                         </TableHead>
                         <TableBody>
-                            {tarefasFiltradas.map(({ linha, id, codigoDuplicado }) => {
-                                const riscada = tachados.has(id);
-                                return (
-                                    <TableRow key={id} hover>
-                                        <TableCell sx={{ width: '1%', px: 0.5 }}>
-                                            <Checkbox
-                                                size="small"
-                                                checked={riscada}
-                                                onChange={() => alternarTachado(id)}
-                                                sx={{ p: 0.25 }} />
-                                        </TableCell>
-                                        <TableCell align="center" sx={{ width: '1%', px: 0.5, whiteSpace: 'nowrap' }}>
-                                            {linha.agrupada ? (
-                                                <BadgeTexto texto="Tag" cor={COR_TAG} />
-                                            ) : (
-                                                <BadgeTexto texto="Baixa" cor={COR_CONCLUIDO} />
-                                            )}
-                                        </TableCell>
-                                        <TableCell align="center" sx={{ width: '1%', px: 0.5, whiteSpace: 'nowrap' }}>
-                                            {linha.agrupada ? (
-                                                <EtiquetaFixa texto="Tag" cor={COR_TAG} />
-                                            ) : (
-                                                <EtiquetaFixa texto="Pendente" cor={COR_PENDENTE} />
-                                            )}
-                                        </TableCell>
-                                        <TableCell
-                                            align="center"
-                                            sx={{
-                                                width: '1%',
-                                                px: 0.5,
-                                                whiteSpace: 'nowrap',
-                                                fontVariantNumeric: 'tabular-nums',
-                                                ...(codigoDuplicado
-                                                    ? { color: COR_PENDENTE, fontWeight: 700 }
-                                                    : {}),
-                                            }}>
-                                            {codigoDuplicado ? (
-                                                <Tooltip title="Código repetido: mais de um colaborador ocupa a mesma posição (DEV/REV/QA) desta descrição.">
-                                                    <Box component="span">
-                                                        {formatarCodigo(linha.codigo, larguraCodigo)}
-                                                    </Box>
-                                                </Tooltip>
-                                            ) : (
-                                                formatarCodigo(linha.codigo, larguraCodigo)
-                                            )}
-                                        </TableCell>
-                                        <TableCell sx={{ maxWidth: 360, px: 0.8 }}>
-                                            <Tooltip title={linha.descricao}>
-                                                <Box
-                                                    sx={{
-                                                        overflow: 'hidden',
-                                                        textOverflow: 'ellipsis',
-                                                        whiteSpace: 'nowrap',
-                                                        ...(riscada
-                                                            ? { textDecoration: 'line-through', color: 'text.disabled' }
-                                                            : {}),
-                                                        ...(codigoDuplicado
-                                                            ? { color: COR_PENDENTE, fontWeight: 700 }
-                                                            : {}),
-                                                    }}>
-                                                    {linha.descricao || '(sem descrição)'}
-                                                </Box>
-                                            </Tooltip>
-                                        </TableCell>
-                                        {GRUPOS.map((grupo) => {
-                                            const bloco = linha[grupo.bloco];
-                                            const temColaborador = bloco.reaSegundos > 0;
-                                            return (
-                                                <Fragment key={grupo.rotulo}>
-                                                    <TableCell align="center" sx={{ px: 0.5, width: LARGURA_CELULA, borderLeft: 1, borderColor: 'divider', whiteSpace: 'nowrap' }}>
-                                                        <Tooltip title={formatarDuracao(Math.round(bloco.preHoras * 3600))}>
-                                                            <Box component="span">{formatarHoraResumida(bloco.preHoras * 3600)}</Box>
-                                                        </Tooltip>
-                                                    </TableCell>
-                                                    <TableCell align="center" sx={{ px: 0.5, width: LARGURA_CELULA, whiteSpace: 'nowrap' }}>
-                                                        <Tooltip title={formatarDuracao(bloco.reaSegundos)}>
-                                                            <Box
-                                                                component="span"
-                                                                sx={
-                                                                    bloco.reaSegundos > 0
-                                                                        ? { color: 'primary.main', fontWeight: 600 }
-                                                                        : undefined
-                                                                }>
-                                                                {formatarHoraResumida(bloco.reaSegundos)}
-                                                            </Box>
-                                                        </Tooltip>
-                                                    </TableCell>
-                                                    <TableCell align="center" sx={{ px: 0.5, width: LARGURA_CELULA, whiteSpace: 'nowrap' }}>
-                                                        {temColaborador ? (
-                                                            <BadgeSigla
-                                                                sigla={bloco.sigla ?? ''}
-                                                                cor={bloco.cor ?? undefined}
-                                                                nome={bloco.nomeExibicao ?? undefined} />
-                                                        ) : (
-                                                            <EtiquetaFixa texto="–" cor="text.primary" />
-                                                        )}
-                                                    </TableCell>
-                                                    <TableCell align="center" sx={{ px: 0.5, width: '1%', whiteSpace: 'nowrap' }}>
-                                                        {temColaborador ? (
-                                                            <EtiquetaFixa
-                                                                texto={linha.agrupada ? 'Tag' : 'Pendente'}
-                                                                cor={linha.agrupada ? COR_TAG : COR_PENDENTE} />
-                                                        ) : (
-                                                            <EtiquetaFixa texto="Nenhuma" cor="text.primary" />
-                                                        )}
-                                                    </TableCell>
-                                                </Fragment>
-                                            );
-                                        })}
-                                    </TableRow>
-                                );
-                            })}
+                            {tarefasFiltradas.map(({ linha, id, codigoDuplicado }) => (
+                                <SprintLinhaTarefa
+                                    key={id}
+                                    linha={linha}
+                                    id={id}
+                                    codigoDuplicado={codigoDuplicado}
+                                    riscada={tachados.has(id)}
+                                    onAlternarTachado={alternarTachado}
+                                    destacada={destacadas.has(id)}
+                                    onAlternarDestaque={alternarDestaque}
+                                    larguraCodigo={larguraCodigo}
+                                    coresStatus={coresStatus}
+                                    coresPrioridade={coresPrioridade}
+                                    corTag={corTag} />
+                            ))}
                         </TableBody>
                     </Table>
                 </TableContainer>
             ) : undefined}
 
-            <Dialog
-                open={dialogoInfoAberto}
-                onClose={() => setDialogoInfoAberto(false)}
-                fullWidth
-                maxWidth="sm">
-                <DialogTitle>Como este sprint é calculado</DialogTitle>
-                <DialogContent>
-                    <Stack spacing={2}>
-                        {cabecalho ? (
-                            <Stack spacing={0.5}>
-                                <Typography variant="subtitle2">Capacidade</Typography>
-                                <Typography variant="body2" color="text.secondary">
-                                    Tempo Total = Horas/dia × Dias úteis = {cabecalho.horasPorDia} × {cabecalho.diasUteis} ={' '}
-                                    {cabecalho.horasPorDia * cabecalho.diasUteis} h
-                                </Typography>
-                                <Typography variant="body2" color="text.secondary">
-                                    Margem = floor(30% × Tempo Total) = {cabecalho.margem} h
-                                </Typography>
-                                <Typography variant="body2" color="text.secondary">
-                                    Tempo por colaborador = Tempo Total − Margem = {cabecalho.td} h
-                                </Typography>
-                                <Typography variant="body2" color="text.secondary">
-                                    Capacidade = Tempo por colaborador × nº de colaboradores = {cabecalho.ct} h
-                                </Typography>
-                            </Stack>
-                        ) : undefined}
-
-                        {categorias ? (
-                            <Stack spacing={0.5}>
-                                <Typography variant="subtitle2">Categorias</Typography>
-                                <Typography variant="body2" color="text.secondary">
-                                    DEV: {categorias.dev.join(', ') || '(nenhuma)'}
-                                </Typography>
-                                <Typography variant="body2" color="text.secondary">
-                                    REV: {categorias.rev.join(', ') || '(nenhuma)'}
-                                </Typography>
-                                <Typography variant="body2" color="text.secondary">
-                                    QA: {categorias.qa.join(', ') || '(nenhuma)'}
-                                </Typography>
-                                <Typography variant="body2" color="text.secondary">
-                                    Agrupamento: {categorias.agrupamento}
-                                </Typography>
-                            </Stack>
-                        ) : undefined}
-
-                        <Stack spacing={0.5}>
-                            <Typography variant="subtitle2">Regras da listagem</Typography>
-                            <Box component="ul" sx={{ m: 0, pl: 2.5 }}>
-                                <Typography component="li" variant="body2" color="text.secondary">
-                                    Cada linha é uma tarefa (linha de descrição) ou uma tag agrupada (linha de tag) — as
-                                    duas seguem regras de mesclagem diferentes, descritas abaixo.
-                                </Typography>
-                                <Typography component="li" variant="body2" color="text.secondary">
-                                    <strong>Linhas de descrição</strong>: os grupos DEV/REV/QA de uma mesma linha podem
-                                    vir de colaboradores diferentes — colaboradores que ocupam posições diferentes da
-                                    mesma descrição são mesclados numa única linha; só abrem linhas separadas quando
-                                    dois colaboradores disputam a mesma posição.
-                                </Typography>
-                                <Typography component="li" variant="body2" color="text.secondary">
-                                    <strong>Linhas de tag</strong>: cada colaborador sempre ocupa a sua própria linha —
-                                    nunca mescla com outro colaborador, mesmo que ocupem posições diferentes (ex.: um em
-                                    DEV e outro em QA da mesma tag). Todo o tempo do colaborador naquela tag vai para a
-                                    coluna QA (se ele tem algum apontamento QA no sprint) ou DEV (senão); REV nunca
-                                    recebe agrupamento por tag.
-                                </Typography>
-                                <Typography component="li" variant="body2" color="text.secondary">
-                                    Em qualquer linha, um grupo (DEV/REV/QA) sem tempo do colaborador aparece com "–" na
-                                    coluna do colaborador e "Nenhuma" na situação; PRE e REA ficam "00h".
-                                </Typography>
-                                <Typography component="li" variant="body2" color="text.secondary">
-                                    PRE = tempo previsto, REA = tempo realizado (Toggl) — passe o mouse nos títulos das
-                                    colunas para ver a legenda, e nos valores para ver a hora completa. PRE = 0 por
-                                    enquanto, sem integração. Um REA maior que zero fica na cor da Capacidade.
-                                </Typography>
-                                <Typography component="li" variant="body2" color="text.secondary">
-                                    O código (TEL - 0000) é preenchido com zeros à esquerda até o tamanho do maior código
-                                    da lista deste sprint (o número de zeros varia conforme a listagem).
-                                </Typography>
-                                <Typography component="li" variant="body2" color="text.secondary">
-                                    Quando dois colaboradores disputam a mesma posição (DEV/REV/QA) da mesma descrição, a
-                                    tarefa abre em linhas separadas e o código e a descrição dessas linhas ficam em
-                                    vermelho. Essa marcação existe só para linhas de descrição — nas linhas de tag cada
-                                    colaborador já tem sua própria linha por definição, então nunca há destaque de
-                                    duplicidade ali.
-                                </Typography>
-                                <Typography component="li" variant="body2" color="text.secondary">
-                                    Situação e Prioridade são fixas — "Baixa" / "Pendente" nas linhas normais, "Tag"
-                                    (laranja) nas linhas de agrupamento por tag. Sem integração por enquanto.
-                                </Typography>
-                                <Typography component="li" variant="body2" color="text.secondary">
-                                    A caixa de seleção antes da Prioridade risca a descrição da linha. A marcação fica
-                                    salva no navegador (localStorage), é isolada por sprint (cada sprint tem a sua) e só
-                                    é apagada quando uma nova consulta real à API do Toggl é feita (não ao carregar do cache).
-                                </Typography>
-                                <Typography component="li" variant="body2" color="text.secondary">
-                                    "Buscar por descrição" filtra a listagem já carregada por código ou descrição, sem
-                                    fazer nova consulta à API — filtra só o grid de tarefas, não o cabeçalho nem a tabela
-                                    de colaboradores.
-                                </Typography>
-                                <Typography component="li" variant="body2" color="text.secondary">
-                                    Dias úteis excluem sábado e domingo.
-                                </Typography>
-                            </Box>
-                        </Stack>
-                    </Stack>
-                </DialogContent>
-                <DialogActions>
-                    <Button onClick={() => setDialogoInfoAberto(false)}>Fechar</Button>
-                </DialogActions>
-            </Dialog>
+            <SprintDialogInfo
+                aberto={dialogoInfoAberto}
+                onFechar={() => setDialogoInfoAberto(false)}
+                cabecalho={cabecalho}
+                categorias={categorias}
+                responsabilidade={responsabilidade} />
         </Stack>
     );
 }

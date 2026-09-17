@@ -3,17 +3,15 @@ import type { ReactNode } from 'react';
 import { ErroApi } from '../../api/http';
 import { useEffect, useState } from 'react';
 import { useUsuariosToggl } from './useUsuariosToggl';
-import ErrorIcon from '@mui/icons-material/Error';
 import type { UsuarioTogglResumo } from '../../api/tipos';
 import { useNotificacao } from '../../hooks/useNotificacao';
-import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import { UsuarioTogglFormCampos } from './UsuarioTogglFormCampos';
 import { BotaoComCarregamento } from '../../components/BotaoComCarregamento';
 
 import {
     Alert,
     Stack,
     Dialog,
-    TextField,
     DialogTitle,
     DialogActions,
     DialogContent,
@@ -38,13 +36,14 @@ export function UsuarioTogglFormDialog({
     const { notificarErro } = useNotificacao();
     const [tokenApi, setTokenApi] = useState('');
     const [salvando, setSalvando] = useState(false);
-    const { criar, editar, validar } = useUsuariosToggl();
     const [validando, setValidando] = useState(false);
+    const { criar, editar, validar } = useUsuariosToggl();
     const [sigla, setSigla] = useState(usuarioEmEdicao?.sigla ?? '');
     const [cor, setCor] = useState(usuarioEmEdicao?.cor ?? COR_PADRAO_USUARIO);
     const [avisoSemValidacao, setAvisoSemValidacao] = useState<string | null>(null);
     const [resultadoValidacao, setResultadoValidacao] = useState<boolean | null>(null);
     const [nomeExibicao, setNomeExibicao] = useState(usuarioEmEdicao?.nomeExibicao ?? '');
+    const [administrador, setAdministrador] = useState(usuarioEmEdicao?.administrador ?? false);
 
     useEffect(() => {
         if (aberto) {
@@ -52,6 +51,7 @@ export function UsuarioTogglFormDialog({
             setTokenApi('');
             setSigla(usuarioEmEdicao?.sigla ?? '');
             setCor(usuarioEmEdicao ? usuarioEmEdicao.cor : COR_PADRAO_USUARIO);
+            setAdministrador(usuarioEmEdicao?.administrador ?? false);
             setResultadoValidacao(null);
             setAvisoSemValidacao(null);
         }
@@ -62,6 +62,7 @@ export function UsuarioTogglFormDialog({
         setTokenApi('');
         setSigla('');
         setCor(COR_PADRAO_USUARIO);
+        setAdministrador(false);
         setResultadoValidacao(null);
         setAvisoSemValidacao(null);
         onFechar();
@@ -92,6 +93,7 @@ export function UsuarioTogglFormDialog({
                     ignorarValidacao,
                     sigla: sigla.trim(),
                     cor,
+                    administrador,
                 });
             } else {
                 await criar({
@@ -101,6 +103,7 @@ export function UsuarioTogglFormDialog({
                     sigla: sigla.trim(),
                     cor,
                     selecionado: true,
+                    administrador,
                 });
             }
             onSalvo(emEdicao ? 'Usuário do Toggl atualizado com sucesso.' : 'Usuário do Toggl cadastrado com sucesso.');
@@ -123,64 +126,28 @@ export function UsuarioTogglFormDialog({
     return (
         <Dialog open={aberto} onClose={salvando ? undefined : fecharEResetar} fullWidth maxWidth="sm">
             <DialogTitle>{emEdicao ? 'Editar usuário do Toggl' : 'Adicionar usuário do Toggl'}</DialogTitle>
-            <DialogContent>
+            <DialogContent sx={{ pb: '0rem !important' }}>
                 <Stack spacing={2} sx={{ mt: 1 }}>
-                    <TextField
-                        label="Nome de exibição"
-                        value={nomeExibicao}
-                        onChange={(evento) => setNomeExibicao(evento.target.value)}
-                        autoFocus
-                        fullWidth
-                        disabled={salvando} />
-                    <TextField
-                        label="API Token"
-                        type="password"
-                        value={tokenApi}
-                        onChange={(evento) => {
-                            setTokenApi(evento.target.value);
+                    <UsuarioTogglFormCampos
+                        nomeExibicao={nomeExibicao}
+                        onNomeExibicaoChange={setNomeExibicao}
+                        tokenApi={tokenApi}
+                        onTokenApiChange={(valor) => {
+                            setTokenApi(valor);
                             setResultadoValidacao(null);
                         }}
-                        placeholder={emEdicao ? `Atual: ${usuarioEmEdicao?.tokenMascarado} (deixe em branco para manter)` : undefined}
-                        fullWidth
-                        disabled={salvando} />
-
-                    <Stack direction="row" spacing={2}>
-                        <TextField
-                            label="Sigla"
-                            value={sigla}
-                            onChange={(evento) => setSigla(evento.target.value)}
-                            helperText="Ex.: JS, MRC — usada nas células do Gant"
-                            fullWidth
-                            disabled={salvando} />
-                        <TextField
-                            label="Cor"
-                            type="color"
-                            value={cor}
-                            onChange={(evento) => setCor(evento.target.value)}
-                            sx={{ width: 120 }}
-                            disabled={salvando} />
-                    </Stack>
-
-                    <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-                        <BotaoComCarregamento
-                            size="small"
-                            variant="outlined"
-                            carregando={validando}
-                            disabled={!tokenApi.trim() || salvando}
-                            onClick={() => void validarTokenDigitado()}>
-                            Validar token
-                        </BotaoComCarregamento>
-                        {resultadoValidacao === true ? (
-                            <Alert icon={<CheckCircleIcon fontSize="inherit" />} severity="success" sx={{ py: 0 }}>
-                                Token válido
-                            </Alert>
-                        ) : undefined}
-                        {resultadoValidacao === false ? (
-                            <Alert icon={<ErrorIcon fontSize="inherit" />} severity="warning" sx={{ py: 0 }}>
-                                Token inválido
-                            </Alert>
-                        ) : undefined}
-                    </Stack>
+                        emEdicao={emEdicao}
+                        tokenMascarado={usuarioEmEdicao?.tokenMascarado}
+                        sigla={sigla}
+                        onSigilaChange={setSigla}
+                        cor={cor}
+                        onCorChange={setCor}
+                        administrador={administrador}
+                        onAdministradorChange={setAdministrador}
+                        salvando={salvando}
+                        validando={validando}
+                        resultadoValidacao={resultadoValidacao}
+                        onValidarToken={() => void validarTokenDigitado()} />
 
                     {avisoSemValidacao ? (
                         <Alert

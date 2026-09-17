@@ -54,4 +54,19 @@ public static class AnalisadorIni
         Directory.CreateDirectory(Path.GetDirectoryName(caminho)!);
         File.WriteAllText(caminho, conteudo, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
     }
+
+    public static void EscreverSecoes(string caminho, Dictionary<string, Dictionary<string, string>> secoes)
+    {
+        StringBuilder sb = new();
+
+        foreach ((string nomeSecao, Dictionary<string, string> valores) in secoes)
+        {
+            sb.AppendLine($"[{nomeSecao}]");
+            foreach ((string chave, string valor) in valores)
+                sb.AppendLine($"{chave}={valor}");
+            sb.AppendLine();
+        }
+
+        Escrever(caminho, sb.ToString());
+    }
 }

@@ -23,16 +23,23 @@ public static class GantEndpoints
             if (!Agrupamento.EhValido(request.Agrupamento))
                 return Results.BadRequest("Agrupamento deve ser 'descricao', 'tag' ou 'ambos'.");
 
-            if (!ValidacaoDatas.Tenta(request.DataInicio, request.DataFim, out DateTime inicio, out DateTime fim, out IResult? erroDatas))
-                return erroDatas!;
-
+            ConfiguracaoGant? configuracaoExistente = CarregadorConfiguracaoGantIni.Carregar(caminhoParametrosGant);
             ConfiguracaoGant configuracao = new()
             {
-                DataInicio = inicio.ToString("yyyy-MM-dd"),
-                DataFim = fim.ToString("yyyy-MM-dd"),
+                DataInicio = configuracaoExistente?.DataInicio,
+                DataFim = configuracaoExistente?.DataFim,
                 TagsSelecionadas = request.TagsSelecionadas,
                 Agrupamento = request.Agrupamento
             };
+
+            if (!string.IsNullOrWhiteSpace(request.DataInicio) || !string.IsNullOrWhiteSpace(request.DataFim))
+            {
+                if (!ValidacaoDatas.Tenta(request.DataInicio ?? "", request.DataFim ?? "", out DateTime inicio, out DateTime fim, out IResult? erroDatas))
+                    return erroDatas!;
+
+                configuracao.DataInicio = inicio.ToString("yyyy-MM-dd");
+                configuracao.DataFim = fim.ToString("yyyy-MM-dd");
+            }
 
             IResult? erroPersistencia = TratamentoIo.Executar(
                 () => CarregadorConfiguracaoGantIni.Salvar(caminhoParametrosGant, configuracao),

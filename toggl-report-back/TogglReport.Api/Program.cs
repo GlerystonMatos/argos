@@ -110,23 +110,30 @@ app.UseSwaggerUI(opcoes =>
 string caminhoConfiguracao = CaminhosDados.CaminhoConfiguracao(AppContext.BaseDirectory);
 string caminhoUsuarios = CaminhosDados.CaminhoUsuarios(AppContext.BaseDirectory);
 string caminhoSprints = CaminhosDados.CaminhoSprints(AppContext.BaseDirectory);
-string caminhoCategoriasSprint = CaminhosDados.CaminhoCategoriasSprint(AppContext.BaseDirectory);
 string caminhoCacheSprint = CaminhosDados.CaminhoCacheSprint(AppContext.BaseDirectory);
 string caminhoCache = CaminhosDados.CaminhoCache(AppContext.BaseDirectory);
 string caminhoParametrosGant = CaminhosDados.CaminhoParametrosGant(AppContext.BaseDirectory);
 string caminhoCacheGant = CaminhosDados.CaminhoCacheGant(AppContext.BaseDirectory);
+string caminhoJiraSprintData = CaminhosDados.CaminhoJiraSprintData(AppContext.BaseDirectory);
+string caminhoCacheTagsToggl = CaminhosDados.CaminhoCacheTagsToggl(AppContext.BaseDirectory);
+string caminhoCacheListasJira = CaminhosDados.CaminhoCacheListasJira(AppContext.BaseDirectory);
+string caminhoCoresJira = CaminhosDados.CaminhoCoresJira(AppContext.BaseDirectory);
+string caminhoConfiguracoesGerais = CaminhosDados.CaminhoConfiguracoesGerais(AppContext.BaseDirectory);
 string pastaDados = CaminhosDados.PastaDados(AppContext.BaseDirectory);
 
 app.MapConfiguracaoEndpoints(caminhoConfiguracao, caminhoUsuarios);
 app.MapUsuariosTogglEndpoints(caminhoConfiguracao, caminhoUsuarios);
+app.MapTagsTogglEndpoints(caminhoConfiguracao, caminhoUsuarios, caminhoCacheTagsToggl);
 app.MapConsultasEndpoints(caminhoConfiguracao, caminhoUsuarios, caminhoCache);
 app.MapRelatorioEndpoints(caminhoConfiguracao, caminhoUsuarios, caminhoCache);
 app.MapBuscaEndpoints(caminhoConfiguracao, caminhoUsuarios, caminhoCache);
 app.MapDadosEndpoints(pastaDados);
 app.MapGantEndpoints(caminhoConfiguracao, caminhoUsuarios, caminhoParametrosGant, caminhoCacheGant);
 app.MapSprintsEndpoints(caminhoSprints);
-app.MapSprintCategoriasEndpoints(caminhoCategoriasSprint);
-app.MapSprintConsultasEndpoints(caminhoConfiguracao, caminhoUsuarios, caminhoCacheSprint);
-app.MapSprintAcompanhamentoEndpoints(caminhoConfiguracao, caminhoUsuarios, caminhoSprints, caminhoCategoriasSprint, caminhoCacheSprint);
+app.MapSprintCategoriasEndpoints(caminhoConfiguracoesGerais);
+app.MapSprintResponsabilidadeEndpoints(caminhoConfiguracoesGerais);
+app.MapSprintConsultasEndpoints(caminhoConfiguracao, caminhoUsuarios, caminhoCacheSprint, caminhoConfiguracoesGerais, caminhoJiraSprintData);
+app.MapSprintAcompanhamentoEndpoints(caminhoConfiguracao, caminhoUsuarios, caminhoSprints, caminhoConfiguracoesGerais, caminhoCacheSprint, caminhoJiraSprintData);
+app.MapJiraEndpoints(caminhoConfiguracoesGerais, caminhoCacheListasJira, caminhoCoresJira);
 
 app.Run();

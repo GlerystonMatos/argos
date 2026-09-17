@@ -14,7 +14,7 @@ public static class UsuariosTogglEndpoints
         {
             ConfiguracaoApp configuracao = CarregadorConfiguracaoIni.Carregar(caminhoConfiguracao, caminhoUsuarios) ?? new ConfiguracaoApp();
             List<UsuarioTogglResumoDto> usuarios = configuracao.Usuarios
-                .Select(u => new UsuarioTogglResumoDto(u.Chave, u.NomeExibicao, ServicoUsuariosToggl.MascararToken(u.TokenApi), u.Sigla, u.Cor, u.Selecionado))
+                .Select(u => new UsuarioTogglResumoDto(u.Chave, u.NomeExibicao, ServicoUsuariosToggl.MascararToken(u.TokenApi), u.Sigla, u.Cor, u.Selecionado, u.Administrador))
                 .ToList();
             return Results.Ok(usuarios);
         })
@@ -55,8 +55,11 @@ public static class UsuariosTogglEndpoints
             }
 
             string chave = ServicoUsuariosToggl.GerarChaveUnica(request.NomeExibicao, configuracao.Usuarios);
-            ConfiguracaoUsuarioToggl usuario = new() { Chave = chave, NomeExibicao = request.NomeExibicao, TokenApi = request.TokenApi, Sigla = request.Sigla, Cor = request.Cor, Selecionado = request.Selecionado };
+            ConfiguracaoUsuarioToggl usuario = new() { Chave = chave, NomeExibicao = request.NomeExibicao, TokenApi = request.TokenApi, Sigla = request.Sigla, Cor = request.Cor, Selecionado = request.Selecionado, Administrador = request.Administrador };
             configuracao.Usuarios.Add(usuario);
+
+            if (usuario.Administrador)
+                ServicoUsuariosToggl.DesmarcarOutrosAdministradores(configuracao.Usuarios, usuario);
 
             IResult? erroPersistencia = TratamentoIo.Executar(
                 () => CarregadorConfiguracaoIni.Salvar(caminhoConfiguracao, caminhoUsuarios, configuracao),
@@ -65,7 +68,7 @@ public static class UsuariosTogglEndpoints
                 return erroPersistencia;
 
             return Results.Created($"/api/usuarios-toggl/{chave}",
-                new UsuarioTogglResumoDto(chave, usuario.NomeExibicao, ServicoUsuariosToggl.MascararToken(usuario.TokenApi), usuario.Sigla, usuario.Cor, usuario.Selecionado));
+                new UsuarioTogglResumoDto(chave, usuario.NomeExibicao, ServicoUsuariosToggl.MascararToken(usuario.TokenApi), usuario.Sigla, usuario.Cor, usuario.Selecionado, usuario.Administrador));
         })
         .WithSummary("Cadastra um usuário do Toggl (valida o token por padrão)");
 
@@ -113,13 +116,21 @@ public static class UsuariosTogglEndpoints
             if (request.Selecionado is not null)
                 usuario.Selecionado = request.Selecionado.Value;
 
+            if (request.Administrador is not null)
+            {
+                usuario.Administrador = request.Administrador.Value;
+
+                if (usuario.Administrador)
+                    ServicoUsuariosToggl.DesmarcarOutrosAdministradores(configuracao.Usuarios, usuario);
+            }
+
             IResult? erroPersistencia = TratamentoIo.Executar(
                 () => CarregadorConfiguracaoIni.Salvar(caminhoConfiguracao, caminhoUsuarios, configuracao),
                 "Não foi possível salvar a configuração.");
             if (erroPersistencia is not null)
                 return erroPersistencia;
 
-            return Results.Ok(new UsuarioTogglResumoDto(usuario.Chave, usuario.NomeExibicao, ServicoUsuariosToggl.MascararToken(usuario.TokenApi), usuario.Sigla, usuario.Cor, usuario.Selecionado));
+            return Results.Ok(new UsuarioTogglResumoDto(usuario.Chave, usuario.NomeExibicao, ServicoUsuariosToggl.MascararToken(usuario.TokenApi), usuario.Sigla, usuario.Cor, usuario.Selecionado, usuario.Administrador));
         })
         .WithSummary("Edita nome de exibição e/ou token de um usuário do Toggl");
 

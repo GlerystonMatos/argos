@@ -10,11 +10,15 @@ dados.rar
 .env
 !.env.example
 
-TogglRelatorioParametros.ini
-TogglRelatorioData.ini
+ConfiguracoesGerais.ini
 TogglUsuarios.ini
-TogglSprints.ini
-TogglSprintCategorias.ini
-TogglSprintData.ini
-TogglGantParametros.ini
-TogglGantData.ini
+TogglTagsCache.ini
+JiraListasCache.ini
+JiraCores.ini
+RelatorioParametros.ini
+RelatorioData.ini
+GantParametros.ini
+GantData.ini
+Sprints.ini
+SprintData.ini
+JiraSprintData.ini

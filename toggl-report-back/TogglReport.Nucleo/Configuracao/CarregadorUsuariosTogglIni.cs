@@ -6,27 +6,8 @@ public static class CarregadorUsuariosTogglIni
 {
     private const string PrefixoSecaoUsuario = "Usuario:";
 
-    public static List<ConfiguracaoUsuarioToggl> Carregar(string caminho, string? caminhoMigracaoLegado = null)
-    {
-        if (!File.Exists(caminho) && caminhoMigracaoLegado is not null && File.Exists(caminhoMigracaoLegado))
-        {
-            List<ConfiguracaoUsuarioToggl> usuariosLegado = ExtrairUsuarios(AnalisadorIni.Analisar(caminhoMigracaoLegado));
-            if (usuariosLegado.Count > 0)
-            {
-                try
-                {
-                    Salvar(caminho, usuariosLegado);
-                }
-                catch (Exception excecao) when (excecao is IOException or UnauthorizedAccessException)
-                {
-                }
-
-                return usuariosLegado;
-            }
-        }
-
-        return File.Exists(caminho) ? ExtrairUsuarios(AnalisadorIni.Analisar(caminho)) : new List<ConfiguracaoUsuarioToggl>();
-    }
+    public static List<ConfiguracaoUsuarioToggl> Carregar(string caminho) =>
+        File.Exists(caminho) ? ExtrairUsuarios(AnalisadorIni.Analisar(caminho)) : new List<ConfiguracaoUsuarioToggl>();
 
     public static void Salvar(string caminho, List<ConfiguracaoUsuarioToggl> usuarios)
     {
@@ -40,6 +21,7 @@ public static class CarregadorUsuariosTogglIni
             sb.AppendLine($"Sigla={usuario.Sigla}");
             sb.AppendLine($"Cor={usuario.Cor}");
             sb.AppendLine($"Selecionado={usuario.Selecionado}");
+            sb.AppendLine($"Administrador={usuario.Administrador}");
             sb.AppendLine();
         }
 
@@ -63,7 +45,8 @@ public static class CarregadorUsuariosTogglIni
                 TokenApi = CriptografiaToken.Descriptografar(AnalisadorIni.ObterOuPadrao(valores, "TokenApi", "")),
                 Sigla = AnalisadorIni.ObterOuPadrao(valores, "Sigla", ""),
                 Cor = AnalisadorIni.ObterOuPadrao(valores, "Cor", ""),
-                Selecionado = bool.TryParse(AnalisadorIni.ObterOuPadrao(valores, "Selecionado", "True"), out bool selecionado) ? selecionado : true
+                Selecionado = bool.TryParse(AnalisadorIni.ObterOuPadrao(valores, "Selecionado", "True"), out bool selecionado) ? selecionado : true,
+                Administrador = bool.TryParse(AnalisadorIni.ObterOuPadrao(valores, "Administrador", "False"), out bool administrador) && administrador
             });
         }
 

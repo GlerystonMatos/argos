@@ -27,6 +27,7 @@ export function BadgeSigla({ sigla, cor, nome, sx }: BadgeSiglaProps): ReactNode
                     textTransform: 'uppercase',
                     fontFamily: FONTE_MARCA,
                     bgcolor: cor || 'action.selected',
+                    color: 'text.primary',
                 },
                 sx,
             ] as SxProps<Theme>}>

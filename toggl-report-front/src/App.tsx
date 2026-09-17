@@ -20,9 +20,10 @@ import { ParametrosForm } from './features/configuracao/ParametrosForm';
 import { ParametrosGantForm } from './features/gant/ParametrosGantForm';
 import { BotaoComCarregamento } from './components/BotaoComCarregamento';
 import { ImportarDadosDialog } from './features/dados/ImportarDadosDialog';
-import { useUsuariosToggl } from './features/usuariosToggl/useUsuariosToggl';
-import { CategoriasSprintPanel } from './features/sprint/CategoriasSprintPanel';
-import { UsuariosTogglPanel } from './features/usuariosToggl/UsuariosTogglPanel';
+import { useCategoriasSprint } from './features/sprint/useCategoriasSprint';
+import { useUsuariosToggl } from './features/usuarios-toggl/useUsuariosToggl';
+import { ConfiguracoesView } from './features/configuracoes/ConfiguracoesView';
+import { useResponsabilidadeSprint } from './features/sprint/useResponsabilidadeSprint';
 
 import type {
     Sprint,
@@ -30,6 +31,7 @@ import type {
     CategoriasSprint,
     ConsultarResponse,
     ParametrosConfiguracao,
+    ResponsabilidadeSprint,
 } from './api/tipos';
 
 import {
@@ -51,16 +53,17 @@ import {
 
 const ETAPAS_RELATORIO = ['Parâmetros', 'Consulta', 'Relatório'] as const;
 const ETAPAS_GANT = ['Parâmetros', 'Consulta', 'Gant'] as const;
-const ETAPAS_SPRINT = ['Sprints', 'Parâmetros', 'Consultar', 'Acompanhamento'] as const;
+const ETAPAS_SPRINT = ['Sprints', 'Consultar', 'Acompanhamento'] as const;
 
-type Modo = 'usuarios' | 'relatorio' | 'gant' | 'sprint';
+type Modo = 'configuracoes' | 'relatorio' | 'gant' | 'sprint';
 
 interface AppInternoProps {
     onSair: () => void;
 }
 
 function AppInterno({ onSair }: AppInternoProps): ReactNode {
-    const [modo, setModo] = useState<Modo>('usuarios');
+    const [modo, setModo] = useState<Modo>('configuracoes');
+    const [configuracaoCompleta, setConfiguracaoCompleta] = useState(false);
 
     const [etapaAtiva, setEtapaAtiva] = useState(0);
     const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
@@ -74,21 +77,23 @@ function AppInterno({ onSair }: AppInternoProps): ReactNode {
     const [etapaSprintAtiva, setEtapaSprintAtiva] = useState(0);
     const [sprintSelecionado, setSprintSelecionado] = useState<Sprint | null>(null);
     const [parametrosSprint, setParametrosSprint] = useState<CategoriasSprint | null>(null);
+    const [responsabilidadeSprint, setResponsabilidadeSprint] = useState<ResponsabilidadeSprint | null>(null);
     const [consultaSprintConcluida, setConsultaSprintConcluida] = useState<ConsultarResponse | null>(null);
 
     const consulta = useConsulta();
     const consultaGant = useConsultaGant();
-    const consultaSprint = useConsultaSprint();
+    const consultaSprint = useConsultaSprint(sprintSelecionado?.chave ?? '');
 
-    const { usuarios, carregando: carregandoUsuarios, carregar: carregarUsuarios } = useUsuariosToggl();
-    const semUsuarios = !carregandoUsuarios && usuarios.length === 0;
+    const { usuariosToggl: usuariosToggl, carregando: carregandoUsuariosToggl, carregar: carregarUsuariosToggl } = useUsuariosToggl();
+    const semUsuariosToggl = !carregandoUsuariosToggl && usuariosToggl.length === 0;
+    const { carregar: carregarCategoriasSprint } = useCategoriasSprint();
+    const { carregar: carregarResponsabilidadeSprint } = useResponsabilidadeSprint();
 
     const [, setVerificacaoInicialFeita] = useState(false);
     const [dialogoImportarAberto, setDialogoImportarAberto] = useState(false);
-    const [chaveUsuariosPanel, setChaveUsuariosPanel] = useState(0);
 
     useEffect(() => {
-        carregarUsuarios()
+        carregarUsuariosToggl()
             .then((lista) => {
                 setVerificacaoInicialFeita((jaFeita) => {
                     if (!jaFeita && lista.length === 0) {
@@ -98,7 +103,17 @@ function AppInterno({ onSair }: AppInternoProps): ReactNode {
                 });
             })
             .catch(() => { });
-    }, [etapaAtiva, etapaGantAtiva, etapaSprintAtiva, modo, carregarUsuarios]);
+    }, [etapaAtiva, etapaGantAtiva, etapaSprintAtiva, modo, carregarUsuariosToggl]);
+
+    useEffect(() => {
+        if (modo !== 'sprint' || etapaSprintAtiva !== 2) return;
+        Promise.all([carregarCategoriasSprint(), carregarResponsabilidadeSprint()])
+            .then(([config, responsabilidade]) => {
+                setParametrosSprint(config);
+                setResponsabilidadeSprint(responsabilidade);
+            })
+            .catch(() => { });
+    }, [modo, etapaSprintAtiva, carregarCategoriasSprint, carregarResponsabilidadeSprint]);
 
     function alternarSelecao(chave: string): void {
         setSelecionados((atual) => {
@@ -126,8 +141,7 @@ function AppInterno({ onSair }: AppInternoProps): ReactNode {
 
     const etapaSprintLiberada = (indice: number): boolean => {
         if (indice <= 0) return true;
-        if (indice === 1) return sprintSelecionado !== null;
-        if (indice === 2) return sprintSelecionado !== null && parametrosSprint !== null;
+        if (indice === 1) return sprintSelecionado !== null && parametrosSprint !== null;
         return sprintSelecionado !== null && parametrosSprint !== null && consultaSprintConcluida !== null;
     };
 
@@ -149,20 +163,20 @@ function AppInterno({ onSair }: AppInternoProps): ReactNode {
                     value={modo}
                     onChange={(_, valor: Modo) => setModo(valor)}
                     sx={{ mb: 1 }}>
-                    <Tab label="Usuários" value="usuarios" />
-                    <Tab label="Relatório" value="relatorio" />
-                    <Tab label="Gant" value="gant" />
-                    <Tab label="Sprint" value="sprint" />
+                    <Tab label="Configurações" value="configuracoes" />
+                    <Tab label="Relatório" value="relatorio" disabled={!configuracaoCompleta} />
+                    <Tab label="Gant" value="gant" disabled={!configuracaoCompleta} />
+                    <Tab label="Sprint" value="sprint" disabled={!configuracaoCompleta} />
                 </Tabs>
 
-                {semUsuarios ? (
+                {semUsuariosToggl ? (
                     <Alert
                         severity="warning"
                         sx={{ mb: 2 }}
                         action={
                             <BotaoComCarregamento
                                 size="small"
-                                onClick={() => setModo('usuarios')}>
+                                onClick={() => setModo('configuracoes')}>
                                 Cadastrar usuário do Toggl
                             </BotaoComCarregamento>
                         }>
@@ -170,11 +184,24 @@ function AppInterno({ onSair }: AppInternoProps): ReactNode {
                     </Alert>
                 ) : undefined}
 
-                {modo === 'usuarios' ? (
-                    <UsuariosTogglPanel key={chaveUsuariosPanel} />
+                {!configuracaoCompleta && modo !== 'configuracoes' ? (
+                    <Alert
+                        severity="warning"
+                        sx={{ mb: 2 }}
+                        action={
+                            <BotaoComCarregamento size="small" onClick={() => setModo('configuracoes')}>
+                                Ir para Configurações
+                            </BotaoComCarregamento>
+                        }>
+                        Complete as configurações obrigatórias para liberar Relatório, Gant e Sprint.
+                    </Alert>
                 ) : undefined}
 
-                {modo === 'relatorio' ? (
+                {modo === 'configuracoes' ? (
+                    <ConfiguracoesView onAlterado={setConfiguracaoCompleta} />
+                ) : undefined}
+
+                {modo === 'relatorio' && configuracaoCompleta ? (
                     <>
                         <Stepper nonLinear activeStep={etapaAtiva} sx={{ mb: 3 }}>
                             {ETAPAS_RELATORIO.map((rotulo, indice) => (
@@ -188,7 +215,7 @@ function AppInterno({ onSair }: AppInternoProps): ReactNode {
 
                         {etapaAtiva === 0 ? (
                             <ParametrosForm
-                                semUsuarios={semUsuarios}
+                                semUsuarios={semUsuariosToggl}
                                 onSalvo={(config) => {
                                     setConfiguracao(config);
                                     setEtapaAtiva(1);
@@ -201,7 +228,6 @@ function AppInterno({ onSair }: AppInternoProps): ReactNode {
                                 dataFim={configuracao.dataFim}
                                 agrupamento={configuracao.agrupamento}
                                 tagsDetalhadas={configuracao.tagsDetalhadas}
-                                usuariosSelecionados={usuarios.filter((usuario) => usuario.selecionado)}
                                 resultado={consulta.resultado}
                                 consultando={consulta.consultando}
                                 executar={consulta.executar}
@@ -227,7 +253,7 @@ function AppInterno({ onSair }: AppInternoProps): ReactNode {
                     </>
                 ) : undefined}
 
-                {modo === 'gant' ? (
+                {modo === 'gant' && configuracaoCompleta ? (
                     <>
                         <Stepper nonLinear activeStep={etapaGantAtiva} sx={{ mb: 3 }}>
                             {ETAPAS_GANT.map((rotulo, indice) => (
@@ -241,7 +267,7 @@ function AppInterno({ onSair }: AppInternoProps): ReactNode {
 
                         {etapaGantAtiva === 0 ? (
                             <ParametrosGantForm
-                                semUsuarios={semUsuarios}
+                                semUsuarios={semUsuariosToggl}
                                 onSalvo={(params) => {
                                     setConfiguracaoGant(params);
                                     setEtapaGantAtiva(1);
@@ -254,7 +280,6 @@ function AppInterno({ onSair }: AppInternoProps): ReactNode {
                                 dataFim={configuracaoGant.dataFim}
                                 agrupamento={configuracaoGant.agrupamento}
                                 tagsDetalhadas={configuracaoGant.tagsSelecionadas}
-                                usuariosSelecionados={usuarios.filter((usuario) => usuario.selecionado)}
                                 resultado={consultaGant.resultado}
                                 consultando={consultaGant.consultando}
                                 executar={consultaGant.executar}
@@ -275,7 +300,7 @@ function AppInterno({ onSair }: AppInternoProps): ReactNode {
                     </>
                 ) : undefined}
 
-                {modo === 'sprint' ? (
+                {modo === 'sprint' && configuracaoCompleta ? (
                     <>
                         <Stepper nonLinear activeStep={etapaSprintAtiva} sx={{ mb: 3 }}>
                             {ETAPAS_SPRINT.map((rotulo, indice) => (
@@ -291,47 +316,47 @@ function AppInterno({ onSair }: AppInternoProps): ReactNode {
                             <SprintsPanel
                                 sprintSelecionadoChave={sprintSelecionado?.chave ?? null}
                                 onSelecionar={setSprintSelecionado}
-                                semUsuarios={semUsuarios}
-                                onContinuar={() => setEtapaSprintAtiva(1)} />
-                        ) : undefined}
-
-                        {etapaSprintAtiva === 1 ? (
-                            <CategoriasSprintPanel
-                                semUsuarios={semUsuarios}
-                                onVoltar={() => setEtapaSprintAtiva(0)}
-                                onAvancar={(config) => {
-                                    setParametrosSprint(config);
-                                    setEtapaSprintAtiva(2);
+                                semUsuarios={semUsuariosToggl}
+                                onContinuar={() => {
+                                    Promise.all([carregarCategoriasSprint(), carregarResponsabilidadeSprint()])
+                                        .then(([config, responsabilidade]) => {
+                                            setParametrosSprint(config);
+                                            setResponsabilidadeSprint(responsabilidade);
+                                            setEtapaSprintAtiva(1);
+                                        })
+                                        .catch(() => { });
                                 }} />
                         ) : undefined}
 
-                        {etapaSprintAtiva === 2 && sprintSelecionado && parametrosSprint ? (
+                        {etapaSprintAtiva === 1 && sprintSelecionado && parametrosSprint ? (
                             <ConsultaPanel
                                 dataInicio={sprintSelecionado.dataInicio}
                                 dataFim={sprintSelecionado.dataFim}
                                 agrupamento={parametrosSprint.agrupamento}
                                 tagsDetalhadas={parametrosSprint.tagsDetalhadas}
                                 categorias={{ dev: parametrosSprint.dev, rev: parametrosSprint.rev, qa: parametrosSprint.qa }}
-                                usuariosSelecionados={usuarios.filter((usuario) => usuario.selecionado)}
+                                responsabilidade={responsabilidadeSprint ?? undefined}
+                                origemConsulta={{ valor: consultaSprint.origem, onChange: consultaSprint.setOrigem }}
                                 resultado={consultaSprint.resultado}
                                 consultando={consultaSprint.consultando}
                                 executar={consultaSprint.executar}
-                                onVoltar={() => setEtapaSprintAtiva(1)}
+                                onVoltar={() => setEtapaSprintAtiva(0)}
                                 onConcluida={(resposta) => {
                                     setConsultaSprintConcluida(resposta);
                                     if (!resposta.veioDoCache && sprintSelecionado) {
                                         limparTachados(sprintSelecionado.chave);
                                     }
-                                    setEtapaSprintAtiva(3);
+                                    setEtapaSprintAtiva(2);
                                 }} />
                         ) : undefined}
 
-                        {etapaSprintAtiva === 3 && sprintSelecionado && consultaSprintConcluida ? (
+                        {etapaSprintAtiva === 2 && sprintSelecionado && consultaSprintConcluida ? (
                             <SprintView
                                 chaveSprint={sprintSelecionado.chave}
                                 veioDoCache={consultaSprintConcluida.veioDoCache}
                                 categorias={parametrosSprint}
-                                onVoltar={() => setEtapaSprintAtiva(2)} />
+                                responsabilidade={responsabilidadeSprint}
+                                onVoltar={() => setEtapaSprintAtiva(1)} />
                         ) : undefined}
                     </>
                 ) : undefined}
@@ -344,8 +369,7 @@ function AppInterno({ onSair }: AppInternoProps): ReactNode {
                 onFechar={() => setDialogoImportarAberto(false)}
                 onImportado={() => {
                     setDialogoImportarAberto(false);
-                    carregarUsuarios().catch(() => { });
-                    setChaveUsuariosPanel((atual) => atual + 1);
+                    carregarUsuariosToggl().catch(() => { });
                 }} />
         </Box>
     );

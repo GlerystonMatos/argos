@@ -414,11 +414,15 @@ Coverage/*
 *.env
 
 # Configuração local (API Tokens em texto puro) e cache de consulta (tratar como segredo)
-TogglRelatorioParametros.ini
-TogglRelatorioData.ini
+ConfiguracoesGerais.ini
 TogglUsuarios.ini
-TogglSprints.ini
-TogglSprintCategorias.ini
-TogglSprintData.ini
-TogglGantParametros.ini
-TogglGantData.ini
+TogglTagsCache.ini
+JiraListasCache.ini
+JiraCores.ini
+RelatorioParametros.ini
+RelatorioData.ini
+GantParametros.ini
+GantData.ini
+Sprints.ini
+SprintData.ini
+JiraSprintData.ini

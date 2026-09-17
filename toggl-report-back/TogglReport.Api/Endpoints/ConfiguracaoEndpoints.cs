@@ -22,14 +22,19 @@ public static class ConfiguracaoEndpoints
             if (!Agrupamento.EhValido(request.Agrupamento))
                 return Results.BadRequest("Agrupamento deve ser 'descricao', 'tag' ou 'ambos'.");
 
-            if (!ValidacaoDatas.Tenta(request.DataInicio, request.DataFim, out DateTime inicio, out DateTime fim, out IResult? erroDatas))
-                return erroDatas!;
-
             ConfiguracaoApp configuracao = CarregadorConfiguracaoIni.Carregar(caminhoConfiguracao, caminhoUsuarios) ?? new ConfiguracaoApp();
+
+            if (!string.IsNullOrWhiteSpace(request.DataInicio) || !string.IsNullOrWhiteSpace(request.DataFim))
+            {
+                if (!ValidacaoDatas.Tenta(request.DataInicio ?? "", request.DataFim ?? "", out DateTime inicio, out DateTime fim, out IResult? erroDatas))
+                    return erroDatas!;
+
+                configuracao.DataInicioAnterior = inicio.ToString("yyyy-MM-dd");
+                configuracao.DataFimAnterior = fim.ToString("yyyy-MM-dd");
+            }
+
             configuracao.AgrupamentoPadrao = request.Agrupamento;
             configuracao.TagsDetalhadas = request.TagsDetalhadas;
-            configuracao.DataInicioAnterior = inicio.ToString("yyyy-MM-dd");
-            configuracao.DataFimAnterior = fim.ToString("yyyy-MM-dd");
 
             IResult? erroPersistencia = TratamentoIo.Executar(
                 () => CarregadorConfiguracaoIni.Salvar(caminhoConfiguracao, caminhoUsuarios, configuracao),
@@ -40,6 +45,6 @@ public static class ConfiguracaoEndpoints
             return Results.Ok(new ParametrosConfiguracaoDto(
                 configuracao.AgrupamentoPadrao, configuracao.TagsDetalhadas, configuracao.DataInicioAnterior, configuracao.DataFimAnterior));
         })
-        .WithSummary("Atualiza agrupamento, tags detalhadas e período; preserva os usuários já cadastrados");
+        .WithSummary("Atualiza agrupamento, tags detalhadas e período; preserva os usuários do Toggl já cadastrados");
     }
 }

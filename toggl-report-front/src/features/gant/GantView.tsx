@@ -1,16 +1,12 @@
 import { useGant } from './useGant';
+import { GantLinha } from './GantLinha';
 import type { ReactNode } from 'react';
-import { truncar } from '../../utils/texto';
+import { useEffect, useState } from 'react';
 import SearchIcon from '@mui/icons-material/Search';
-import { FONTE_MARCA } from '../../utils/tipografia';
-import { Fragment, useEffect, useState } from 'react';
-import { formatarDuracao } from '../../utils/duracao';
 import { useExpansao } from '../../hooks/useExpansao';
 import { AvisoCache } from '../../components/AvisoCache';
 import UnfoldLessIcon from '@mui/icons-material/UnfoldLess';
 import UnfoldMoreIcon from '@mui/icons-material/UnfoldMore';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import { useNotificacao } from '../../hooks/useNotificacao';
 import { CabecalhoView } from '../../components/CabecalhoView';
 import { formatarDiaCurto, formatarPeriodo } from '../../utils/datas';
@@ -18,18 +14,14 @@ import { EsqueletoCarregando } from '../../components/EsqueletoCarregando';
 import { BotaoComCarregamento } from '../../components/BotaoComCarregamento';
 
 import {
-    Box,
-    Chip,
     Table,
     Alert,
     Stack,
-    Tooltip,
     TableRow,
     TextField,
     TableBody,
     TableCell,
     TableHead,
-    Typography,
     TableContainer,
 } from '@mui/material';
 
@@ -151,74 +143,14 @@ export function GantView({ dataInicio, dataFim, onVoltar, veioDoCache }: GantVie
                                 const usuarioExpandido = expandido[linha.usuarioChave] ?? false;
 
                                 return (
-                                    <Fragment key={`${linha.usuarioChave}-${linha.categoria}-${linha.descricao}-${indice}`}>
-                                        {primeiraDoUsuario ? (
-                                            <TableRow
-                                                key={`cabecalho-${linha.usuarioChave}`}
-                                                onClick={() => alternarUm(linha.usuarioChave)}
-                                                sx={{ cursor: 'pointer', bgcolor: 'action.hover' }}>
-                                                <TableCell colSpan={totalColunas} sx={{ py: 0 }}>
-                                                    <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
-                                                        {usuarioExpandido ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
-                                                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                                                            {linha.nomeExibicao}
-                                                        </Typography>
-                                                    </Stack>
-                                                </TableCell>
-                                            </TableRow>
-                                        ) : undefined}
-                                        {usuarioExpandido ? (
-                                            <TableRow>
-                                                <TableCell sx={{ py: 0 }}>{linha.categoria}</TableCell>
-                                                <TableCell sx={{ py: 0, whiteSpace: 'nowrap' }}>
-                                                    <Tooltip title={linha.descricao}>
-                                                        <Box component="span">{truncar(linha.descricao, 50)}</Box>
-                                                    </Tooltip>
-                                                </TableCell>
-                                                <TableCell sx={{ py: 0 }}>{formatarDuracao(Math.round(linha.totalHoras * 3600))}</TableCell>
-                                                {gant.dias.map((dia) => {
-                                                    const celulas = linha.celulasPorDia[dia];
-                                                    const pintarCelula = celulas && celulas.length > 0;
-                                                    return (
-                                                        <TableCell
-                                                            key={dia}
-                                                            sx={{
-                                                                p: 0.25,
-                                                                textAlign: 'center',
-                                                                borderLeft: 1,
-                                                                borderColor: 'divider',
-                                                                bgcolor: pintarCelula ? celulas[0].cor || 'action.disabledBackground' : undefined,
-                                                            }}>
-                                                            {celulas && celulas.length > 0 ? (
-                                                                <Stack spacing={0.25} sx={{ alignItems: 'center' }}>
-                                                                    {celulas.map((celula) => (
-                                                                        <Tooltip
-                                                                            key={celula.usuarioChave}
-                                                                            title={`${celula.nomeExibicao} — ${formatarDuracao(Math.round(celula.horas * 3600))}`}>
-                                                                            <Chip
-                                                                                size="small"
-                                                                                label={celula.sigla || '?'}
-                                                                                sx={{
-                                                                                    py: 0.20,
-                                                                                    borderRadius: 0,
-                                                                                    fontWeight: 700,
-                                                                                    fontSize: '0.85rem',
-                                                                                    textAlign: 'center',
-                                                                                    display: 'inline-block',
-                                                                                    textTransform: 'uppercase',
-                                                                                    fontFamily: FONTE_MARCA,
-                                                                                    bgcolor: celula.cor || 'action.selected',
-                                                                                }} />
-                                                                        </Tooltip>
-                                                                    ))}
-                                                                </Stack>
-                                                            ) : undefined}
-                                                        </TableCell>
-                                                    );
-                                                })}
-                                            </TableRow>
-                                        ) : undefined}
-                                    </Fragment>
+                                    <GantLinha
+                                        key={`${linha.usuarioChave}-${linha.categoria}-${linha.descricao}-${indice}`}
+                                        linha={linha}
+                                        dias={gant.dias}
+                                        totalColunas={totalColunas}
+                                        primeiraDoUsuario={primeiraDoUsuario}
+                                        usuarioExpandido={usuarioExpandido}
+                                        onAlternarUsuario={() => alternarUm(linha.usuarioChave)} />
                                 );
                             })}
                         </TableBody>

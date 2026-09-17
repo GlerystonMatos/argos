@@ -1,12 +1,13 @@
 using RelatorioToggl.Configuracao;
 using RelatorioToggl.Consultas;
-using RelatorioToggl.Sprints;
+using RelatorioToggl.Jira;
+using RelatorioToggl.Sprint;
 
 namespace RelatorioToggl.Api.Endpoints;
 
 public static class SprintAcompanhamentoEndpoints
 {
-    public static void MapSprintAcompanhamentoEndpoints(this WebApplication app, string caminhoConfiguracao, string caminhoUsuarios, string caminhoSprints, string caminhoCategoriasSprint, string caminhoCacheSprint)
+    public static void MapSprintAcompanhamentoEndpoints(this WebApplication app, string caminhoConfiguracao, string caminhoUsuarios, string caminhoSprints, string caminhoConfiguracoesGerais, string caminhoCacheSprint, string caminhoJiraSprintData)
     {
         RouteGroupBuilder grupo = app.MapGroup("/api/sprint").WithTags("Sprint");
 
@@ -15,8 +16,8 @@ public static class SprintAcompanhamentoEndpoints
             if (string.IsNullOrWhiteSpace(chaveSprint))
                 return Results.BadRequest("A chave do sprint é obrigatória.");
 
-            List<Sprint> sprints = CarregadorSprintsIni.Carregar(caminhoSprints);
-            Sprint? sprint = sprints.FirstOrDefault(s => s.Chave == chaveSprint);
+            List<DadosSprint> sprints = CarregadorSprintsIni.Carregar(caminhoSprints);
+            DadosSprint? sprint = sprints.FirstOrDefault(s => s.Chave == chaveSprint);
             if (sprint is null)
                 return Results.NotFound("Sprint não encontrado.");
 
@@ -26,16 +27,22 @@ public static class SprintAcompanhamentoEndpoints
             if (usuariosSelecionados.Count == 0)
                 return Results.BadRequest("Nenhum usuário do Toggl cadastrado.");
 
-            CacheConsulta? cache = ServicoConsulta.CarregarCacheSeExistente(caminhoCacheSprint);
+            CacheConsulta? cache = CarregadorCacheSprintIni.CarregarSeExistente(caminhoCacheSprint, chaveSprint);
             if (cache is null || cache.DataInicio != sprint.DataInicio || cache.DataFim != sprint.DataFim)
                 return Results.Conflict("Não há consulta salva para esse período. Chame POST /api/sprint/consultas primeiro.");
 
             ConfiguracaoApp configuracaoSelecionados = new() { Usuarios = usuariosSelecionados };
             ResultadoConsulta consulta = ServicoConsulta.CarregarRegistrosDoCache(cache, configuracaoSelecionados);
 
-            ConfiguracaoCategoriasSprint categorias = CarregadorConfiguracaoCategoriasSprintIni.Carregar(caminhoCategoriasSprint);
+            ConfiguracaoCategoriasSprint categorias = CarregadorConfiguracaoCategoriasSprintIni.Carregar(caminhoConfiguracoesGerais);
 
-            ResultadoSprint resultado = ServicoSprint.Montar(sprint, usuariosSelecionados, consulta, categorias);
+            List<IssueJira>? issuesJira = CarregadorCacheJiraSprintIni.ObterParaSprint(caminhoJiraSprintData, chaveSprint);
+            Dictionary<string, IssueJira>? issuesPorCodigo = issuesJira?.ToDictionary(issue => issue.Chave, StringComparer.OrdinalIgnoreCase);
+
+            ConfiguracaoResponsabilidadeSprint responsabilidade = CarregadorConfiguracaoResponsabilidadeSprintIni.Carregar(caminhoConfiguracoesGerais);
+            ConfiguracaoMapeamentoJiraToggl mapeamento = CarregadorConfiguracaoMapeamentoJiraTogglIni.Carregar(caminhoConfiguracoesGerais);
+
+            ResultadoSprint resultado = ServicoSprint.Montar(sprint, usuariosSelecionados, consulta, categorias, issuesPorCodigo, responsabilidade, mapeamento);
             return Results.Ok(resultado);
         })
         .WithSummary("Devolve o acompanhamento do sprint (cabeçalho de capacidade + tarefas por descrição) a partir do cache do sprint");

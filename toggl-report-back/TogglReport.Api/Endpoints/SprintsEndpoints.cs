@@ -11,7 +11,7 @@ public static class SprintsEndpoints
 
         grupo.MapGet("/", () =>
         {
-            List<Sprint> sprints = CarregadorSprintsIni.Carregar(caminhoSprints);
+            List<DadosSprint> sprints = CarregadorSprintsIni.Carregar(caminhoSprints);
             List<SprintDto> resposta = sprints
                 .Select(s => new SprintDto(s.Chave, s.Nome, s.HorasPorDia, s.DataInicio, s.DataFim))
                 .ToList();
@@ -30,13 +30,13 @@ public static class SprintsEndpoints
             if (request.HorasPorDia <= 0)
                 return Results.BadRequest("As horas por dia devem ser maiores que zero.");
 
-            List<Sprint> sprints = CarregadorSprintsIni.Carregar(caminhoSprints);
+            List<DadosSprint> sprints = CarregadorSprintsIni.Carregar(caminhoSprints);
 
             if (ServicoSprints.NomeEmUso(sprints, request.Nome, ignorar: null))
                 return Results.Conflict($"Já existe um sprint chamado '{request.Nome}'.");
 
             string chave = ServicoSprints.GerarChaveUnica(request.Nome, sprints);
-            Sprint sprint = new()
+            DadosSprint sprint = new()
             {
                 Chave = chave,
                 Nome = request.Nome,
@@ -59,8 +59,8 @@ public static class SprintsEndpoints
 
         grupo.MapPut("/{chave}", (string chave, EditarSprintRequest request) =>
         {
-            List<Sprint> sprints = CarregadorSprintsIni.Carregar(caminhoSprints);
-            Sprint? sprint = sprints.FirstOrDefault(s => s.Chave == chave);
+            List<DadosSprint> sprints = CarregadorSprintsIni.Carregar(caminhoSprints);
+            DadosSprint? sprint = sprints.FirstOrDefault(s => s.Chave == chave);
             if (sprint is null)
                 return Results.NotFound();
 
@@ -95,8 +95,8 @@ public static class SprintsEndpoints
 
         grupo.MapDelete("/{chave}", (string chave) =>
         {
-            List<Sprint> sprints = CarregadorSprintsIni.Carregar(caminhoSprints);
-            Sprint? sprint = sprints.FirstOrDefault(s => s.Chave == chave);
+            List<DadosSprint> sprints = CarregadorSprintsIni.Carregar(caminhoSprints);
+            DadosSprint? sprint = sprints.FirstOrDefault(s => s.Chave == chave);
             if (sprint is null)
                 return Results.NotFound();
 
