@@ -5,13 +5,13 @@ namespace RelatorioToggl.Api.Endpoints;
 
 public static class SprintResponsabilidadeEndpoints
 {
-    public static void MapSprintResponsabilidadeEndpoints(this WebApplication app, string caminhoConfiguracoesGerais)
+    public static void MapSprintResponsabilidadeEndpoints(this WebApplication app, CaminhosDados caminhos)
     {
         RouteGroupBuilder grupo = app.MapGroup("/api/sprint/responsabilidade").WithTags("Sprint");
 
         grupo.MapGet("/", () =>
         {
-            ConfiguracaoResponsabilidadeSprint configuracao = CarregadorConfiguracaoResponsabilidadeSprintIni.Carregar(caminhoConfiguracoesGerais);
+            ConfiguracaoResponsabilidadeSprint configuracao = CarregadorConfiguracaoResponsabilidadeSprintIni.Carregar(caminhos.JiraStatus);
             return Results.Ok(new ResponsabilidadeSprintDto(configuracao.StatusDev, configuracao.StatusRev, configuracao.StatusQa));
         })
         .WithSummary("Obtém o mapeamento global de status do Jira por grupo responsável (DEV/REV/QA)");
@@ -20,13 +20,13 @@ public static class SprintResponsabilidadeEndpoints
         {
             ConfiguracaoResponsabilidadeSprint configuracao = new()
             {
-                StatusDev = Normalizar(request.StatusDev),
-                StatusRev = Normalizar(request.StatusRev),
-                StatusQa = Normalizar(request.StatusQa)
+                StatusDev = NormalizacaoListas.Normalizar(request.StatusDev),
+                StatusRev = NormalizacaoListas.Normalizar(request.StatusRev),
+                StatusQa = NormalizacaoListas.Normalizar(request.StatusQa)
             };
 
             IResult? erroPersistencia = TratamentoIo.Executar(
-                () => CarregadorConfiguracaoResponsabilidadeSprintIni.Salvar(caminhoConfiguracoesGerais, configuracao),
+                () => CarregadorConfiguracaoResponsabilidadeSprintIni.Salvar(caminhos.JiraStatus, configuracao),
                 "Não foi possível salvar a responsabilidade por status.");
             if (erroPersistencia is not null)
                 return erroPersistencia;
@@ -35,11 +35,4 @@ public static class SprintResponsabilidadeEndpoints
         })
         .WithSummary("Atualiza o mapeamento global de status do Jira por grupo responsável (DEV/REV/QA)");
     }
-
-    private static List<string> Normalizar(List<string>? valores) =>
-        (valores ?? new List<string>())
-            .Where(valor => !string.IsNullOrWhiteSpace(valor))
-            .Select(valor => valor.Trim())
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
 }

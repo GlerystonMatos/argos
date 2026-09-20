@@ -24,19 +24,23 @@ A Web API consulta o Toggl Track, faz cache do retorno cru em arquivos `.ini` de
     - [Como rodar](#como-rodar)
     - [Endpoints](#endpoints)
     - [Exemplos de request/response](#exemplos-de-requestresponse)
-    - [Gráfico de Gant](#gráfico-de-Gant)
+    - [Gráfico de Gant](#gráfico-de-gant)
     - [Sprint](#sprint)
     - [Jira](#jira)
     - [Decisões desta camada](#decisões-desta-camada)
+  - [Pasta `dados/`](#pasta-dados)
+    - [Backup e restauração (`/api/dados/*`)](#backup-e-restauração-apidados)
+  - [Docker](#docker)
   - [Estrutura de arquivos](#estrutura-de-arquivos)
   - [Segurança](#segurança)
+    - [Variáveis de ambiente em dev (Visual Studio)](#variáveis-de-ambiente-em-dev-visual-studio)
   - [Limitações conhecidas](#limitações-conhecidas)
 
 ## Requisitos
 
 - [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) ou superior
 - Um **API Token** pessoal do Toggl Track para cada usuário que você queira incluir no relatório ([como obter](#como-obter-seu-api-token-do-toggl))
-- Opcional: um **API Token** do Jira Cloud, só se for usar a aba Jira ([como obter](#como-obter-seu-api-token-do-jira))
+- Opcional: um **API Token** do Jira Cloud, só se for usar a integração com o Jira ([como obter](#como-obter-seu-api-token-do-jira))
 
 ## Compilar a solução
 
@@ -57,7 +61,7 @@ Compila os dois projetos (`TogglReport.Api`, `TogglReport.Nucleo`) de uma vez. `
 1. Acesse [track.toggl.com](https://track.toggl.com/) e faça login.
 2. Vá em **Profile Settings** (ícone de perfil no canto).
 3. Role até o final da página — o **API Token** está lá.
-4. Copie e cole no formulário de usuários do frontend.
+4. Copie e cole no cadastro de usuários do Toggl no frontend.
 
 ---
 
@@ -65,30 +69,32 @@ Compila os dois projetos (`TogglReport.Api`, `TogglReport.Nucleo`) de uma vez. `
 
 1. Acesse [id.atlassian.com/manage-profile/security/api-tokens](https://id.atlassian.com/manage-profile/security/api-tokens) logado com a conta Atlassian usada no seu Jira Cloud.
 2. **Create API token**, dê um nome (ex.: "toggl-report") e copie o valor exibido — ele não aparece de novo depois.
-3. Cole na aba **Jira** do frontend junto com a URL do domínio (`empresa.atlassian.net`) e o e-mail da mesma conta.
+3. Cole na seção **Jira** do frontend junto com a URL do domínio (`empresa.atlassian.net`) e o e-mail da mesma conta.
 
 ---
 
 ## Núcleo compartilhado (`TogglReport.Nucleo`)
 
-Biblioteca de classes referenciada pelo `TogglReport.Api`. Contém **tudo que não depende de HTTP**, isolando toda a regra de negócio numa camada só:
+Biblioteca de classes referenciada pelo `TogglReport.Api`. Contém **tudo que não depende de HTTP** — toda a regra de negócio e o acesso a INI, sem nenhum `PackageReference`:
 
 | Pasta | Conteúdo |
 |---|---|
-| `Configuracao/` | `ConfiguracaoApp`/`ConfiguracaoUsuarioToggl` (modelo do `[Geral]` de `RelatorioParametros.ini` + usuários em memória, inclui `Administrador`), `CarregadorConfiguracaoIni` (agrupamento/tags/período), `CarregadorUsuariosTogglIni` (`TogglUsuarios.ini` — usuários/tokens, compartilhado com o Gant), `CriptografiaToken` (AES do `TokenApi`), `CacheConsulta`/`UsuarioTogglCacheado` (modelo do `RelatorioData.ini`), `CarregadorCacheIni` (cache único do relatório/Gant), `CarregadorCacheSprintIni` (mesmo `CacheConsulta`, mas isolado por sprint em `SprintData.ini`), `AnalisadorIni` (parser de INI compartilhado — `Analisar`/`ObterOuPadrao`/`ObterOuNulo` + `Escrever` (grava UTF-8 sem BOM, criando a pasta) e `DividirLista` (split de lista separada por vírgula)), `CaminhosDados` (monta os caminhos `dados/*.ini` a partir do diretório base de quem chama, incluindo `CaminhoConfiguracoesGerais` → `dados/ConfiguracoesGerais.ini`), `ServicoUsuariosToggl` (gerar chave única, checar nome em uso, mascarar token, `DesmarcarOutrosAdministradores` — garante um só `Administrador` por vez), `CarregadorConfiguracaoJiraIni`/`CarregadorConfiguracaoCategoriasSprintIni`/`CarregadorConfiguracaoResponsabilidadeSprintIni` (cada um lê/grava sua seção de `ConfiguracoesGerais.ini` — ver [Segurança](#segurança)), `ServicoChaves` (`GerarChaveUnica` compartilhado por `ServicoUsuariosToggl`/`ServicoSprints`), `DiasUteis` (`Entre(inicio, fim)` — dias seg–sex, base do `ServicoGant`/`ServicoSprint`), `Agrupamento` (`EhValido` — `descricao`/`tag`/`ambos`, usado pelos 3 endpoints de parâmetros) |
-| `Toggl/` | `ClienteApiToggl` (HTTP Basic contra `api.track.toggl.com/api/v9`, inclui `ObterTagsAsync` — resolve o workspace via `GET /me` (`default_workspace_id`) e, se vier `null` (conta com múltiplos workspaces), cai para `GET /workspaces` e usa o primeiro da lista, antes de listar `GET /workspaces/{id}/tags`), `RegistroTempoDto`, `ResultadoApiToggl`, `LimitadorRequisicoes` (limite de 30 req/hora, em memória, por processo) |
-| `Relatorios/` | `ServicoAgrupamento` (por descrição/tag, normalização "TEL"), `LinhaDescricao`, `ServicoBuscaDescricao`, `LinhaBusca`, `ResultadoBuscaDescricao` — tudo puro, devolve dados, nunca texto formatado |
-| `Consultas/` | `ServicoConsulta` — decide cache×API e aplica o rate limiter; `ResultadoConsulta`, `EventoConsultaUsuarioToggl`, `StatusConsultaUsuarioToggl` |
+| `Configuracao/` | Modelos e carregadores/salvadores de cada `.ini` (`CarregadorUsuariosTogglIni`, `CarregadorConfiguracaoCategoriasSprintIni` para Toggl, `CarregadorConfiguracaoJiraIni`, `CarregadorCacheIni`/`CarregadorCacheSprintIni`, etc.); `CaminhosDados` (monta todos os caminhos de `dados/`); `AnalisadorIni` (parser/escritor de INI compartilhado, UTF-8 sem BOM); `CriptografiaToken` (AES dos tokens); `ServicoUsuariosToggl`, `ServicoSprints`, `ServicoChaves`, `DiasUteis`, `Agrupamento` (helpers) |
+| `Toggl/` | `ClienteApiToggl` (HTTP Basic contra `api.track.toggl.com/api/v9`; `ObterTagsAsync` resolve o workspace via `GET /me` e, se `default_workspace_id` vier `null`, cai para `GET /workspaces` e usa o primeiro), `RegistroTempoDto`, `ResultadoApiToggl` (Ok/Falha, sem exceptions), `LimitadorRequisicoes` (30 req/hora por usuário, em memória) |
+| `Relatorios/` | `ServicoAgrupamento` (por descrição/tag, normalização "TEL"), `ServicoBuscaDescricao` — lógica pura, devolve dados, nunca texto formatado |
+| `Consultas/` | `ServicoConsulta` — decide cache×API e aplica o rate limiter |
+| `Gant/`, `Sprint/` | `ServicoGant`, `ServicoSprint` e seus modelos de resultado |
+| `Jira/` | `ClienteApiJira` (HTTP Basic `email:apiToken`), `IssueJira`, `ResultadoApiJira`, carregador do cache de issues por sprint |
 
-`ServicoConsulta` é o ponto mais importante: a Web API chama sempre os mesmos métodos (`CarregarCacheSeExistente`, `CacheCorrespondeAosParametros`, `CarregarRegistrosDoCache`, `ConsultarUsuariosAsync`, `SalvarCache`) — cada endpoint decide **quando** chamar cada um (via um parâmetro de requisição, `forcarConsultaApi`), mas a regra em si (o que conta como "mesmo período/usuários", quando usar cache, como tratar o rate limit) existe em um único lugar.
+`ServicoConsulta` é o ponto mais importante: a Web API chama sempre os mesmos métodos (`CarregarCacheSeExistente`, `CacheCorrespondeAosParametros`, `CarregarRegistrosDoCache`, `ConsultarUsuariosAsync`, `SalvarCache`) — cada endpoint decide **quando** chamar cada um (via `forcarConsultaApi`), mas a regra em si (o que conta como "mesmo período/usuários", quando usar cache, como tratar o rate limit) existe em um único lugar.
 
-Este projeto **nunca** referencia tipos de apresentação HTTP (`Endpoints/`, `Dtos/`) — só lógica pura e acesso a arquivo.
+Este projeto **nunca** referencia tipos de apresentação HTTP (`Endpoints/`, `Dtos/`).
 
 ---
 
 ## Web API (`TogglReport.Api`)
 
-API HTTP local (Minimal APIs, ASP.NET Core), com autenticação HTTP Basic **opcional** (desligada por padrão, ver [Segurança](#segurança)) — expõe as funcionalidades da aplicação para consumo do [frontend](../toggl-report-front/README.md) ou de qualquer outro cliente HTTP local.
+API HTTP local (Minimal APIs, ASP.NET Core), com autenticação HTTP Basic **opcional** (desligada por padrão, ver [Segurança](#segurança)) — expõe as funcionalidades para o [frontend](../toggl-report-front/README.md) ou qualquer outro cliente HTTP.
 
 ### Como rodar
 
@@ -96,50 +102,53 @@ API HTTP local (Minimal APIs, ASP.NET Core), com autenticação HTTP Basic **opc
 dotnet run --project TogglReport.Api
 ```
 
-Sobe em `http://localhost:5180` (porta fixa, `Properties/launchSettings.json`). Swagger/OpenAPI em **`http://localhost:5180/swagger`** — documenta todos os endpoints com parâmetros, respostas e exemplos, sem exigir autenticação para navegar. Quando `AUTH__USUARIO`/`AUTH__SENHA` estão configurados, o Swagger ganha um botão **"Authorize"** (esquema HTTP Basic) — informe as credenciais uma vez e as chamadas de teste feitas na própria UI já saem autenticadas.
+Sobe em `http://localhost:5180` (porta fixa, `Properties/launchSettings.json`). Swagger/OpenAPI em **`http://localhost:5180/swagger`** — documenta todos os endpoints, sem exigir autenticação para navegar. Com `AUTH__USUARIO`/`AUTH__SENHA` configurados, o Swagger ganha um botão **"Authorize"** (HTTP Basic) e as chamadas de teste saem autenticadas.
 
-Cria sua pasta `dados/` (ao lado do executável da API), com `RelatorioParametros.ini`/`TogglUsuarios.ini`/`RelatorioData.ini` e seu próprio contador de rate limit em memória.
+Cria a pasta `dados/` ao lado do executável da API (ver [Pasta `dados/`](#pasta-dados)) e mantém seu próprio contador de rate limit em memória.
 
 ### Endpoints
 
 | Método | Rota | Descrição |
 |---|---|---|
-| `GET` | `/api/configuracao` | Agrupamento, tags detalhadas e último período salvos |
-| `PUT` | `/api/configuracao` | Atualiza agrupamento/tags/período; preserva os usuários já cadastrados. `dataInicio`/`dataFim` são opcionais desde 2026-09-13 — omitidos, preservam o período já salvo (usado pela aba Configurações para atualizar só agrupamento/tags sem mexer no período do Relatório) |
+| `GET` | `/api/configuracao` | Agrupamento, tags detalhadas (fonte única do Toggl) e último período do Relatório |
+| `PUT` | `/api/configuracao` | Atualiza agrupamento/tags e, se informados, o período. `dataInicio`/`dataFim` são opcionais — omitidos, preservam o período salvo |
 | `GET` | `/api/usuarios-toggl` | Lista usuários do Toggl cadastrados (token mascarado, inclui `administrador`) |
-| `POST` | `/api/usuarios-toggl` | Cadastra um usuário do Toggl (valida o token por padrão); marcar `administrador: true` desmarca automaticamente qualquer outro administrador existente |
-| `PUT` | `/api/usuarios-toggl/{chave}` | Edita nome de exibição, token e/ou `administrador` de um usuário do Toggl; `tokenApi` omitido/vazio mantém o já salvo; marcar `administrador: true` desmarca automaticamente qualquer outro administrador existente (só pode haver um por vez) |
-| `DELETE` | `/api/usuarios-toggl/{chave}` | Remove um usuário do Toggl cadastrado |
-| `POST` | `/api/usuarios-toggl/validar-token` | Valida um API Token de usuário do Toggl, sem salvar |
-| `GET` | `/api/usuarios-toggl/tags?forcarAtualizacao=` | Lista as tags reais do workspace do Toggl (`GET /me` para ler `default_workspace_id`, com fallback para `GET /workspaces` — usa o primeiro da lista — quando esse campo vem `null`, seguido de `GET /workspaces/{id}/tags`), usando o token do usuário marcado como `administrador`; cacheada em `TagsCache.ini` até `forcarAtualizacao=true`; 400 se nenhum usuário é administrador |
-| `POST` | `/api/consultas` | Consulta o Toggl (cache-first, respeita o rate limit); salva o retorno cru |
-| `GET` | `/api/relatorio?dataInicio=&dataFim=` | Relatório agrupado a partir dos dados em cache |
-| `GET` | `/api/busca?termo=` | Busca por descrição sobre os dados em cache |
-| `GET` | `/api/dados/download` | Baixa a pasta `dados/` inteira compactada em `dados.zip` (todos os arquivos presentes no momento, sem lista fixa) |
-| `POST` | `/api/dados/restaurar` | Restaura a pasta `dados/` a partir de um `.zip` enviado (`multipart/form-data`, campo `arquivo`) — `ExtractToDirectory(overwriteFiles: true)`: sobrescreve **só** os arquivos presentes no `.zip` (os demais, inclusive os caches de consulta, ficam intactos), criando a pasta se ainda não existir. Serve tanto para o primeiro uso quanto para reimportar sobre dados já existentes (o frontend tem um botão no rodapé, ver README do front). Nenhuma invalidação de cache está atrelada à importação. 400 se algum arquivo do zip estiver dentro de uma pasta (deve compactar o **conteúdo** de `dados/`, não a pasta em si); 500 com mensagem limpa em qualquer outra falha de I/O |
-| `GET` | `/api/gant/parametros` | Período, tags a detalhar e agrupamento do **Gant** (independente do relatório) |
-| `PUT` | `/api/gant/parametros` | Atualiza os parâmetros do Gant — valida `agrupamento` (400 se fora de `descricao`/`tag`/`ambos`); `dataInicio`/`dataFim` opcionais desde 2026-09-13, mesma regra de `/api/configuracao` |
+| `POST` | `/api/usuarios-toggl` | Cadastra um usuário (valida o token por padrão); `administrador: true` desmarca qualquer outro administrador |
+| `PUT` | `/api/usuarios-toggl/{chave}` | Edita nome, token e/ou `administrador`; `tokenApi` omitido/vazio mantém o salvo; só um administrador por vez |
+| `DELETE` | `/api/usuarios-toggl/{chave}` | Remove um usuário |
+| `POST` | `/api/usuarios-toggl/validar-token` | Valida um API Token do Toggl, sem salvar |
+| `GET` | `/api/usuarios-toggl/tags?forcarAtualizacao=` | Tags reais do workspace do Toggl, usando o token do usuário `administrador`; cacheada em `TogglTagsCache.ini` até `forcarAtualizacao=true`; 400 se não há administrador |
+| `POST` | `/api/consultas` | Consulta o Toggl (cache-first, respeita o rate limit) e salva o retorno cru em `RelatorioData.ini` |
+| `GET` | `/api/relatorio?dataInicio=&dataFim=` | Relatório agrupado a partir do cache; 409 se não há cache para esse período exato |
+| `GET` | `/api/busca?termo=` | Busca por descrição sobre o cache do Relatório; 409 sem cache |
+| `GET` | `/api/dados/download` | Baixa `dados.zip` com **todos** os arquivos da raiz de `dados/` (sem lista fixa — inclui qualquer arquivo que esteja lá); 404 se a pasta está vazia |
+| `POST` | `/api/dados/restaurar` | Restaura `dados/` a partir de um `.zip` (`multipart/form-data`, campo `arquivo`); ver [Pasta `dados/`](#pasta-dados) |
+| `GET` | `/api/gant/parametros` | Período do Gant + agrupamento/tags (mesma fonte única do Toggl) |
+| `PUT` | `/api/gant/parametros` | Atualiza período (opcional, como em `/api/configuracao`) e agrupamento/tags; 400 se `agrupamento` inválido |
 | `POST` | `/api/gant/consultas` | Igual a `/api/consultas`, mas grava em `GantData.ini` |
-| `GET` | `/api/gant?dataInicio=&dataFim=&termo=` | Gant agrupado por usuário/categoria/descrição, dia a dia (só dias úteis); `termo` filtra por descrição |
-| `GET` | `/api/sprints` | Lista os sprints cadastrados |
-| `POST` | `/api/sprints` | Cadastra um sprint (`Nome`, `HorasPorDia`, `DataInicio`, `DataFim`) — 400 (nome vazio, datas inválidas, `fim < inicio`, `HorasPorDia <= 0`) / 409 (nome em uso) |
-| `PUT` | `/api/sprints/{chave}` | Edita um sprint (campos `null`/vazios não alteram) |
-| `DELETE` | `/api/sprints/{chave}` | Remove um sprint |
-| `GET` | `/api/sprint/categorias` | Parâmetros do Sprint: mapeamento global TAG → categoria + agrupamento + tags detalhadas + cor da tag: `{ dev, rev, qa: string[], agrupamento: string, tagsDetalhadas: string[], corTag: string }` — sem arquivo/chave, as listas e `corTag` vêm vazios e `agrupamento = "ambos"` |
-| `PUT` | `/api/sprint/categorias` | Atualiza os parâmetros (normaliza as listas: trim + distinct case-insensitive + descarta vazias; valida `agrupamento` contra `descricao`/`tag`/`ambos`, 400 se inválido). `ServicoSprint.Montar` consome os dois na chave de agrupamento da grid (por descrição ou por tag, regra do `ServicoGant`) |
-| `GET/PUT` | `/api/sprint/responsabilidade` | Mapeamento global de status do Jira por grupo responsável (`{ statusDev, statusRev, statusQa: string[] }`), mesmo molde de `/api/sprint/categorias`. Seção `[SprintResponsabilidade]` de `ConfiguracoesGerais.ini` |
-| `POST` | `/api/sprint/consultas` | Igual a `/api/consultas`, mas grava a seção do sprint em `SprintData.ini` (`chaveSprint` obrigatório no corpo, `CarregadorCacheSprintIni`); também atualiza a seção do sprint em `JiraSprintData.ini` (prioridade/situação/estimativas) quando o Jira está configurado |
-| `GET` | `/api/sprint?chaveSprint=` | Acompanhamento do sprint: capacidade + card de colaboradores + grid com uma linha por descrição/tag (só em linhas de descrição, colaboradores de categorias diferentes mesclam numa linha só; linhas de tag nunca mesclam); 409 se não há consulta salva para o período do sprint |
-| `GET` | `/api/jira/configuracao` | URL do domínio, e-mail, campo de estimativa de esforço e token mascarado (`****` se nunca configurado) |
-| `PUT` | `/api/jira/configuracao` | Salva a configuração; `apiToken` omitido/vazio mantém o já salvo (400 se nunca houve um) |
+| `GET` | `/api/gant?dataInicio=&dataFim=&termo=` | Gant por usuário/categoria/descrição, dia a dia (só dias úteis); `termo` filtra por descrição; 409 sem cache |
+| `GET` | `/api/sprints` | Lista os sprints (inclui `Fechado`) |
+| `POST` | `/api/sprints` | Cadastra um sprint (`Nome`, `HorasPorDia`, `DataInicio`, `DataFim`) — 400 (nome vazio, datas inválidas, `fim < inicio`, `HorasPorDia <= 0`) / 409 (nome em uso); nasce aberto |
+| `PUT` | `/api/sprints/{chave}` | Edita um sprint (campos `null`/vazios não alteram); 409 se estiver fechado |
+| `DELETE` | `/api/sprints/{chave}` | Remove o sprint **e** seus dois arquivos de cache (`SprintData_<chave>.ini` e `JiraSprintData_<chave>.ini`) |
+| `POST` | `/api/sprints/{chave}/fechar` | Marca `Fechado = true`; trava edição e faz a consulta do sprint usar só o cache |
+| `POST` | `/api/sprints/{chave}/reabrir` | Marca `Fechado = false` |
+| `GET/PUT` | `/api/sprint/categorias` | Mapeamento global tag → DEV/REV/QA + agrupamento + tags detalhadas + cor da tag: `{ dev, rev, qa, agrupamento, tagsDetalhadas, corTag }`. `PUT` normaliza as listas (trim, distinct case-insensitive, descarta vazias) e valida `agrupamento` (400) |
+| `GET/PUT` | `/api/sprint/responsabilidade` | Status do Jira por grupo responsável: `{ statusDev, statusRev, statusQa }` |
+| `GET/PUT` | `/api/sprint/status-final` | Status do Jira que contam como concluídos/ignorados nos totalizadores do cabeçalho do Sprint: `{ statusConcluido, statusIgnorado }`; `PUT` devolve 400 se o mesmo status estiver nas duas listas |
+| `POST` | `/api/sprint/consultas` | Como `/api/consultas`, com `chaveSprint` obrigatório (400 se vazio ou inválido para nome de arquivo; 404 se o sprint não existe). Grava `SprintData_<chave>.ini` e, com o Jira configurado, `JiraSprintData_<chave>.ini`. `origem` (`nenhum`\|`toggl`\|`jira`\|`ambos`, default `nenhum`) escolhe o que **forçar**, não a fonte; sprint fechado ignora `origem` e devolve 409 se não houver cache batendo |
+| `GET` | `/api/sprint?chaveSprint=` | Acompanhamento do sprint (capacidade, colaboradores, grid); 409 sem cache para o período do sprint |
+| `GET/PUT` | `/api/jira/configuracao` | URL do domínio, e-mail, campos de estimativa (desenvolvimento/revisão/testes) e "revisado por"; token sempre mascarado. `PUT` com `apiToken` omitido/vazio mantém o salvo (400 se nunca houve um) |
 | `POST` | `/api/jira/testar-conexao` | Testa `email`/`urlDominio`/`apiToken` informados **sem salvar** (`GET /rest/api/3/myself`) — sempre `200` com `{ sucesso, mensagem }` |
-| `POST` | `/api/jira/campos` | Lista os campos **customizados** do Jira (`GET /rest/api/3/field`, filtra `custom: true`, ordena por nome); credenciais no corpo são opcionais — se omitidas, usa a configuração já salva (400 se nenhuma das duas existir) |
-| `POST` | `/api/jira/issues` | Busca em lote (JQL `key in (...)`, `POST /rest/api/3/search/jql`, paginando em blocos de até 100 issues via `nextPageToken`/`isLast`) prioridade, situação, estimativa original (`timeoriginalestimate`), estimativa de esforço (campo customizado configurado), responsável (`assignee`, nativo) e revisado por (campo customizado configurável); usa sempre a configuração já salva; issue não encontrada só fica ausente do resultado, nunca gera erro |
-| `GET` | `/api/jira/status?forcarAtualizacao=` | Lista os nomes reais de status do Jira (`GET /rest/api/3/status`); cacheada em `JiraListasCache.ini` até `forcarAtualizacao=true`; 400 se a configuração do Jira não está salva |
-| `GET` | `/api/jira/prioridades?forcarAtualizacao=` | Idem, para `GET /rest/api/3/priority` |
-| `GET/PUT` | `/api/jira/cores` | Mapeamento configurável de cor (hex) por nome de status e por nome de prioridade (`{ coresStatus, coresPrioridade }`, ambos `Record<string,string>`), persistido em `JiraCores.ini`; usado pelo Sprint para colorir as badges de Situação/Prioridade no lugar da paleta fixa quando o nome tem cor configurada |
-| `GET` | `/api/jira/usuarios?forcarAtualizacao=` | Lista os nomes reais de usuários da instância Jira (`GET /rest/api/3/users/search`, paginado, filtra `accountType == "atlassian" && active == true`); cacheada em `JiraListasCache.ini` até `forcarAtualizacao=true`; 400 se a configuração do Jira não está salva |
-| `GET/PUT` | `/api/jira/usuarios-mapeamento` | Mapeamento configurável `displayName` do Jira → `Chave` de usuário Toggl (`{ mapeamento: Record<string,string> }`), persistido em `[JiraTogglMapeamento]` de `ConfiguracoesGerais.ini`; alimenta o fallback DEV/REV do Sprint (ver seção Sprint) |
+| `POST` | `/api/jira/campos` | Lista os campos **customizados** do Jira (`GET /rest/api/3/field`, `custom: true`); credenciais no corpo são opcionais — omitidas, usa a configuração salva (400 se nenhuma existir) |
+| `POST` | `/api/jira/issues` | Busca em lote (JQL `key in (...)`) prioridade, situação, estimativas, responsável e revisado por, com a configuração salva; issue não encontrada só fica ausente |
+| `GET` | `/api/jira/status?forcarAtualizacao=` | Nomes reais de status (`GET /rest/api/3/status`), cacheados em `JiraStatusCache.ini`; 400 sem configuração do Jira |
+| `GET` | `/api/jira/prioridades?forcarAtualizacao=` | Idem para prioridades (`GET /rest/api/3/priority`), cache `JiraPrioridadesCache.ini` |
+| `GET` | `/api/jira/usuarios?forcarAtualizacao=` | Nomes reais de usuários (`GET /rest/api/3/users/search`, paginado, só `atlassian` ativos), cache `JiraUsuariosCache.ini` |
+| `GET/PUT` | `/api/jira/cores` | Cor (hex) por nome de status e de prioridade: `{ coresStatus, coresPrioridade }` |
+| `GET/PUT` | `/api/jira/usuarios-mapeamento` | Mapeamento `displayName` do Jira → usuário Toggl (`ChaveToggl`) ou usuário exclusivo do Jira (`Sigla`/`Cor`); alimenta o fallback DEV/REV do Sprint |
+
+**Erros**: 400 (parâmetros/datas inválidos), 404 (recurso não encontrado), 409 (nome em uso; sem cache correspondente; sprint fechado), 500 (`Results.Problem`, falha de I/O). `GET /api/relatorio`, `/busca`, `/gant` e `/sprint` **exigem cache prévio** — nunca disparam consulta implícita, para manter explícito quando uma chamada externa ao Toggl acontece (rate limit).
 
 ### Exemplos de request/response
 
@@ -158,85 +167,97 @@ Cria sua pasta `dados/` (ao lado do executável da API), com `RelatorioParametro
 ```
 `status` é sempre uma string: `Sucesso`, `Erro`, `LimiteAtingidoComCache` ou `LimiteAtingidoSemCache`.
 
-**`GET /api/relatorio?dataInicio=2026-08-01&dataFim=2026-08-31`** — 409 se não houver consulta salva para esse período exato (chame `POST /api/consultas` primeiro); 200 com, por usuário, `porDescricao` (cada item traz `descricao`, `segundos` e `tag`), `porTag`, `emAndamento` e `totalSegundos`. **Atenção**: os itens de `emAndamento` vêm em **snake_case** (`workspace_id`, `project_id`, `description`, `duration`, `start`, `stop`) — é o DTO cru reaproveitado do Toggl, diferente do resto da API que é camelCase.
-
-No frontend, cada usuário do Relatório é uma **tabela** (`[checkbox] · Tag · Descrição · Tempo`), com as linhas por descrição e depois as por tag concatenadas, sem títulos de seção; a `tag` fica em coluna própria e a descrição aparece crua (sem prefixo).
+**`GET /api/relatorio?dataInicio=2026-08-01&dataFim=2026-08-31`** — 409 se não houver consulta salva para esse período exato (chame `POST /api/consultas` primeiro); 200 com, por usuário, `porDescricao` (cada item traz `descricao`, `segundos` e `tag`), `porTag`, `emAndamento` e `totalSegundos`. **Atenção**: os itens de `emAndamento` vêm em **snake_case** (`workspace_id`, `project_id`, `description`, `duration`, `start`, `stop`) — é o DTO cru reaproveitado do Toggl; o resto da API é camelCase.
 
 **`GET /api/busca?termo=reuniao`** — 409 se não há cache ainda; 200 com `linhas` (descrição, segundos por usuário, total da linha) e `totalGeralSegundos`.
 
 ### Gráfico de Gant
 
-`/api/gant/*` é um segundo fluxo, com parâmetros (`ConfiguracaoGant`: período + tags a detalhar + agrupamento) e cache (`dados/GantData.ini`) **independentes** do relatório — reaproveita a mesma lista de usuários e o mesmo `ServicoConsulta`, só troca o arquivo de cache. `GET /api/gant` devolve `{ dias, linhas }`: `dias` são só os **dias úteis** do período (sábado/domingo ocultos); cada linha pertence a um único usuário, agrupada por categoria (tag) + descrição — tags na lista "a detalhar" viram uma linha por descrição, as demais ficam agregadas numa única linha por tag. O parâmetro opcional `termo` filtra por descrição antes de agrupar (mesma rota, sem endpoint novo). No frontend, a tabela do Gant mostra a descrição **truncada em 50 caracteres** com um _tooltip_ da descrição completa.
+`/api/gant/*` é um segundo fluxo, com período e cache (`dados/GantData.ini`) **independentes** do relatório — reaproveita a mesma lista de usuários, o mesmo `ServicoConsulta` e o mesmo agrupamento/tags (fonte única do Toggl). `GET /api/gant` devolve `{ dias, linhas }`: `dias` são só os **dias úteis** do período (sábado/domingo ocultos); cada linha pertence a um único usuário, agrupada por categoria (tag) + descrição — tags detalhadas viram uma linha por descrição, as demais ficam agregadas numa única linha por tag. O parâmetro `termo` filtra por descrição antes de agrupar.
 
-Os usuários têm quatro campos próprios (persistidos no `TogglUsuarios.ini`): `sigla`/`cor` (identificação visual nas células do Gant), `selecionado` (`bool`, default `true` — só usuários selecionados entram na próxima consulta, seja do relatório ou do Gant) e `administrador` (`bool`, default `false`, desde 2026-09-13 — marca qual usuário do Toggl tem seu token usado nas chamadas que não são de uma pessoa específica, como `GET /api/usuarios-toggl/tags`; cada usuário já tinha seu próprio token pessoal para as consultas normais). Desde 2026-09-15, só pode haver **um** `administrador` por vez: `ServicoUsuariosToggl.DesmarcarOutrosAdministradores` desmarca o anterior automaticamente sempre que um novo é marcado (POST/PUT de `/api/usuarios-toggl`).
+Cada usuário tem quatro campos próprios (em `TogglUsuarios.ini`): `sigla`/`cor` (identificação visual), `selecionado` (`bool`, default `true` — só usuários selecionados entram na próxima consulta de Relatório, Gant ou Sprint) e `administrador` (`bool`, default `false` — o token dele é usado nas chamadas sem usuário específico, como `GET /api/usuarios-toggl/tags`; só um por vez, garantido por `ServicoUsuariosToggl.DesmarcarOutrosAdministradores`).
 
 ### Sprint
 
-`/api/sprints` e `/api/sprint/*` são a terceira visualização, molde do Gant. Diferente do relatório e do Gant, tem **gestão** (CRUD de sprints) além do acompanhamento. Cada sprint tem `Nome`, `HorasPorDia`, `DataInicio` e `DataFim` próprios; um mapeamento **global** (não por sprint) de TAG → categoria (`Dev`/`Rev`/`Qa`); e cache de consulta dedicado. Arquivos em `dados/` (todos no `.gitignore`/`.dockerignore`):
+`/api/sprints` e `/api/sprint/*` são a terceira visualização. Diferente do relatório e do Gant, tem **gestão** (CRUD de sprints) além do acompanhamento. Cada sprint tem `Nome`, `HorasPorDia`, `DataInicio`, `DataFim` e `Fechado`; o mapeamento tag → categoria, a responsabilidade por status e os status finais são **globais** (não por sprint), e o cache de consulta é **um arquivo por sprint** (ver [Pasta `dados/`](#pasta-dados)) — consultar um sprint nunca sobrescreve o cache de outro.
 
-| Arquivo | Conteúdo |
-|---|---|
-| `Sprints.ini` | seções `[Sprint:<chave>]` — `Nome`, `HorasPorDia` (decimal, `InvariantCulture`), `DataInicio`, `DataFim` (`yyyy-MM-dd`) |
-| `ConfiguracoesGerais.ini` — seção `[SprintCategorias]` | `Dev`/`Rev`/`Qa` = listas de tags separadas por vírgula, mais `Agrupamento` (`descricao`/`tag`/`ambos`), `TagsDetalhadas` (lista de tags) e `CorTag` (hex da cor do badge/label "Tag" no Sprint, desde 2026-09-16) da etapa "Toggl: agrupamento e tags" do wizard de Configurações. `Carregar` nunca devolve `null`: sem arquivo/seção cai no padrão, que **não tem nenhuma TAG nem cor** — `Dev`/`Rev`/`Qa`/`TagsDetalhadas`/`CorTag` vazios, só `Agrupamento = ambos`; sem `CorTag` configurada, o frontend usa cinza (`corIndisponivel`) só na exibição, nunca grava um valor default. O wizard obriga o usuário a preencher DEV/REV/QA antes de avançar. `ServicoSprint.Montar` usa `Agrupamento`/`TagsDetalhadas` para decidir a chave de linha da grid (descrição normalizada ou nome da tag), mesma regra do `ServicoGant`. Consolidada desde 2026-09-15 (antes, arquivo próprio `TogglSprintCategorias.ini`, seção `[Geral]`) |
-| `SprintData.ini` | cache de consulta — dado cru, token criptografado, **isolado por sprint** desde 2026-09-13 (seções `[Sprint:<chave>]`/`[Sprint:<chave>:Usuario:<chave>]` via `CarregadorCacheSprintIni`), diferente do `RelatorioData.ini`/`GantData.ini` (cache único, bate só por período+usuários — trocar de período sobrescreve). Sem migração automática do formato antigo: um cache salvo antes dessa mudança fica órfão (o formato antigo não guardava a chave do sprint), uma nova consulta recria no formato novo |
-| `ConfiguracoesGerais.ini` — seção `[SprintResponsabilidade]` | `StatusDev`/`StatusRev`/`StatusQa` = listas de nomes de status do Jira separadas por vírgula (mesmo molde de `[SprintCategorias]`, `Padrao()` vazio). Opcional — sem nenhuma lista preenchida (ou tarefa não encontrada no Jira), `ServicoSprint.Montar` cai no comportamento anterior (todo grupo com colaborador mostra "Pendente"); com pelo menos uma lista preenchida e tarefa encontrada mas o status não bate com nenhuma das três, todo grupo com colaborador mostra "Concluído" (`LinhaTarefaSprint.SituacaoSemGrupoResponsavel`, desde 2026-09-16 — antes confundia esse caso com "sem responsabilidade configurada"). Consolidada desde 2026-09-15 (antes, arquivo próprio `TogglSprintResponsabilidade.ini`, seção `[Geral]`) |
+`POST /api/sprint/consultas` reaproveita o `ServicoConsulta` inteiro (cache-first, rate limit, filtro por `selecionado`). `GET /api/sprint` monta o acompanhamento por `ServicoSprint.Montar`:
 
-> O antigo campo manual de tarefa (prioridade + situação por categoria) e o endpoint `PUT /api/sprint/tarefas` **foram removidos** — Prioridade e Situação não são mais editáveis nem persistidas pelo usuário. Desde a integração com o Jira (ver seção Jira), quando configurada, elas passam a ser **lidas** (somente leitura, nunca gravadas de volta) de `JiraSprintData.ini`; sem integração ou issue não encontrada, caem no padrão fixo ("Baixa" / "Pendente").
+- **Capacidade**: `diasUteis` (seg–sex no período, inclusive) → `tempoTotal = HorasPorDia × diasUteis` → `margem = floor(30% × tempoTotal)` → `TD = floor(tempoTotal − margem)` (tempo por colaborador) → `CT = TD × nº de colaboradores selecionados` (capacidade total). Ex.: `HorasPorDia=7`, `2026-09-01`→`2026-09-24` → `diasUteis=18`, `tempoTotal=126`, `margem=37`, `TD=89`.
+- **Totalizadores do cabeçalho** (`TarefasPendentes`/`TarefasConcluidas`): contam **descrições distintas** (nunca linhas de tag). Concluídas = `Situacao` em `statusConcluido`; Pendentes = `Situacao` fora de `statusConcluido` **e** de `statusIgnorado`. Sem nenhuma das listas configurada, Concluídas = 0 e Pendentes = todas.
+- **Colaboradores** (`LinhaColaboradorSprint`): uma linha por colaborador selecionado, com `Td`, `SegundosRealizados` (todos os apontamentos `>= 0` no cache do sprint, com ou sem tag de categoria) e `TarefasPendentes`/`TarefasConcluidas`. Estes dois **não** usam `statusConcluido`/`statusIgnorado`: contam, por **grupo** DEV/REV/QA que o colaborador ocupa em cada linha de descrição, a mesma classificação Pendente/Concluído da coluna "Situação" do grid. "Disponível" (`Td − realizado`) é calculada no frontend.
+- **Grid de tarefas**: uma linha por `(Chave, Agrupada)` vinda da chave de agrupamento (mesma regra descricao/tag/ambos do Gant). Cada linha traz `Codigo`, `Descricao`, `Agrupada`, três blocos `Dev`/`Rev`/`Qa` (`PreHoras`, `ReaSegundos`, colaborador, sigla, cor) e, se houver Jira, `Prioridade`/`Situacao`.
+  - **Linha de descrição**: descrição normalizada "TEL"; `Codigo`/`Descricao` separados pelo regex `^(TEL - \d+)(?: - (.+))?$` (sem casar, `Codigo` vazio). `ReaSegundos` de cada grupo = tempo do colaborador naquela descrição com tags da categoria. **Mescla** colaboradores por empacotamento guloso, na ordem dos selecionados: cada um entra na primeira linha aberta cujos slots DEV/REV/QA que ele ocupa estejam livres, senão abre linha nova — categorias diferentes da mesma descrição mesclam, mesma categoria fica em linhas separadas.
+  - **Linha de tag** (só com agrupamento `tag`/`ambos`): `Codigo` vazio, `Descricao` = nome da tag, **um colaborador por linha, nunca mescla**. Todo o tempo do colaborador na tag vai para **um** grupo: QA se ele tem ≥1 apontamento com tag de QA, senão DEV (REV nunca recebe tag).
+  - **Ordenação**: pelo **número** do código (`TEL - 994 → TEL - 1000`), não por string; linhas de descrição primeiro, depois as de tag.
+- **Situação por grupo** (responsabilidade por status): (1) o status da issue bate com um grupo → esse grupo "Pendente" e os demais (com colaborador) "Concluído"; (2) há responsabilidade configurada e a tarefa foi encontrada, mas o status não bate com nenhum grupo → todos "Concluído" (`SituacaoSemGrupoResponsavel`); (3) sem responsabilidade configurada ou tarefa não encontrada → todos "Pendente".
+- **Busca, filtros e ordenação** da tela são **client-side**, sobre a lista já carregada — sem nova chamada à API.
 
-`POST /api/sprint/consultas` reaproveita o `ServicoConsulta` inteiro (cache-first, rate limit, filtro por `Selecionado`), só troca o arquivo de cache. `GET /api/sprint` monta o acompanhamento por `ServicoSprint.Montar` (núcleo, `Sprint/`):
+**Fechar/reabrir**: `fechar`/`reabrir` só alternam `Fechado`, sem mexer em cache — fechar não copia dado nenhum, o cache já salvo simplesmente nunca mais é sobrescrito. A trava é sempre do backend: `PUT /api/sprints/{chave}` devolve 409 se fechado, e `POST /api/sprint/consultas` ignora o `origem` recebido, força `nenhum` e devolve 409 se não houver cache do Toggl batendo (nunca chama Toggl/Jira de verdade). `Fechado` só muda por `fechar`/`reabrir`, nunca pelo `PUT` genérico.
 
-- **Capacidade por colaborador**: `diasUteis` = dias do período excluindo sábado/domingo; `tempoTotal` = `HorasPorDia × diasUteis`; `margem` = `floor(30% de tempoTotal)`; `TD` (tempo disponível por colaborador) = `floor(tempoTotal − margem)`; `CT` (capacidade total) = `TD × nº de colaboradores selecionados`. Ex.: `HorasPorDia=7`, `2026-09-01`→`2026-09-24` → `diasUteis=18`, `tempoTotal=126`, `margem=37`, `TD=89`, `CT=89` (1 colaborador). O `CabecalhoSprint` traz `Ct` e (após ele) `Td`, mais `TarefasPendentes` (nº de descrições distintas no grid) e `TarefasConcluidas` (**sempre 0** — não há mais situação). O frontend rotula `CT` como "Capacidade" e `TD` como "Tempo por colaborador" (ex-"Total"), exibe uma coluna "Disponível" derivada no cliente, e um botão "Informações" abre um modal com esses números (também sem os rótulos "TD"/"CT"). Os campos de texto do card do sprint (Sprint, Horas/dia, Dias úteis, Margem, Início, Fim) são renderizados maiores e em azul (`primary.main`, a mesma cor da "Capacidade").
-- **Colaboradores** (`ResultadoSprint.Colaboradores`): uma linha por colaborador selecionado — `record LinhaColaboradorSprint(NomeExibicao, Sigla, Cor, Td, SegundosRealizados, TarefasPendentes, TarefasConcluidas)` (inalterado; `TarefasConcluidas` sempre 0). `Td` é igual para todos; `SegundosRealizados` = soma das durações `>= 0` de **todos** os apontamentos do usuário no cache do sprint (com ou sem tag de categoria). Colaborador sem nenhum apontamento entra zerado. Sem detalhamento por dia — isso é o Gant. A tabela de colaboradores do frontend mostra **Colab. (nome completo) · sigla · Tempo por colaborador (`Td`, ex-"Total") · Realizado · Disponível · Pendentes · Concluídas** com rodapé somando Pendentes/Concluídas — "Disponível" = `Tempo por colaborador − Realizado` é calculada no frontend (verde quando positiva, vermelha quando negativa, neutra em zero); desde 2026-09-08 as colunas **Disponível, Pendentes e Concluídas** ficam **sempre em negrito**, mesmo neutras/zeradas (antes só "Disponível" tinha negrito condicional).
-- **Grid de tarefas** — `ServicoSprint.Montar` (sem parâmetro `manuais`) emite uma linha por descrição/tag: `record LinhaTarefaSprint(string Codigo, string Descricao, bool Agrupada, BlocoCategoriaSprint Dev, Rev, Qa, string? Prioridade = null, string? Situacao = null)`, `record BlocoCategoriaSprint(decimal PreHoras, long ReaSegundos, string? NomeExibicao, string? Sigla, string? Cor, decimal? EstimativaOriginalHoras = null)` — os campos de Jira (opcionais, à direita, não quebram os construtores posicionais existentes) só são preenchidos quando `Montar` recebe `issuesPorCodigo` (ver seção Jira). `ChaveAgrupamento(registro, categorias)` devolve `(string Chave, bool Agrupada)`. **Desde 2026-09-08** o colaborador saiu do nível da linha e passou para cada bloco — uma **linha de descrição** pode **mesclar até 3 colaboradores**, um por bloco DEV/REV/QA: `Montar` empacota os colaboradores de um mesmo grupo `(Chave, Agrupada == false)` de forma gulosa, na ordem de `usuariosSelecionados` — cada um entra na primeira linha já aberta cujos slots que ele ocupa (`segundos > 0`) estejam todos livres; senão abre uma linha nova. Dois colaboradores que disputam a **mesma** categoria da mesma descrição continuam em linhas separadas; colaboradores em categorias **diferentes** da mesma descrição mesclam numa linha só. **Linhas de tag (`Agrupada == true`) nunca mesclam** (corrigido em 2026-09-10 — até então reaproveitavam o mesmo empacotamento guloso e podiam mesclar indevidamente dois colaboradores, ex.: um em DEV e outro em QA da mesma tag): `Montar` pula a busca por linha compatível quando `agrupada == true`, então cada colaborador sempre abre sua própria linha.
-  - **Linha de descrição** (`Agrupada == false`): por descrição normalizada "TEL". `Codigo`/`Descricao` de `SepararCodigo` — regex `^(TEL - \d+)(?: - (.+))?$` → `Codigo = "TEL - 0000"`, `Descricao` = resto; sem casar → `Codigo = ""`, `Descricao` = texto inteiro. `ReaSegundos` de cada grupo DEV/REV/QA = tempo do colaborador daquele bloco nessa descrição cujas tags ∈ `categorias.Dev`/`Rev`/`Qa`.
-  - **Linha tag-agg** (`Agrupada == true`, só com `agrupamento` `tag`/`ambos`): por tag, `Codigo = ""`, `Descricao` = nome da tag, **sempre 1 colaborador por linha**. **Todo** o tempo de cada colaborador naquela tag vai para **um** grupo: **QA** se o colaborador tem ≥ 1 apontamento no sprint com tag ∈ `categorias.Qa` (pré-passo `colaboradoresComQa`), senão **DEV**. REV nunca recebe tag-agg.
-  - **Ordenação**: por **número do código**, não por string (era bug — `TEL - 1118` vinha antes de `TEL - 994`). Helper `NumeroCodigo(string codigo)` extrai só os dígitos de `Codigo`; a grade fica `.ThenBy(t => t.Agrupada ? 0 : NumeroCodigo(t.Codigo))` antes do desempate por string. Linhas de descrição primeiro (as com `Codigo` antes das sem; por `NumeroCodigo` crescente, depois desempate `Codigo`/`Descricao`), depois as tag-agg (pelo índice do único colaborador da linha — `MenorIndiceColaborador` —, depois por `Descricao`). Resultado: `TEL - 994 → TEL - 1000 → TEL - 1118`.
-  - Frontend: 1ª coluna de **checkbox** (risca a descrição da linha; a marcação fica salva no `localStorage` do navegador **isolada por sprint** — a chave inclui o `chaveSprint` — e só é apagada numa nova consulta real à API, não ao carregar do cache; o id da linha usa um índice de ocorrência de `(codigo, descricao)` na lista completa em vez do `nomeExibicao`, desde 2026-09-08, já que uma linha pode ter mais de um colaborador), depois colunas **Prioridade · Situação · Código · Descrição** + grupos DEV/REV/QA (`PRE · REA · badge de sigla · Sit.` — o badge lê o colaborador do bloco correspondente, não mais da linha). A **linha 1 do cabeçalho de cada grupo** mostra o nome por extenso (**Desenvolvimento / Revisão / Qualidade**); a linha 2 e os dados seguem com DEV/REV/QA / a sigla. O **bloco esquerdo** (Checkbox · Prioridade · Situação · Código · Descrição) **não tem divisória vertical** — a 1ª borda aparece só em Descrição → DEV; as bordas entre/dentro dos grupos DEV/REV/QA continuam. Colunas compactadas (só "Descrição" cresce, com o mesmo `px: 0.5` das demais), **linhas mais baixas** (padding vertical reduzido) e **Situação / PRE / REA / badges centralizados**. **Prioridade** é um badge (componente `BadgeTexto`, mesmo visual do `BadgeSigla`): valor do Jira (`linha.Prioridade`) quando disponível, senão "Baixa" nas linhas normais, laranja "Tag" nas linhas de agrupamento por tag. **Situação** (componente `EtiquetaFixa`): valor do Jira (`linha.Situacao`) quando disponível, senão "Pendente" nas normais, laranja "Tag" nas de agrupamento por tag. A regra **"–" no badge e na situação do grupo** (desde a Fase 4 da integração Jira↔Toggl — antes a situação do grupo mostrava "Nenhuma" em preto) vale para **qualquer linha** cujo grupo DEV/REV/QA não tenha tempo do colaborador (`reaSegundos === 0`) — antes só as linhas de agrupamento por tag; nesses grupos PRE/REA ficam "00h". Nada é editável nem persistido pelo usuário. PRE/REA usam a largura do badge e exibem `00h` (2 dígitos) com `Tooltip` da duração completa; PRE do grupo DEV vem da estimativa de esforço do Jira quando disponível (tooltip mostra também a estimativa original), senão `00h` — REV/QA continuam sempre `00h`; o **cabeçalho** de PRE/REA tem `Tooltip` ("Tempo previsto" / "Tempo realizado"). Quando **REA > 0**, o valor fica na cor da Capacidade (`primary.main`) e em negrito. A coluna **Código** é **centralizada** e recebe **zeros à esquerda dinâmicos** — preenchida até o nº de dígitos do maior código do sprint (linhas sem código ficam "—"). O badge de sigla é o componente `BadgeSigla` (sigla colorida, cantos retos), o mesmo do card de colaboradores. Um botão **"Buscar por descrição"** no header (antes do "Informações") abre um filtro **local, client-side** sobre a lista já carregada (colunas Código + Descrição) — sem nova chamada à API e sem trocar de tela, filtrando só a grid de tarefas; difere do Relatório (que abre uma busca própria) e do Gant (que reconsulta `GET /api/gant?termo=`).
-
-> Melhoria futura (não implementada): a planilha de referência tem também um gráfico de pizza Concluído/Pendente e um gráfico de barras por colaborador.
+> Prioridade e Situação **não são editáveis nem persistidas** pelo usuário: vêm do Jira (somente leitura, de `JiraSprintData_<chave>.ini`). Sem integração ou issue não encontrada, os badges caem em "Nenhuma" e o PRE em "–".
 
 ### Jira
 
-`/api/jira/*` guarda a configuração (seção `[Jira]` de `ConfiguracoesGerais.ini` desde 2026-09-15 — antes, arquivo próprio `JiraConfig.ini`, seção `[Geral]`; `ConfiguracaoJira`/`CarregadorConfiguracaoJiraIni`), com `ApiToken` criptografado do mesmo jeito que o `TokenApi` do Toggl e mascarado (`ServicoUsuariosToggl.MascararToken`) em toda resposta que sai da API. `ClienteApiJira` autentica com Basic `email:apiToken` (não `token:api_token` como o Toggl) contra `https://<dominio>/rest/api/3/`, normalizando a URL informada (aceita com ou sem `https://`). `POST /api/jira/testar-conexao` sempre exige as três credenciais no corpo (nunca reaproveita a configuração salva, para validar exatamente o que está na tela); `POST /api/jira/campos` aceita credenciais no corpo **ou** cai para a configuração salva quando o corpo vem vazio, e filtra a resposta do Jira a `custom: true` — a lista serve só para popular o seletor de "estimativa de esforço" no frontend.
+A configuração vive em `JiraConexao.ini` (URL, e-mail e `ApiToken` criptografado do mesmo jeito que o do Toggl) e `JiraCampos.ini` (campos customizados), mascarada (`ServicoUsuariosToggl.MascararToken`) em toda resposta. `ClienteApiJira` autentica com Basic `email:apiToken` contra `https://<dominio>/rest/api/3/`, normalizando a URL (com ou sem `https://`). `POST /api/jira/testar-conexao` sempre exige as três credenciais no corpo (valida exatamente o que está na tela); `POST /api/jira/campos` usa as do corpo ou, se vazio, as salvas, e filtra a `custom: true`.
 
-**Integração com o Sprint** (`POST /api/jira/issues`, e embutida em `POST /api/sprint/consultas`): busca em lote via JQL `key in (TEL-994,TEL-718,...)` — nunca uma chamada por tarefa. `ClienteApiJira.BuscarIssuesAsync` pede os campos `priority`, `status`, `timeoriginalestimate` (estimativa original, em segundos), `assignee` (responsável, nativo) e os dois campos customizados configuráveis — estimativa de esforço e "revisado por"; `timeoriginalestimate` e o campo de estimativa (se numérico ou `{"value": ...}`) são convertidos para horas, `assignee`/"revisado por" extraem só o `displayName`. **Pagina em blocos de até 100 issues** (`nextPageToken`/`isLast` no corpo da resposta — campos confirmados só ao vivo contra o Jira real, não documentados): até 2026-09, `BuscarIssuesAsync` mandava `maxResults = chaves.Count` numa única chamada, e o Jira Cloud limita esse endpoint a 100 resultados/página independente do valor pedido — perdia issues em silêncio em sprints com mais de 100 códigos TEL (confirmado com um sprint real de 129 códigos, só 100 issues voltavam). Corrigido com um loop até `isLast == true` ou `nextPageToken` vazio, `maxResults` fixo em 100. Issue não encontrada pelo JQL simplesmente não aparece no resultado — sem erro; falha de rede/autenticação com o Jira derruba só a atualização do cache do Jira, nunca a consulta do Toggl. `SprintConsultasEndpoints` extrai os códigos direto dos registros crus do Toggl (`ServicoSprint.ExtrairCodigosJira`, independente do `Agrupamento` configurado) e grava o resultado em `JiraSprintData.ini` (`[Sprint:<chaveSprint>]`, isolado por sprint — mesma ideia do `SprintData.ini`, mas em arquivo/carregador (`CarregadorCacheSprintIni`) separado). `GET /api/sprint` carrega esse cache e passa a `ServicoSprint.Montar`, que aplica Prioridade/Situação/estimativas só às linhas de descrição do bloco DEV (nunca tag-agg, nunca REV/QA); `Responsavel`/`RevisadoPor` alimentam o fallback DEV/REV descrito abaixo.
+**Integração com o Sprint** (`POST /api/jira/issues`, embutida em `POST /api/sprint/consultas`): busca em lote via JQL `key in (TEL-994,...)` — nunca uma chamada por tarefa — pedindo `priority`, `status`, `assignee` (nativo) e quatro campos customizados configuráveis: `CampoEstimativaDesenvolvimentoId`, `CampoEstimativaRevisaoId`, `CampoEstimativaTestesId` (PRE de DEV/REV/QA, convertidos para horas; sem o campo de um grupo, o PRE dele fica 0) e `CampoRevisadoPorId` (extrai só o `displayName`, como o `assignee`).
 
-**Fallback DEV/REV e mapeamento Jira↔Toggl** (desde 2026-09-16): `ConfiguracaoMapeamentoJiraToggl` (seção `[JiraTogglMapeamento]` de `ConfiguracoesGerais.ini`, mapeamento configurável `displayName` do Jira → `Chave` de usuário Toggl, editável no 5º estágio do wizard de Configurações do frontend, alimentado por `GET /api/jira/usuarios`) permite que `ServicoSprint.Montar` preencha automaticamente o bloco **DEV** de uma linha de descrição com o usuário mapeado a partir de `Responsavel` (assignee), e o **REV** a partir de `RevisadoPor` — só quando nenhuma linha daquela descrição já tem colaborador nesse bloco (nunca sobrescreve tempo real apontado) e o usuário mapeado está entre os usuários selecionados da consulta atual (nunca busca fora dos selecionados). É só uma sugestão visual (0 segundos) — não conta como tempo realizado nem afeta capacidade/pendências.
+- **Sempre `POST /rest/api/3/search/jql`**: `GET`/`POST /rest/api/3/search` foi descontinuado (410 Gone).
+- **Paginação**: o endpoint devolve no máximo 100 issues por página; `BuscarIssuesAsync` pagina com `nextPageToken`/`isLast` (`maxResults` fixo em 100) — sem isso, sprints com mais de 100 códigos TEL perdiam issues em silêncio.
+- **Quando roda**: os códigos TEL são extraídos de **todos** os registros crus do Toggl recém-buscados (independe do agrupamento) e o resultado vai para `JiraSprintData_<chave>.ini`. O Jira atualiza sempre que `origem` força o Jira **ou** quando o Toggl fez uma consulta real; nunca só por reaproveitar cache. Falha de rede/autenticação do Jira derruba só a atualização do Jira, nunca a consulta do Toggl.
+- **Aplicação**: `ServicoSprint.Montar` aplica Prioridade/Situação só às linhas de descrição (nunca de tag) e a estimativa de cada grupo ao bloco correspondente.
 
-A API do Jira **não expõe cor por prioridade dentro da busca de issues** — só no endpoint dedicado `GET /rest/api/3/priority` (exigiria chamada extra); status também não tem cor individual, só `statusCategory.key` (`new`/`indeterminate`/`done`) — capturado em `IssueJira.SituacaoCategoria`. Por isso, desde 2026-09-13, a cor de cada badge de Prioridade/Situação no Sprint vem de um **mapeamento configurável por nome** (`GET/PUT /api/jira/cores`, `JiraCores.ini`), populado a partir da listagem **real** de nomes (`GET /api/jira/status`/`/prioridades`, cacheados) — sem cor configurada para aquele nome exato, cai numa paleta fixa por nome de prioridade ou pela categoria do status (`new`/`indeterminate`/`done`); sem nem isso, cinza (`corIndisponivel`). A seção `[SprintResponsabilidade]` de `ConfiguracoesGerais.ini` (`ConfiguracaoResponsabilidadeSprint`) mapeia status → DEV/REV/QA; `ServicoSprint.Montar` compara `Situacao` a essas listas e preenche `LinhaTarefaSprint.GrupoResponsavelStatus`/`SituacaoSemGrupoResponsavel` — três casos: (1) bate com um grupo → esse grupo "tem a bola" e mostra "Pendente", os demais (com colaborador) mostram "Concluído"; (2) responsabilidade configurada (≥1 lista não vazia) e tarefa encontrada no Jira, mas o status não bate com nenhuma das três listas → todo grupo com colaborador mostra "Concluído" (`SituacaoSemGrupoResponsavel = true`, desde 2026-09-16); (3) sem nenhuma lista preenchida, ou tarefa não encontrada, todo grupo com colaborador mostra "Pendente" (comportamento anterior, preservado como padrão).
+**Fallback DEV/REV via mapeamento Jira↔Toggl** (`JiraTogglMapeamento.ini`): o bloco **DEV** vem de `Responsavel` (assignee) e o **REV** de `RevisadoPor` — nunca o contrário. Só preenche quando nenhuma linha daquela descrição já tem colaborador no bloco (nunca sobrescreve tempo real) e, se a entrada mapeia um usuário Toggl (`ChaveToggl`), ele está entre os selecionados da consulta; entradas exclusivas do Jira usam `Sigla`/`Cor` próprias e não exigem seleção. Afeta só a 1ª linha de descrição do grupo. É sugestão visual (0 segundos) — não conta como tempo realizado, capacidade nem pendências.
 
-> **`GET`/`POST /rest/api/3/search` foi descontinuado pelo Jira** (confirmado com `410 Gone` num teste real em 2026-09-13, apontando para o substituto) — `BuscarIssuesAsync` já usa `POST /rest/api/3/search/jql`. Se a Atlassian migrar de novo, é só nesse método que muda.
+**Cores**: a busca de issues não expõe cor de prioridade/status (só `statusCategory`), então a cor de cada badge vem de um mapeamento por nome exato (`GET/PUT /api/jira/cores`, guardado em `JiraStatus.ini`/`JiraPrioridades.ini`), alimentado pela listagem real de nomes. Sem cor configurada, **Prioridade** cai numa paleta por severidade (Muito alta → Muito baixa) e **Status** no cinza dos badges "Nenhuma".
 
 ### Decisões desta camada
 
-- **Minimal APIs**, um arquivo por grupo de endpoints em `Endpoints/` (`Map*Endpoints(this WebApplication app, ...)`), DTOs em `Dtos/` — nenhuma duplicação de lógica: todo endpoint delega para `TogglReport.Nucleo`.
-- **Helpers de endpoint extraídos pela auditoria de 2026-09-07** (não são rotas): `ValidacaoDatas.Tenta` (parse de datas + `fim < inicio`, 7 handlers — `GET /api/gant` fora, só faz parse) e `TratamentoIo.Executar` (converte `IOException`/`UnauthorizedAccessException` em `500` com mensagem limpa, 9 sites — `DadosEndpoints` fora, o `try` de lá é mais complexo). Ver `CLAUDE.md` §4.2/§7 item 29.
-- **Stateless entre requisições**: a API nunca mantém os registros baixados em memória entre chamadas — toda leitura de relatório/busca **relê o `RelatorioData.ini`**. Isso é o que permite reaproveitar o cache do jeito mais simples possível, sem sessão.
-- **CORS liberado** (`AllowAnyOrigin/Header/Method`) — uso exclusivamente local, sem dado sensível trafegando entre origens que importe proteger.
-- **Enums serializados como string** (`JsonStringEnumConverter`) — `status` de `/api/consultas` aparece como texto no JSON, não como número.
-- **Swashbuckle.AspNetCore** — única dependência NuGet do repositório (necessária para o Swagger). A UI do Swagger tem CSS próprio injetado (`SwaggerUIOptions.HeadContent`) e usa o ícone do projeto (servido via `app.UseStaticFiles()`, a única pasta estática da API). Não tem tema escuro nativo — segue o SO/navegador do usuário; uma tentativa de forçar tema claro via `color-scheme` foi testada e revertida por não funcionar na prática (ver `CLAUDE.md` §4.7). Quando a autenticação Basic está ligada, `AddSecurityDefinition`/`AddSecurityRequirement` registram o esquema `basic` só nesse caso (mesma condição do middleware) — é o que faz o botão "Authorize" aparecer no Swagger UI.
-- **Autenticação HTTP Basic opcional** — desligada por padrão (uso local);
-  liga configurando `AUTH__USUARIO`/`AUTH__SENHA` (produção). `/health`,
-  `/swagger` e `/images` (ícone da topbar do Swagger) nunca exigem. Sem popup
-  nativo do navegador — 401 sem `WWW-Authenticate`, tela de login própria no
-  frontend.
+- **Minimal APIs**, um arquivo por grupo de endpoints em `Endpoints/` (`Map*Endpoints(this WebApplication app, ...)`), DTOs em `Dtos/` — todo endpoint delega para `TogglReport.Nucleo`. Helpers internos: `ValidacaoDatas.Tenta` (parse de datas + `fim < inicio`) e `TratamentoIo.Executar` (converte `IOException`/`UnauthorizedAccessException` em `500` com mensagem limpa).
+- **Stateless entre requisições**: a API nunca mantém registros baixados em memória — toda leitura de relatório/busca relê o `.ini` de cache. Reaproveitar o cache fica simples, sem sessão.
+- **CORS liberado** (`AllowAnyOrigin/Header/Method`) — pensado para uso local.
+- **Enums serializados como string** (`JsonStringEnumConverter`) — `status` de `/api/consultas` aparece como texto.
+- **Swashbuckle.AspNetCore** — única dependência NuGet do repositório (Swagger). A UI tem CSS próprio (`SwaggerUIOptions.HeadContent`) e usa o ícone do projeto, servido via `app.UseStaticFiles()`. O esquema `basic` só é registrado quando a autenticação está ligada (é o que faz o botão "Authorize" aparecer).
+- **Autenticação HTTP Basic opcional** — desligada por padrão; liga com `AUTH__USUARIO`/`AUTH__SENHA`. `/health`, `/swagger` e `/images` nunca exigem. A resposta 401 não traz `WWW-Authenticate` (evita o popup nativo do navegador; o frontend tem tela de login própria).
+
+---
+
+## Pasta `dados/`
+
+Ao lado do executável da API (`AppContext.BaseDirectory/dados`), **plana**: todos os arquivos ficam na raiz, em um único formato (INI relacional, sem migração de formatos antigos). `CaminhosDados` monta todos os caminhos. Tudo já está no `.gitignore`/`.dockerignore`.
+
+| Arquivo | Conteúdo |
+|---|---|
+| `TogglUsuarios.ini` | `[Usuario:<chave>]` — `NomeExibicao`, `TokenApi` (criptografado), `Sigla`, `Cor`, `Selecionado`, `Administrador` |
+| `TogglConfiguracao.ini` | `[Geral]` — `Agrupamento` (`descricao`/`tag`/`ambos`, padrão `ambos`) e `CorTag`; **fonte única** para Relatório, Gant e Sprint |
+| `TogglTags.ini` | `[Tag:<nome>]` — `Categorias` (`Dev`/`Rev`/`Qa`, lista) e `Detalhar` (bool). Padrão vazio: nenhuma tag, nenhuma cor |
+| `JiraConexao.ini` | `[Conexao]` — `UrlDominio`, `Email`, `ApiToken` (criptografado, prefixo `enc:`) |
+| `JiraCampos.ini` | `[Campo:EstimativaDesenvolvimento\|EstimativaRevisao\|EstimativaTestes\|RevisadoPor]` — `Id`, `Nome` |
+| `JiraStatus.ini` | `[Status:<nome>]` — `Cor`, `Responsaveis` (`Dev`/`Rev`/`Qa`) e `Final` (`Concluido`\|`Ignorado`; mutuamente exclusivos) |
+| `JiraPrioridades.ini` | `[Prioridade:<nome>]` — `Cor` |
+| `JiraTogglMapeamento.ini` | `[Usuario:<displayName do Jira>]` — `ChaveToggl`, `Sigla`, `Cor` |
+| `Sprints.ini` | `[Sprint:<chave>]` — `Nome`, `HorasPorDia` (decimal, `InvariantCulture`), `DataInicio`, `DataFim` (`yyyy-MM-dd`), `Fechado` (padrão `False`) |
+| `RelatorioParametros.ini`, `GantParametros.ini` | só `DataInicio`/`DataFim` (o agrupamento vem de `TogglConfiguracao.ini`) |
+| `RelatorioData.ini`, `GantData.ini` | cache **único** por visualização (`[Geral]` + `[Usuario:<chave>]`, retorno cru do Toggl em JSON, `TokenApi` criptografado); bate só por período + usuários, e trocar de período sobrescreve |
+| `SprintData_<chaveSprint>.ini` | cache do Toggl **por sprint** (`[Sprint]` + `[Usuario:<chave>]`) |
+| `JiraSprintData_<chaveSprint>.ini` | cache das issues do Jira **por sprint** (`[Sprint]` com `Issues` em JSON, sem token) |
+| `TogglTagsCache.ini`, `JiraStatusCache.ini`, `JiraPrioridadesCache.ini`, `JiraUsuariosCache.ini` | caches de listagens reais (tags do Toggl; status, prioridades e usuários do Jira), renovados com `forcarAtualizacao=true` |
+
+- **Cache indexado por `Chave`** do usuário (não pelo nome, que pode mudar): o cache "bate" com a consulta quando o período é igual **e** todo usuário atual acha seu par por `Chave` + `TokenApi`.
+- **Chave do sprint em nome de arquivo**: só letras, dígitos, `-` e `_` (até 100 caracteres); chave inválida em consulta/acompanhamento devolve 400.
+- **Renomear ou mudar o formato de um `.ini` não tem migração automática** — troque a constante em `CaminhosDados`, renomeie o arquivo real à mão e não deixe lógica de compatibilidade no código.
+
+### Backup e restauração (`/api/dados/*`)
+
+- **Download**: zip **plano** de todos os arquivos da raiz de `dados/` (sem lista fixa — se houver um `dados.zip` antigo na pasta, ele entra no zip também).
+- **Restauração**: `POST /api/dados/restaurar` extrai **qualquer** arquivo da raiz do `.zip`, sem lista de nomes permitidos, com `overwriteFiles: true` — sobrescreve só os arquivos presentes no zip (os demais, inclusive caches, ficam intactos) e cria a pasta se preciso. Serve para o primeiro uso e para reimportar sobre dados existentes; não invalida cache nenhum. 400 se algum arquivo do zip estiver dentro de uma pasta (compacte o **conteúdo** de `dados/`, não a pasta) ou se o arquivo não for um `.zip` válido; 500 com mensagem limpa em falha de I/O.
 
 ---
 
 ## Docker
 
-A imagem (`Dockerfile`, base `aspnet:10.0-alpine`) roda o processo `dotnet`
-como usuário **não-root** (`$APP_UID`, padrão das imagens .NET 8+) — mas os
-volumes `dados/`/`certificado/` são **bind mounts** do host, e o Docker cria
-o ponto de montagem como `root:root` por padrão quando o container sobe, o
-que bloqueava qualquer escrita nessas pastas pelo usuário não-root (ex.:
-`POST /api/dados/restaurar` falhava com `UnauthorizedAccessException` —
-leitura funcionava, só escrita não). Corrigido com um `entrypoint.sh`: o
-container agora inicia como `root`, `chown`s `dados/`/`certificado/` para
-`$APP_UID`, e só então troca de usuário via `su-exec` antes de rodar o
-`dotnet TogglReport.Api.dll` — o processo da aplicação continua não-root,
-só o passo de ajuste de permissão do volume roda como root, uma vez, no
-início do container.
+A imagem (`Dockerfile`, base `aspnet:10.0-alpine`) roda o `dotnet` como usuário **não-root** (`$APP_UID`), mas os volumes `dados/`/`certificado/` são **bind mounts** do host (`./dados:/app/dados`), que o Docker cria como `root:root` — o que bloqueava escritas (ex.: `POST /api/dados/restaurar` falhava com `UnauthorizedAccessException`). O `entrypoint.sh` resolve: o container inicia como `root`, faz `chown` de `dados/`/`certificado/` para `$APP_UID` e só então troca de usuário via `su-exec` antes de rodar `dotnet TogglReport.Api.dll` — o processo da aplicação continua não-root; só o ajuste de permissão roda como root, uma vez, no início.
 
 ## Estrutura de arquivos
 
@@ -245,36 +266,49 @@ toggl-report-back/
  ├─ TogglReport.slnx
  ├─ TogglReport.Api/                    # Web API
  │   ├─ Program.cs
+ │   ├─ Autenticacao/                   # middleware de HTTP Basic opcional
  │   ├─ Dtos/                           # um record por request/response
- │   ├─ Endpoints/                      # um Map*Endpoints por grupo de rotas (inclui GantEndpoints) + helpers internos ValidacaoDatas (TryParse + fim<inicio) e TratamentoIo (500 em IOException/UnauthorizedAccessException)
+ │   ├─ Endpoints/                      # um Map*Endpoints por grupo de rotas + helpers (ValidacaoDatas, TratamentoIo)
  │   ├─ Properties/launchSettings.json
  │   └─ wwwroot/                        # só o ícone do Swagger (images/) e seus favicons
  └─ TogglReport.Nucleo/                 # referenciado pela Api
-     ├─ Configuracao/                   # inclui ConfiguracaoGant/CarregadorConfiguracaoGantIni + Sprint/ServicoSprints/CarregadorSprintsIni/ConfiguracaoCategoriasSprint/CarregadorConfiguracaoCategoriasSprintIni/ConfiguracaoResponsabilidadeSprint/CarregadorConfiguracaoResponsabilidadeSprintIni/CarregadorCacheSprintIni + ConfiguracaoJira/CarregadorConfiguracaoJiraIni + ConfiguracaoMapeamentoJiraToggl/CarregadorConfiguracaoMapeamentoJiraTogglIni (4 carregadores lêem/gravam ConfiguracoesGerais.ini) + ConfiguracaoCoresJira/CarregadorConfiguracaoCoresJiraIni + CarregadorCacheTagsTogglIni/CarregadorCacheListasJiraIni + helpers ServicoChaves/DiasUteis/Agrupamento
-     ├─ Toggl/
-     ├─ Relatorios/
-     ├─ Consultas/
-     ├─ Gant/                          # ServicoGant + LinhaGant/CelulaGant/ResultadoGant
-     ├─ Sprint/                        # ServicoSprint + CabecalhoSprint/BlocoCategoriaSprint/LinhaTarefaSprint/LinhaColaboradorSprint/ResultadoSprint (namespace RelatorioToggl.Sprints)
-     └─ Jira/                          # ClienteApiJira (inclui ObterStatusAsync/ObterPrioridadesAsync/ObterUsuariosAsync, paginado) + CampoJira/IssueJira/ResultadoApiJira/CacheJiraSprint/UsuarioJiraBruto
+     ├─ Configuracao/                   # modelos + carregadores de cada .ini, CaminhosDados, AnalisadorIni, criptografia, helpers
+     ├─ Toggl/                          # cliente da API v9, DTOs, rate limiter
+     ├─ Relatorios/                     # agrupamento e busca por descrição
+     ├─ Consultas/                      # ServicoConsulta (cache-first + rate limit)
+     ├─ Gant/                           # ServicoGant + modelos
+     ├─ Sprint/                         # ServicoSprint + modelos (namespace RelatorioToggl.Sprints)
+     └─ Jira/                           # ClienteApiJira, IssueJira, cache de issues por sprint
 ```
 
 ## Segurança
 
-`TogglUsuarios.ini`, `ConfiguracoesGerais.ini`, `RelatorioData.ini`, `GantData.ini` e `SprintData.ini` (gerados por **cada** executável em sua própria pasta `dados/`) guardam API Tokens **criptografados** (AES; chave via `CHAVE_CRIPTOGRAFIA` — renomeada de `TOGGL_CHAVE_CRIPTOGRAFIA` em 2026-09-07, quando a chave padrão embutida também foi rotacionada: tokens gravados sem env var configurada precisam ser reinseridos; ver `CLAUDE.md` §2.4) — os três de cache também o retorno cru das consultas, esse não criptografado.
+**Tokens criptografados em repouso.** `TogglUsuarios.ini`, `JiraConexao.ini`, `RelatorioData.ini`, `GantData.ini` e `SprintData_<chave>.ini` guardam API Tokens **criptografados** (AES; prefixo `enc:`; chave derivada de `CHAVE_CRIPTOGRAFIA`).
+Sem essa variável, vale uma chave padrão embutida no código-fonte — proteção mínima, que não resiste a quem lê o código. Valor sem o prefixo `enc:` é tratado como texto puro legado e passa a ser criptografado no próximo salvamento.
+Os caches de consulta também guardam o retorno cru do Toggl, **não criptografado**.
 
-**`ConfiguracoesGerais.ini`** (desde 2026-09-15) consolida em seções separadas — `[Jira]` (URL/e-mail/token do Jira, criptografado, antes em `JiraConfig.ini`), `[SprintCategorias]` (mapeamento DEV/REV/QA + agrupamento + tags, antes em `TogglSprintCategorias.ini`) e `[SprintResponsabilidade]` (status→DEV/REV/QA, antes em `TogglSprintResponsabilidade.ini`) — três arquivos antes independentes; entra na lista de arquivos sensíveis por causa da seção `[Jira]`, mesmo as outras duas não tendo dado sensível. A migração lazy desses três arquivos legados para o consolidado já foi concluída em produção e o fallback de leitura foi removido do código; os três arquivos ficaram órfãos e foram apagados manualmente da pasta `dados/`.
+Os demais arquivos (`TogglConfiguracao.ini`, `TogglTags.ini`, `JiraCampos.ini`, `JiraStatus.ini`, `JiraPrioridades.ini`, `JiraTogglMapeamento.ini`, `Sprints.ini`, `*Parametros.ini`, `JiraSprintData_*.ini` e os caches de listagens) não têm token.
 
-`RelatorioParametros.ini` (agrupamento/tags/período), `Sprints.ini`, `JiraSprintData.ini` (cache de prioridade/situação/estimativas, sem token), `TagsCache.ini` (cache de nomes de tags), `JiraListasCache.ini` (cache de nomes de status/prioridades) e `JiraCores.ini` (mapeamento nome → cor) não têm dado sensível. Não versione nenhum desses arquivos (já estão no `.gitignore`/`.dockerignore`, em qualquer profundidade de pasta) e trate os que têm token como segredo mesmo assim.
+Nenhum arquivo de `dados/` é versionado (`.gitignore`/`.dockerignore`, em qualquer profundidade, incluindo os padrões `SprintData_*.ini` e `JiraSprintData_*.ini`) — trate os que têm token como segredo mesmo assim.
+
+**Mudar `CHAVE_CRIPTOGRAFIA` invalida os tokens já gravados.** Trocar a chave (ou passar a usar/deixar de usar a variável) faz os `enc:` existentes não decifrarem — os tokens precisam ser reinseridos.
+
+**Gotcha operacional — rode com a chave certa.** Sem a `CHAVE_CRIPTOGRAFIA` correta (a mesma do `.env` de quem gravou os dados), a descriptografia falha silenciosamente e o token chega como texto `enc:...` inválido: o cache **não "bate"** (o par `Chave` + `TokenApi` diverge) e a consulta segue para a **rede real**, gastando rate limit e falhando com 401. Para testes, use uma **cópia** da pasta `dados/` (e a mesma chave) em vez de apontar a API para os dados reais — uma consulta indevida pode sobrescrever caches.
+
+**Restauração sem whitelist.** `/api/dados/restaurar` extrai qualquer arquivo da raiz do `.zip` para `dados/`: exponha a API só com a autenticação Basic ligada (`AUTH__USUARIO`/`AUTH__SENHA`) e trate o `.zip` de backup como segredo.
 
 ### Variáveis de ambiente em dev (Visual Studio)
 
-As três env vars da API — `AUTH__USUARIO`, `AUTH__SENHA` (autenticação Basic opcional, ambas vazias = sem autenticação) e `CHAVE_CRIPTOGRAFIA` (chave de criptografia dos tokens, vazia = chave padrão embutida) — vão no bloco `environmentVariables` de `TogglReport.Api/Properties/launchSettings.json`, já presentes lá com valor vazio como template. Pela IDE: **Propriedades do projeto → Depurar → "Abrir interface do usuário de perfis de inicialização de depuração" → Variáveis de ambiente**. `AUTH:*` são lidas via `IConfiguration` (o provider de env vars mapeia `AUTH__USUARIO` → `AUTH:USUARIO`); `CHAVE_CRIPTOGRAFIA` é lida direto via `Environment.GetEnvironmentVariable`. Como `launchSettings.json` é versionado, para guardar valores reais sem commitar: `git update-index --skip-worktree toggl-report-back/TogglReport.Api/Properties/launchSettings.json` ou defina as variáveis no ambiente do Windows (o VS herda). Fora de dev, o `docker-compose.yml` lê as três do `.env` da raiz (gitignored; `.env.example` é o template).
+As três env vars da API — `AUTH__USUARIO`, `AUTH__SENHA` (autenticação Basic opcional; ambas vazias = sem autenticação) e `CHAVE_CRIPTOGRAFIA` (vazia = chave padrão embutida) — vão no bloco `environmentVariables` de `TogglReport.Api/Properties/launchSettings.json`, já presente com valores vazios como template.
+
+Pela IDE: **Propriedades do projeto → Depurar → "Abrir interface do usuário de perfis de inicialização de depuração" → Variáveis de ambiente**. `AUTH:*` são lidas via `IConfiguration` (o provider de env vars mapeia `AUTH__USUARIO` → `AUTH:USUARIO`); `CHAVE_CRIPTOGRAFIA` é lida direto via `Environment.GetEnvironmentVariable`.
+
+Como `launchSettings.json` é versionado, para guardar valores reais sem commitar: `git update-index --skip-worktree toggl-report-back/TogglReport.Api/Properties/launchSettings.json` ou defina as variáveis no ambiente do Windows (o VS herda). Fora de dev, o `docker-compose.yml` lê as três do `.env` da raiz (gitignored; `.env.example` é o template).
 
 ## Limitações conhecidas
 
 - Sem paginação: `/me/time_entries` traz tudo do período numa única chamada — períodos muito longos podem ser lentos ou esbarrar em limites de histórico da conta (erro 400).
 - Datas são tratadas como dias no fuso local e convertidas para UTC na chamada à API.
 - Não resolve nome de projeto/cliente — agrupamento é só por descrição e tag.
-- Limite de 30 requisições/hora por usuário do Toggl é só em memória, **por processo** — não persiste entre reinícios da API.
+- Limite de 30 requisições/hora por usuário do Toggl é só em memória, **por processo** — não persiste entre reinícios da API (não é o mesmo mecanismo do retry de 429 do `ClienteApiToggl`, que respeita `Retry-After` da própria API do Toggl e tenta uma vez).
 - Sem testes automatizados.

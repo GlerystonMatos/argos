@@ -6,13 +6,13 @@ namespace RelatorioToggl.Api.Endpoints;
 
 public static class JiraEndpoints
 {
-    public static void MapJiraEndpoints(this WebApplication app, string caminhoConfiguracoesGerais, string caminhoCacheListasJira, string caminhoCoresJira)
+    public static void MapJiraEndpoints(this WebApplication app, CaminhosDados caminhos)
     {
         RouteGroupBuilder grupo = app.MapGroup("/api/jira").WithTags("Jira");
 
         grupo.MapGet("/configuracao", () =>
         {
-            ConfiguracaoJira configuracao = CarregadorConfiguracaoJiraIni.Carregar(caminhoConfiguracoesGerais) ?? new ConfiguracaoJira();
+            ConfiguracaoJira configuracao = CarregadorConfiguracaoJiraIni.Carregar(caminhos);
             return Results.Ok(ParaDto(configuracao));
         })
         .WithSummary("Obtém a configuração do Jira salva (API Token mascarado)");
@@ -25,7 +25,7 @@ public static class JiraEndpoints
             if (string.IsNullOrWhiteSpace(request.Email))
                 return Results.BadRequest("E-mail é obrigatório.");
 
-            ConfiguracaoJira configuracao = CarregadorConfiguracaoJiraIni.Carregar(caminhoConfiguracoesGerais) ?? new ConfiguracaoJira();
+            ConfiguracaoJira configuracao = CarregadorConfiguracaoJiraIni.Carregar(caminhos);
 
             if (string.IsNullOrWhiteSpace(configuracao.ApiToken) && string.IsNullOrWhiteSpace(request.ApiToken))
                 return Results.BadRequest("API Token é obrigatório.");
@@ -34,20 +34,24 @@ public static class JiraEndpoints
             configuracao.Email = request.Email.Trim();
             if (!string.IsNullOrWhiteSpace(request.ApiToken))
                 configuracao.ApiToken = request.ApiToken.Trim();
-            configuracao.CampoEstimativaEsforcoId = request.CampoEstimativaEsforcoId;
-            configuracao.CampoEstimativaEsforcoNome = request.CampoEstimativaEsforcoNome;
+            configuracao.CampoEstimativaDesenvolvimentoId = request.CampoEstimativaDesenvolvimentoId;
+            configuracao.CampoEstimativaDesenvolvimentoNome = request.CampoEstimativaDesenvolvimentoNome;
             configuracao.CampoRevisadoPorId = request.CampoRevisadoPorId;
             configuracao.CampoRevisadoPorNome = request.CampoRevisadoPorNome;
+            configuracao.CampoEstimativaRevisaoId = request.CampoEstimativaRevisaoId;
+            configuracao.CampoEstimativaRevisaoNome = request.CampoEstimativaRevisaoNome;
+            configuracao.CampoEstimativaTestesId = request.CampoEstimativaTestesId;
+            configuracao.CampoEstimativaTestesNome = request.CampoEstimativaTestesNome;
 
             IResult? erroPersistencia = TratamentoIo.Executar(
-                () => CarregadorConfiguracaoJiraIni.Salvar(caminhoConfiguracoesGerais, configuracao),
+                () => CarregadorConfiguracaoJiraIni.Salvar(caminhos, configuracao),
                 "Não foi possível salvar a configuração do Jira.");
             if (erroPersistencia is not null)
                 return erroPersistencia;
 
             return Results.Ok(ParaDto(configuracao));
         })
-        .WithSummary("Salva/atualiza a configuração do Jira (URL, e-mail, API Token e campos de estimativa de esforço e revisado por)");
+        .WithSummary("Salva/atualiza a configuração do Jira (URL, e-mail, API Token e campos de estimativa de desenvolvimento, revisão, testes e revisado por)");
 
         grupo.MapPost("/testar-conexao", async (TestarConexaoJiraRequest request) =>
         {
@@ -71,8 +75,8 @@ public static class JiraEndpoints
 
             if (string.IsNullOrWhiteSpace(urlDominio) || string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(apiToken))
             {
-                ConfiguracaoJira? configuracaoSalva = CarregadorConfiguracaoJiraIni.Carregar(caminhoConfiguracoesGerais);
-                if (configuracaoSalva is null || string.IsNullOrWhiteSpace(configuracaoSalva.ApiToken))
+                ConfiguracaoJira configuracaoSalva = CarregadorConfiguracaoJiraIni.Carregar(caminhos);
+                if (string.IsNullOrWhiteSpace(configuracaoSalva.ApiToken))
                     return Results.BadRequest("Informe URL do domínio, e-mail e API Token, ou salve a configuração do Jira primeiro.");
 
                 urlDominio = configuracaoSalva.UrlDominio;
@@ -95,36 +99,36 @@ public static class JiraEndpoints
 
         grupo.MapPost("/issues", async (BuscarIssuesJiraRequest request) =>
         {
-            ConfiguracaoJira? configuracaoSalva = CarregadorConfiguracaoJiraIni.Carregar(caminhoConfiguracoesGerais);
-            if (configuracaoSalva is null || string.IsNullOrWhiteSpace(configuracaoSalva.ApiToken))
+            ConfiguracaoJira configuracaoSalva = CarregadorConfiguracaoJiraIni.Carregar(caminhos);
+            if (string.IsNullOrWhiteSpace(configuracaoSalva.ApiToken))
                 return Results.BadRequest("Salve a configuração do Jira primeiro (POST /api/jira/configuracao).");
 
             ClienteApiJira? cliente = CriarCliente(configuracaoSalva.UrlDominio, configuracaoSalva.Email, configuracaoSalva.ApiToken, out string? erroUrl);
             if (cliente is null)
                 return Results.BadRequest(erroUrl);
 
-            ResultadoApiJira<List<IssueJira>> resultado = await cliente.BuscarIssuesAsync(request.Codigos, configuracaoSalva.CampoEstimativaEsforcoId, configuracaoSalva.CampoRevisadoPorId);
+            ResultadoApiJira<List<IssueJira>> resultado = await cliente.BuscarIssuesAsync(request.Codigos, configuracaoSalva.CampoEstimativaDesenvolvimentoId, configuracaoSalva.CampoRevisadoPorId, configuracaoSalva.CampoEstimativaRevisaoId, configuracaoSalva.CampoEstimativaTestesId);
             if (!resultado.Sucesso)
                 return Results.BadRequest(resultado.MensagemErro);
 
             List<IssueJiraDto> issues = resultado.Dados!
-                .Select(issue => new IssueJiraDto(issue.Chave, issue.Prioridade, issue.Situacao, issue.EstimativaOriginalHoras, issue.EstimativaEsforcoHoras, issue.UrlIssue, issue.SituacaoCategoria, issue.Responsavel, issue.RevisadoPor))
+                .Select(issue => new IssueJiraDto(issue.Chave, issue.Prioridade, issue.Situacao, issue.EstimativaDesenvolvimentoHoras, issue.UrlIssue, issue.SituacaoCategoria, issue.Responsavel, issue.RevisadoPor, issue.EstimativaRevisaoHoras, issue.EstimativaTestesHoras))
                 .ToList();
             return Results.Ok(issues);
         })
-        .WithSummary("Busca em lote (JQL key in (...)) prioridade, situação, estimativa original e estimativa de esforço, usando a configuração já salva");
+        .WithSummary("Busca em lote (JQL key in (...)) prioridade, situação e estimativas de desenvolvimento/revisão/testes, usando a configuração já salva");
 
         grupo.MapGet("/status", async (bool forcarAtualizacao) =>
         {
             if (!forcarAtualizacao)
             {
-                CacheListaJira? cacheExistente = CarregadorCacheListasJiraIni.CarregarStatus(caminhoCacheListasJira);
+                CacheListaJira? cacheExistente = CarregadorCacheListasJiraIni.Carregar(caminhos.JiraStatusCache);
                 if (cacheExistente is not null)
                     return Results.Ok(new ListaJiraResponse(cacheExistente.Nomes, true, cacheExistente.AtualizadoEm));
             }
 
-            ConfiguracaoJira? configuracaoSalva = CarregadorConfiguracaoJiraIni.Carregar(caminhoConfiguracoesGerais);
-            if (configuracaoSalva is null || string.IsNullOrWhiteSpace(configuracaoSalva.ApiToken))
+            ConfiguracaoJira configuracaoSalva = CarregadorConfiguracaoJiraIni.Carregar(caminhos);
+            if (string.IsNullOrWhiteSpace(configuracaoSalva.ApiToken))
                 return Results.BadRequest("Salve a configuração do Jira primeiro (POST /api/jira/configuracao).");
 
             ClienteApiJira? cliente = CriarCliente(configuracaoSalva.UrlDominio, configuracaoSalva.Email, configuracaoSalva.ApiToken, out string? erroUrl);
@@ -139,7 +143,7 @@ public static class JiraEndpoints
             CacheListaJira cache = new() { Nomes = resultado.Dados!, AtualizadoEm = atualizadoEm };
 
             IResult? erroPersistencia = TratamentoIo.Executar(
-                () => CarregadorCacheListasJiraIni.SalvarStatus(caminhoCacheListasJira, cache),
+                () => CarregadorCacheListasJiraIni.Salvar(caminhos.JiraStatusCache, cache),
                 "Não foi possível salvar o cache de status do Jira.");
             if (erroPersistencia is not null)
                 return erroPersistencia;
@@ -152,13 +156,13 @@ public static class JiraEndpoints
         {
             if (!forcarAtualizacao)
             {
-                CacheListaJira? cacheExistente = CarregadorCacheListasJiraIni.CarregarPrioridades(caminhoCacheListasJira);
+                CacheListaJira? cacheExistente = CarregadorCacheListasJiraIni.Carregar(caminhos.JiraPrioridadesCache);
                 if (cacheExistente is not null)
                     return Results.Ok(new ListaJiraResponse(cacheExistente.Nomes, true, cacheExistente.AtualizadoEm));
             }
 
-            ConfiguracaoJira? configuracaoSalva = CarregadorConfiguracaoJiraIni.Carregar(caminhoConfiguracoesGerais);
-            if (configuracaoSalva is null || string.IsNullOrWhiteSpace(configuracaoSalva.ApiToken))
+            ConfiguracaoJira configuracaoSalva = CarregadorConfiguracaoJiraIni.Carregar(caminhos);
+            if (string.IsNullOrWhiteSpace(configuracaoSalva.ApiToken))
                 return Results.BadRequest("Salve a configuração do Jira primeiro (POST /api/jira/configuracao).");
 
             ClienteApiJira? cliente = CriarCliente(configuracaoSalva.UrlDominio, configuracaoSalva.Email, configuracaoSalva.ApiToken, out string? erroUrl);
@@ -173,7 +177,7 @@ public static class JiraEndpoints
             CacheListaJira cache = new() { Nomes = resultado.Dados!, AtualizadoEm = atualizadoEm };
 
             IResult? erroPersistencia = TratamentoIo.Executar(
-                () => CarregadorCacheListasJiraIni.SalvarPrioridades(caminhoCacheListasJira, cache),
+                () => CarregadorCacheListasJiraIni.Salvar(caminhos.JiraPrioridadesCache, cache),
                 "Não foi possível salvar o cache de prioridades do Jira.");
             if (erroPersistencia is not null)
                 return erroPersistencia;
@@ -186,13 +190,13 @@ public static class JiraEndpoints
         {
             if (!forcarAtualizacao)
             {
-                CacheListaJira? cacheExistente = CarregadorCacheListasJiraIni.CarregarUsuarios(caminhoCacheListasJira);
+                CacheListaJira? cacheExistente = CarregadorCacheListasJiraIni.Carregar(caminhos.JiraUsuariosCache);
                 if (cacheExistente is not null)
                     return Results.Ok(new ListaJiraResponse(cacheExistente.Nomes, true, cacheExistente.AtualizadoEm));
             }
 
-            ConfiguracaoJira? configuracaoSalva = CarregadorConfiguracaoJiraIni.Carregar(caminhoConfiguracoesGerais);
-            if (configuracaoSalva is null || string.IsNullOrWhiteSpace(configuracaoSalva.ApiToken))
+            ConfiguracaoJira configuracaoSalva = CarregadorConfiguracaoJiraIni.Carregar(caminhos);
+            if (string.IsNullOrWhiteSpace(configuracaoSalva.ApiToken))
                 return Results.BadRequest("Salve a configuração do Jira primeiro (POST /api/jira/configuracao).");
 
             ClienteApiJira? cliente = CriarCliente(configuracaoSalva.UrlDominio, configuracaoSalva.Email, configuracaoSalva.ApiToken, out string? erroUrl);
@@ -207,7 +211,7 @@ public static class JiraEndpoints
             CacheListaJira cache = new() { Nomes = resultado.Dados!, AtualizadoEm = atualizadoEm };
 
             IResult? erroPersistencia = TratamentoIo.Executar(
-                () => CarregadorCacheListasJiraIni.SalvarUsuarios(caminhoCacheListasJira, cache),
+                () => CarregadorCacheListasJiraIni.Salvar(caminhos.JiraUsuariosCache, cache),
                 "Não foi possível salvar o cache de usuários do Jira.");
             if (erroPersistencia is not null)
                 return erroPersistencia;
@@ -218,7 +222,7 @@ public static class JiraEndpoints
 
         grupo.MapGet("/usuarios-mapeamento", () =>
         {
-            ConfiguracaoMapeamentoJiraToggl configuracao = CarregadorConfiguracaoMapeamentoJiraTogglIni.Carregar(caminhoConfiguracoesGerais);
+            ConfiguracaoMapeamentoJiraToggl configuracao = CarregadorConfiguracaoMapeamentoJiraTogglIni.Carregar(caminhos.JiraTogglMapeamento);
             return Results.Ok(new MapeamentoJiraTogglDto(ParaDto(configuracao.Mapeamento)));
         })
         .WithSummary("Obtém o mapeamento configurável de usuário do Jira (displayName) para usuário do Toggl (Chave), com Sigla/Cor para usuários exclusivos do Jira");
@@ -231,7 +235,7 @@ public static class JiraEndpoints
             };
 
             IResult? erroPersistencia = TratamentoIo.Executar(
-                () => CarregadorConfiguracaoMapeamentoJiraTogglIni.Salvar(caminhoConfiguracoesGerais, configuracao),
+                () => CarregadorConfiguracaoMapeamentoJiraTogglIni.Salvar(caminhos.JiraTogglMapeamento, configuracao),
                 "Não foi possível salvar o mapeamento de usuários Jira/Toggl.");
             if (erroPersistencia is not null)
                 return erroPersistencia;
@@ -242,7 +246,7 @@ public static class JiraEndpoints
 
         grupo.MapGet("/cores", () =>
         {
-            ConfiguracaoCoresJira configuracao = CarregadorConfiguracaoCoresJiraIni.Carregar(caminhoCoresJira);
+            ConfiguracaoCoresJira configuracao = CarregadorConfiguracaoCoresJiraIni.Carregar(caminhos);
             return Results.Ok(new CoresJiraDto(configuracao.CoresStatus, configuracao.CoresPrioridade));
         })
         .WithSummary("Obtém o mapeamento configurável de cores por status e por prioridade do Jira");
@@ -256,7 +260,7 @@ public static class JiraEndpoints
             };
 
             IResult? erroPersistencia = TratamentoIo.Executar(
-                () => CarregadorConfiguracaoCoresJiraIni.Salvar(caminhoCoresJira, configuracao),
+                () => CarregadorConfiguracaoCoresJiraIni.Salvar(caminhos, configuracao),
                 "Não foi possível salvar o mapeamento de cores do Jira.");
             if (erroPersistencia is not null)
                 return erroPersistencia;
@@ -309,8 +313,12 @@ public static class JiraEndpoints
         configuracao.UrlDominio,
         configuracao.Email,
         ServicoUsuariosToggl.MascararToken(configuracao.ApiToken),
-        configuracao.CampoEstimativaEsforcoId,
-        configuracao.CampoEstimativaEsforcoNome,
+        configuracao.CampoEstimativaDesenvolvimentoId,
+        configuracao.CampoEstimativaDesenvolvimentoNome,
         configuracao.CampoRevisadoPorId,
-        configuracao.CampoRevisadoPorNome);
+        configuracao.CampoRevisadoPorNome,
+        configuracao.CampoEstimativaRevisaoId,
+        configuracao.CampoEstimativaRevisaoNome,
+        configuracao.CampoEstimativaTestesId,
+        configuracao.CampoEstimativaTestesNome);
 }

@@ -1,59 +1,58 @@
-using System.Text.Json;
-
 namespace RelatorioToggl.Configuracao;
 
 public static class CarregadorConfiguracaoMapeamentoJiraTogglIni
 {
-    private const string SecaoConsolidada = "JiraTogglMapeamento";
-
-    private static readonly JsonSerializerOptions OpcoesJson = new() { PropertyNameCaseInsensitive = true };
+    private const string PrefixoSecaoUsuario = "Usuario:";
 
     public static ConfiguracaoMapeamentoJiraToggl Padrao() => new();
 
-    public static ConfiguracaoMapeamentoJiraToggl Carregar(string caminhoConsolidado)
+    public static ConfiguracaoMapeamentoJiraToggl Carregar(string caminho)
     {
-        if (File.Exists(caminhoConsolidado))
+        ConfiguracaoMapeamentoJiraToggl configuracao = Padrao();
+        if (!File.Exists(caminho))
+            return configuracao;
+
+        foreach ((string nomeSecao, Dictionary<string, string> valores) in AnalisadorIni.Analisar(caminho))
         {
-            Dictionary<string, Dictionary<string, string>> secoes = AnalisadorIni.Analisar(caminhoConsolidado);
-            if (secoes.TryGetValue(SecaoConsolidada, out Dictionary<string, string>? secao))
-                return Mapear(secao);
+            if (!nomeSecao.StartsWith(PrefixoSecaoUsuario, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            string usuarioJira = nomeSecao.Substring(PrefixoSecaoUsuario.Length).Trim();
+            if (usuarioJira.Length == 0)
+                continue;
+
+            configuracao.Mapeamento[usuarioJira] = new EntradaMapeamentoJiraToggl
+            {
+                ChaveToggl = AnalisadorIni.ObterOuNulo(valores, "ChaveToggl"),
+                Sigla = AnalisadorIni.ObterOuNulo(valores, "Sigla"),
+                Cor = AnalisadorIni.ObterOuNulo(valores, "Cor")
+            };
         }
 
-        return Padrao();
+        return configuracao;
     }
 
-    public static void Salvar(string caminhoConsolidado, ConfiguracaoMapeamentoJiraToggl configuracao)
+    public static void Salvar(string caminho, ConfiguracaoMapeamentoJiraToggl configuracao)
     {
-        Dictionary<string, Dictionary<string, string>> secoes = File.Exists(caminhoConsolidado)
-            ? AnalisadorIni.Analisar(caminhoConsolidado)
-            : new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, Dictionary<string, string>> secoes = new(StringComparer.OrdinalIgnoreCase);
 
-        secoes[SecaoConsolidada] = ParaValores(configuracao);
-
-        AnalisadorIni.EscreverSecoes(caminhoConsolidado, secoes);
-    }
-
-    private static ConfiguracaoMapeamentoJiraToggl Mapear(Dictionary<string, string> valores) => new()
-    {
-        Mapeamento = LerMapa(valores, "Mapeamento")
-    };
-
-    private static Dictionary<string, string> ParaValores(ConfiguracaoMapeamentoJiraToggl configuracao) => new(StringComparer.OrdinalIgnoreCase)
-    {
-        ["Mapeamento"] = JsonSerializer.Serialize(configuracao.Mapeamento, OpcoesJson)
-    };
-
-    private static Dictionary<string, EntradaMapeamentoJiraToggl> LerMapa(Dictionary<string, string> secao, string chave)
-    {
-        string json = AnalisadorIni.ObterOuPadrao(secao, chave, "{}");
-        try
+        foreach ((string usuarioJira, EntradaMapeamentoJiraToggl entrada) in configuracao.Mapeamento)
         {
-            return JsonSerializer.Deserialize<Dictionary<string, EntradaMapeamentoJiraToggl>>(json, OpcoesJson)
-                ?? new Dictionary<string, EntradaMapeamentoJiraToggl>(StringComparer.OrdinalIgnoreCase);
+            string nome = usuarioJira.Trim();
+            if (nome.Length == 0)
+                continue;
+
+            Dictionary<string, string> valores = new(StringComparer.OrdinalIgnoreCase);
+            if (entrada.ChaveToggl is not null)
+                valores["ChaveToggl"] = entrada.ChaveToggl;
+            if (entrada.Sigla is not null)
+                valores["Sigla"] = entrada.Sigla;
+            if (entrada.Cor is not null)
+                valores["Cor"] = entrada.Cor;
+
+            secoes[$"{PrefixoSecaoUsuario}{nome}"] = valores;
         }
-        catch (JsonException)
-        {
-            return new Dictionary<string, EntradaMapeamentoJiraToggl>(StringComparer.OrdinalIgnoreCase);
-        }
+
+        AnalisadorIni.EscreverSecoes(caminho, secoes);
     }
 }

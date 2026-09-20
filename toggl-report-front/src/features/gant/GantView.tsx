@@ -78,7 +78,7 @@ export function GantView({ dataInicio, dataFim, onVoltar, veioDoCache }: GantVie
             </CabecalhoView>
 
             {buscaAberta ? (
-                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ mt: '0.5rem !important' }}>
                     <TextField
                         label="Buscar por parte da descrição"
                         value={termoBusca}
@@ -120,7 +120,7 @@ export function GantView({ dataInicio, dataFim, onVoltar, veioDoCache }: GantVie
             ) : undefined}
 
             {gant && gant.linhas.length > 0 ? (
-                <TableContainer sx={{ overflowX: 'auto' }}>
+                <TableContainer sx={{ overflowX: 'auto', mt: '0.5rem !important' }}>
                     <Table size="small">
                         <TableHead>
                             <TableRow>

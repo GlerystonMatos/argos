@@ -1,4 +1,4 @@
-import { createTheme, alpha } from '@mui/material/styles';
+import { createTheme } from '@mui/material/styles';
 
 export const CORES = {
     navbarFundo: '#1A1A32',
@@ -92,16 +92,6 @@ export const tema = createTheme({
                     borderColor: CORES.accentAzul,
                     backgroundColor: 'transparent',
                     color: CORES.accentAzul,
-                },
-            },
-        },
-        MuiStepButton: {
-            styleOverrides: {
-                root: {
-                    '&[aria-selected="true"]': {
-                        backgroundColor: alpha(CORES.accentAzul, 0.15),
-                        borderLeft: `3px solid ${CORES.accentAzul}`,
-                    },
                 },
             },
         },

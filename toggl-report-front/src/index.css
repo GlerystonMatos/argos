@@ -14,8 +14,3 @@ body {
 #root {
     min-height: 100vh;
 }
-
-.MuiStepButton-root[aria-selected="true"] {
-    background-color: transparent !important;
-    border-left: none !important;
-}

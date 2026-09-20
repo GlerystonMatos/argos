@@ -95,3 +95,15 @@ export const GRUPOS: { rotulo: string; nomeLongo: string; bloco: 'dev' | 'rev' |
     { rotulo: 'REV', nomeLongo: 'Revisão', bloco: 'rev' },
     { rotulo: 'QA', nomeLongo: 'Qualidade', bloco: 'qa' },
 ];
+
+type LinhaSituacaoGrupo = {
+    agrupada: boolean;
+    grupoResponsavelStatus: 'dev' | 'rev' | 'qa' | null;
+    situacaoSemGrupoResponsavel: boolean;
+};
+
+export function situacaoGrupo(linha: LinhaSituacaoGrupo, grupo: 'dev' | 'rev' | 'qa'): 'Tag' | 'Pendente' | 'Concluído' {
+    if (linha.agrupada) return 'Tag';
+    if (linha.grupoResponsavelStatus) return grupo === linha.grupoResponsavelStatus ? 'Pendente' : 'Concluído';
+    return linha.situacaoSemGrupoResponsavel ? 'Concluído' : 'Pendente';
+}

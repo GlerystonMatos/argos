@@ -1,16 +1,21 @@
 import type { ReactNode } from 'react';
 import { useEffect, useState } from 'react';
-import type { Agrupamento } from '../api/tipos';
+import { temDadoAproveitavel } from '../utils/consulta';
 import { useNotificacao } from '../hooks/useNotificacao';
+import { DialogoConfirmacao } from './DialogoConfirmacao';
 import { BotaoComCarregamento } from './BotaoComCarregamento';
 import { periodoEhValido, ultimos30Dias } from '../utils/datas';
+import type { Agrupamento, ConsultarResponse } from '../api/tipos';
 
 import {
     Card,
+    Alert,
     Stack,
+    Checkbox,
     TextField,
     Typography,
     CardContent,
+    FormControlLabel,
 } from '@mui/material';
 
 export interface DadosParametros {
@@ -27,29 +32,36 @@ interface ParametrosCarregados {
     dataFim: string | null;
 }
 
-interface ParametrosFormBaseProps {
-    titulo: string;
+export interface ParametrosConsultaProps {
     semUsuarios: boolean;
-    salvando: boolean;
+    onConcluida: (resposta: ConsultarResponse) => void;
+}
+
+interface ParametrosFormBaseProps extends ParametrosConsultaProps {
+    titulo: string;
     mensagemErroCarregar: string;
     carregarInicial: () => Promise<ParametrosCarregados>;
-    aoConfirmar: (dados: DadosParametros) => void;
-    aoContinuar: (dados: DadosParametros) => void;
+    salvarParametros: (dados: DadosParametros) => Promise<unknown>;
+    executarConsulta: (dataInicio: string, dataFim: string, forcarConsultaApi: boolean) => Promise<ConsultarResponse>;
 }
 
 export function ParametrosFormBase({
     titulo,
     semUsuarios,
-    salvando,
     mensagemErroCarregar,
     carregarInicial,
-    aoConfirmar,
-    aoContinuar,
+    salvarParametros,
+    executarConsulta,
+    onConcluida,
 }: ParametrosFormBaseProps): ReactNode {
     const [dataFim, setDataFim] = useState('');
     const [dataInicio, setDataInicio] = useState('');
-    const { notificarErro } = useNotificacao();
+    const { notificarErro, notificarSucesso } = useNotificacao();
+    const [consultando, setConsultando] = useState(false);
+    const [semDados, setSemDados] = useState(false);
     const [carregandoInicial, setCarregandoInicial] = useState(true);
+    const [forcarConsultaApi, setForcarConsultaApi] = useState(false);
+    const [confirmandoConsultaForcada, setConfirmandoConsultaForcada] = useState(false);
     const [tags, setTags] = useState<string[]>([]);
     const [agrupamento, setAgrupamento] = useState<Agrupamento>('ambos');
 
@@ -92,20 +104,48 @@ export function ParametrosFormBase({
 
     const periodoValido = periodoEhValido(dataInicio, dataFim);
 
-    function confirmar(): void {
-        if (!periodoValido) {
-            notificarErro(new Error('A data fim não pode ser anterior à data início.'));
-            return;
+    async function salvarEConsultar(): Promise<void> {
+        setSemDados(false);
+        setConsultando(true);
+        try {
+            try {
+                await salvarParametros({ agrupamento, tags, dataInicio, dataFim });
+                notificarSucesso('Parâmetros salvos.');
+            } catch (erro) {
+                notificarErro(erro, 'Não foi possível salvar os parâmetros');
+                return;
+            }
+
+            try {
+                const resposta = await executarConsulta(dataInicio, dataFim, forcarConsultaApi);
+                if (temDadoAproveitavel(resposta)) {
+                    onConcluida(resposta);
+                } else {
+                    setSemDados(true);
+                }
+            } catch (erro) {
+                notificarErro(erro, 'Não foi possível consultar o Toggl');
+            }
+        } finally {
+            setConsultando(false);
         }
-        aoConfirmar({ agrupamento, tags, dataInicio, dataFim });
     }
 
-    function continuarSemSalvar(): void {
+    function aoClicarConsultar(): void {
         if (!periodoValido) {
             notificarErro(new Error('A data fim não pode ser anterior à data início.'));
             return;
         }
-        aoContinuar({ agrupamento, tags, dataInicio, dataFim });
+        if (forcarConsultaApi) {
+            setConfirmandoConsultaForcada(true);
+            return;
+        }
+        void salvarEConsultar();
+    }
+
+    function confirmarConsultaForcada(): void {
+        setConfirmandoConsultaForcada(false);
+        void salvarEConsultar();
     }
 
     return (
@@ -115,7 +155,7 @@ export function ParametrosFormBase({
                     <Typography variant="h6">{titulo}</Typography>
 
                     <Typography variant="body2" color="text.secondary">
-                        Agrupamento e tags para detalhar por descrição agora são definidos na aba Configurações.
+                        Agrupamento e tags para detalhar por descrição são definidos na seção Configurações.
                     </Typography>
 
                     <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
@@ -124,7 +164,7 @@ export function ParametrosFormBase({
                             type="date"
                             value={dataInicio}
                             onChange={(evento) => setDataInicio(evento.target.value)}
-                            disabled={carregandoInicial}
+                            disabled={carregandoInicial || consultando}
                             slotProps={{ inputLabel: { shrink: true } }}
                             fullWidth />
                         <TextField
@@ -132,7 +172,7 @@ export function ParametrosFormBase({
                             type="date"
                             value={dataFim}
                             onChange={(evento) => setDataFim(evento.target.value)}
-                            disabled={carregandoInicial}
+                            disabled={carregandoInicial || consultando}
                             error={dataInicio !== '' && dataFim !== '' && !periodoValido}
                             helperText={
                                 dataInicio !== '' && dataFim !== '' && !periodoValido
@@ -143,23 +183,42 @@ export function ParametrosFormBase({
                             fullWidth />
                     </Stack>
 
-                    <Stack direction="row" spacing={1} sx={{ justifyContent: 'flex-end' }}>
-                        <BotaoComCarregamento
-                            variant="outlined"
-                            disabled={carregandoInicial || !periodoValido || semUsuarios}
-                            onClick={continuarSemSalvar}>
-                            Continuar
-                        </BotaoComCarregamento>
+                    <FormControlLabel
+                        control={
+                            <Checkbox
+                                checked={forcarConsultaApi}
+                                onChange={(evento) => setForcarConsultaApi(evento.target.checked)}
+                                disabled={carregandoInicial || consultando} />
+                        }
+                        label="Forçar nova consulta à API (ignora o cache local)"
+                        sx={{ mt: '0.5rem !important', ml: '-0.5rem !important' }} />
+
+                    <Stack direction="row" spacing={1} sx={{ justifyContent: 'flex-end', mt: '0rem !important' }}>
                         <BotaoComCarregamento
                             variant="contained"
-                            carregando={salvando}
+                            carregando={consultando}
                             disabled={carregandoInicial || !periodoValido || semUsuarios}
-                            onClick={confirmar}>
-                            Salvar e continuar
+                            onClick={aoClicarConsultar}>
+                            Consultar
                         </BotaoComCarregamento>
                     </Stack>
+
+                    {semDados ? (
+                        <Alert severity="warning">Nenhum usuário do Toggl retornou dados para este período.</Alert>
+                    ) : undefined}
                 </Stack>
             </CardContent>
+
+            <DialogoConfirmacao
+                aberto={confirmandoConsultaForcada}
+                titulo="Forçar nova consulta à API?"
+                mensagem="Isso ignora o cache local e consulta o Toggl de novo, consumindo o limite de 30 requisições/hora por usuário. Deseja continuar?"
+                textoConfirmar="Consultar mesmo assim"
+                textoCancelar="Não"
+                focoNoCancelar
+                onConfirmar={confirmarConsultaForcada}
+                onCancelar={() => setConfirmandoConsultaForcada(false)}
+            />
         </Card>
     );
 }

@@ -11,7 +11,11 @@ export interface CoresJiraPanelHandle {
     salvar: () => Promise<boolean>;
 }
 
-export const CoresJiraPanel = forwardRef<CoresJiraPanelHandle, object>(function CoresJiraPanel(_props, ref): ReactNode {
+interface CoresJiraPanelProps {
+    onAlterado?: () => void;
+}
+
+export const CoresJiraPanel = forwardRef<CoresJiraPanelHandle, CoresJiraPanelProps>(function CoresJiraPanel({ onAlterado }, ref): ReactNode {
     const { dados: cores, carregando, salvando, carregar, salvar } = useCoresJira();
     const { notificarErro } = useNotificacao();
 
@@ -91,14 +95,20 @@ export const CoresJiraPanel = forwardRef<CoresJiraPanelHandle, object>(function 
                 nomes={statusNomes}
                 cores={coresStatus}
                 disabled={carregando || salvando}
-                onChange={(nome, cor) => setCoresStatus((atual) => ({ ...atual, [nome]: cor }))} />
+                onChange={(nome, cor) => {
+                    setCoresStatus((atual) => ({ ...atual, [nome]: cor }));
+                    onAlterado?.();
+                }} />
 
             <MapaCoresLista
                 titulo="Cores por prioridade:"
                 nomes={prioridadeNomes}
                 cores={coresPrioridade}
                 disabled={carregando || salvando}
-                onChange={(nome, cor) => setCoresPrioridade((atual) => ({ ...atual, [nome]: cor }))} />
+                onChange={(nome, cor) => {
+                    setCoresPrioridade((atual) => ({ ...atual, [nome]: cor }));
+                    onAlterado?.();
+                }} />
         </Stack>
     );
 });

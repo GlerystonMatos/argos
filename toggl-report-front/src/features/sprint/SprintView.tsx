@@ -1,8 +1,7 @@
 import { CORES } from '../../theme';
 import type { ReactNode } from 'react';
 import { useSprint } from './useSprint';
-import SearchIcon from '@mui/icons-material/Search';
-import { useEffect, useMemo, useState } from 'react';
+import { fecharSprint } from '../../api/sprintsApi';
 import { SprintDialogInfo } from './SprintDialogInfo';
 import { obterCoresJira } from '../../api/coresJiraApi';
 import { SprintLinhaTarefa } from './SprintLinhaTarefa';
@@ -11,11 +10,29 @@ import { useNotificacao } from '../../hooks/useNotificacao';
 import { SprintCardCapacidade } from './SprintCardCapacidade';
 import { CabecalhoView } from '../../components/CabecalhoView';
 import { SprintCardColaboradores } from './SprintCardColaboradores';
+import { SprintDialogDetalheLinha } from './SprintDialogDetalheLinha';
+import { obterStatusFinalSprint } from '../../api/statusFinalSprintApi';
 import { lerTachados, gravarTachados, idLinhaTarefa } from './tachados';
+import { DialogoConfirmacao } from '../../components/DialogoConfirmacao';
 import { EsqueletoCarregando } from '../../components/EsqueletoCarregando';
 import { BotaoComCarregamento } from '../../components/BotaoComCarregamento';
-import type { CategoriasSprint, ResponsabilidadeSprint } from '../../api/tipos';
-import { GRUPOS, contarDigitos, ordemPrioridade, calcularColisaoPosicao } from './calculos';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+
+import {
+    GRUPOS,
+    contarDigitos,
+    situacaoGrupo,
+    ordemPrioridade,
+    calcularColisaoPosicao,
+} from './calculos';
+
+import type {
+    Sprint,
+    CategoriasSprint,
+    LinhaTarefaSprint,
+    StatusFinalSprint,
+    ResponsabilidadeSprint,
+} from '../../api/tipos';
 
 import {
     Box,
@@ -24,6 +41,7 @@ import {
     Stack,
     Button,
     Tooltip,
+    Checkbox,
     TableRow,
     TextField,
     TableBody,
@@ -32,6 +50,7 @@ import {
     Autocomplete,
     TableSortLabel,
     TableContainer,
+    FormControlLabel,
 } from '@mui/material';
 
 type CampoOrdenacao = 'prioridade' | 'situacao';
@@ -43,26 +62,38 @@ interface SprintViewProps {
     veioDoCache?: boolean;
     categorias?: CategoriasSprint | null;
     responsabilidade?: ResponsabilidadeSprint | null;
+    fechado?: boolean;
+    onFechado?: (sprint: Sprint) => void;
 }
 
 const LARGURA_CELULA = '2.5rem';
+const INDICE_COLUNA_DESCRICAO = 4;
+const LARGURA_MINIMA_DESCRICAO = 100;
+const MARGEM_SEGURANCA_DESCRICAO = 4;
 
-export function SprintView({ chaveSprint, onVoltar, veioDoCache = false, categorias, responsabilidade }: SprintViewProps): ReactNode {
-    const { notificarErro } = useNotificacao();
+export function SprintView({ chaveSprint, onVoltar, veioDoCache = false, categorias, responsabilidade, fechado = false, onFechado }: SprintViewProps): ReactNode {
+    const [fechando, setFechando] = useState(false);
     const [termoBusca, setTermoBusca] = useState('');
-    const [buscaAberta, setBuscaAberta] = useState(false);
     const { resultado, carregando, carregar } = useSprint();
     const corTag = categorias?.corTag || CORES.corIndisponivel;
-    const [dialogoInfoAberto, setDialogoInfoAberto] = useState(false);
-    const [destacadas, setDestacadas] = useState<Set<string>>(new Set());
-    const [coresStatus, setCoresStatus] = useState<Record<string, string>>({});
-    const [coresPrioridade, setCoresPrioridade] = useState<Record<string, string>>({});
-    const [tachados, setTachados] = useState<Set<string>>(() => lerTachados(chaveSprint));
     const [filtrosAbertos, setFiltrosAbertos] = useState(false);
-    const [filtroPrioridades, setFiltroPrioridades] = useState<string[]>([]);
+    const { notificarErro, notificarSucesso } = useNotificacao();
+    const [inverterFiltros, setInverterFiltros] = useState(false);
+    const [dialogoInfoAberto, setDialogoInfoAberto] = useState(false);
+    const [confirmandoFechar, setConfirmandoFechar] = useState(false);
+    const [destacadas, setDestacadas] = useState<Set<string>>(new Set());
     const [filtroSituacoes, setFiltroSituacoes] = useState<string[]>([]);
+    const [filtroPrioridades, setFiltroPrioridades] = useState<string[]>([]);
+    const [coresStatus, setCoresStatus] = useState<Record<string, string>>({});
     const [filtroColaboradores, setFiltroColaboradores] = useState<string[]>([]);
+    const [filtroSituacaoGrupos, setFiltroSituacaoGrupos] = useState<string[]>([]);
+    const [coresPrioridade, setCoresPrioridade] = useState<Record<string, string>>({});
+    const [statusFinal, setStatusFinal] = useState<StatusFinalSprint | null>(null);
+    const [tachados, setTachados] = useState<Set<string>>(() => lerTachados(chaveSprint));
     const [ordenacao, setOrdenacao] = useState<{ campo: CampoOrdenacao; direcao: 'asc' | 'desc' } | null>(null);
+    const [linhaDetalhe, setLinhaDetalhe] = useState<{ linha: LinhaTarefaSprint; codigoDuplicado: boolean } | null>(null);
+    const refTabela = useRef<HTMLTableElement>(null);
+    const [larguraDescricao, setLarguraDescricao] = useState<number | undefined>(undefined);
 
     useEffect(() => {
         obterCoresJira()
@@ -70,6 +101,9 @@ export function SprintView({ chaveSprint, onVoltar, veioDoCache = false, categor
                 setCoresStatus(dados.coresStatus);
                 setCoresPrioridade(dados.coresPrioridade);
             })
+            .catch(() => { });
+        obterStatusFinalSprint()
+            .then(setStatusFinal)
             .catch(() => { });
     }, []);
 
@@ -106,6 +140,20 @@ export function SprintView({ chaveSprint, onVoltar, veioDoCache = false, categor
             }
             return novo;
         });
+    }
+
+    async function confirmarFechar(): Promise<void> {
+        setFechando(true);
+        try {
+            const sprintAtualizado = await fecharSprint(chaveSprint);
+            notificarSucesso('Sprint fechado. Os dados ficam travados e a consulta sempre usará o cache.');
+            onFechado?.(sprintAtualizado);
+        } catch (erro) {
+            notificarErro(erro, 'Não foi possível fechar o sprint');
+        } finally {
+            setFechando(false);
+            setConfirmandoFechar(false);
+        }
     }
 
     const cabecalho = resultado?.cabecalho;
@@ -152,15 +200,30 @@ export function SprintView({ chaveSprint, onVoltar, veioDoCache = false, categor
         return Array.from(vistos).sort((a, b) => a.localeCompare(b, 'pt-BR'));
     }, [tarefas]);
 
-    const filtrosVazios = filtroPrioridades.length === 0
+    const opcoesSituacaoGrupo = useMemo(() => {
+        const vistos = new Set<string>();
+        tarefas.forEach((linha) => {
+            (['dev', 'rev', 'qa'] as const).forEach((grupo) => {
+                if (linha[grupo].nomeExibicao) vistos.add(situacaoGrupo(linha, grupo));
+            });
+        });
+        return Array.from(vistos).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+    }, [tarefas]);
+
+    const filtrosVazios = termoBusca.trim() === ''
+        && filtroPrioridades.length === 0
         && filtroSituacoes.length === 0
-        && filtroColaboradores.length === 0;
-    const buscaOuFiltrosAtivos = Boolean(termoBusca.trim()) || !filtrosVazios;
+        && filtroColaboradores.length === 0
+        && filtroSituacaoGrupos.length === 0
+        && !inverterFiltros;
 
     function limparFiltros(): void {
+        setTermoBusca('');
         setFiltroPrioridades([]);
         setFiltroSituacoes([]);
         setFiltroColaboradores([]);
+        setFiltroSituacaoGrupos([]);
+        setInverterFiltros(false);
     }
 
     function limparOrdenacao(): void {
@@ -183,15 +246,48 @@ export function SprintView({ chaveSprint, onVoltar, veioDoCache = false, categor
             : tarefasComId;
 
         if (filtroPrioridades.length > 0) {
-            lista = lista.filter(({ linha }) => !linha.agrupada && filtroPrioridades.includes(linha.prioridade ?? NENHUMA));
+            lista = inverterFiltros
+                ? lista.filter(({ linha }) => !linha.agrupada && !filtroPrioridades.includes(linha.prioridade ?? NENHUMA))
+                : lista.filter(({ linha }) => !linha.agrupada && filtroPrioridades.includes(linha.prioridade ?? NENHUMA));
         }
         if (filtroSituacoes.length > 0) {
-            lista = lista.filter(({ linha }) => !linha.agrupada && filtroSituacoes.includes(linha.situacao ?? NENHUMA));
+            lista = inverterFiltros
+                ? lista.filter(({ linha }) => !linha.agrupada && !filtroSituacoes.includes(linha.situacao ?? NENHUMA))
+                : lista.filter(({ linha }) => !linha.agrupada && filtroSituacoes.includes(linha.situacao ?? NENHUMA));
         }
-        if (filtroColaboradores.length > 0) {
-            lista = lista.filter(({ linha }) =>
-                [linha.dev, linha.rev, linha.qa].some((bloco) => bloco.nomeExibicao && filtroColaboradores.includes(bloco.nomeExibicao)),
-            );
+        if (filtroColaboradores.length > 0 && filtroSituacaoGrupos.length > 0) {
+            // Combinado: a linha só atende se o MESMO grupo (DEV/REV/QA) tiver o colaborador
+            // selecionado E a situação selecionada — não basta um colaborador aparecer em algum
+            // grupo e a situação selecionada aparecer em outro grupo qualquer da mesma linha.
+            lista = inverterFiltros
+                ? lista.filter(({ linha }) =>
+                    (['dev', 'rev', 'qa'] as const).every((grupo) => {
+                        const nome = linha[grupo].nomeExibicao;
+                        return !(nome && filtroColaboradores.includes(nome) && filtroSituacaoGrupos.includes(situacaoGrupo(linha, grupo)));
+                    }),
+                )
+                : lista.filter(({ linha }) =>
+                    (['dev', 'rev', 'qa'] as const).some((grupo) => {
+                        const nome = linha[grupo].nomeExibicao;
+                        return !!nome && filtroColaboradores.includes(nome) && filtroSituacaoGrupos.includes(situacaoGrupo(linha, grupo));
+                    }),
+                );
+        } else if (filtroColaboradores.length > 0) {
+            lista = inverterFiltros
+                ? lista.filter(({ linha }) =>
+                    [linha.dev, linha.rev, linha.qa].every((bloco) => !bloco.nomeExibicao || !filtroColaboradores.includes(bloco.nomeExibicao)),
+                )
+                : lista.filter(({ linha }) =>
+                    [linha.dev, linha.rev, linha.qa].some((bloco) => bloco.nomeExibicao && filtroColaboradores.includes(bloco.nomeExibicao)),
+                );
+        } else if (filtroSituacaoGrupos.length > 0) {
+            lista = inverterFiltros
+                ? lista.filter(({ linha }) =>
+                    (['dev', 'rev', 'qa'] as const).every((grupo) => !linha[grupo].nomeExibicao || !filtroSituacaoGrupos.includes(situacaoGrupo(linha, grupo))),
+                )
+                : lista.filter(({ linha }) =>
+                    (['dev', 'rev', 'qa'] as const).some((grupo) => linha[grupo].nomeExibicao && filtroSituacaoGrupos.includes(situacaoGrupo(linha, grupo))),
+                );
         }
 
         if (ordenacao) {
@@ -202,78 +298,127 @@ export function SprintView({ chaveSprint, onVoltar, veioDoCache = false, categor
         }
 
         return lista;
-    }, [tarefasComId, termoBusca, filtroPrioridades, filtroSituacoes, filtroColaboradores, ordenacao]);
+    }, [tarefasComId, termoBusca, filtroPrioridades, filtroSituacoes, filtroColaboradores, filtroSituacaoGrupos, inverterFiltros, ordenacao]);
 
     const colaboradores = resultado?.colaboradores ?? [];
+
+    useLayoutEffect(() => {
+        const tabela = refTabela.current;
+        const container = tabela?.parentElement;
+        if (!tabela || !container) return;
+
+        function recalcularLarguraDescricao(): void {
+            const primeiraLinha = tabela!.tBodies[0]?.rows[0];
+            if (!primeiraLinha) return;
+
+            let larguraOutrasColunas = 0;
+            Array.from(primeiraLinha.cells).forEach((celula, indice) => {
+                if (indice !== INDICE_COLUNA_DESCRICAO) larguraOutrasColunas += celula.getBoundingClientRect().width;
+            });
+
+            const disponivel = Math.floor(container!.clientWidth - larguraOutrasColunas) - MARGEM_SEGURANCA_DESCRICAO;
+            setLarguraDescricao(Math.max(LARGURA_MINIMA_DESCRICAO, disponivel));
+        }
+
+        recalcularLarguraDescricao();
+        const observador = new ResizeObserver(recalcularLarguraDescricao);
+        observador.observe(container);
+        return () => observador.disconnect();
+    }, [tarefasFiltradas, larguraCodigo]);
 
     return (
         <Stack spacing={2}>
             <CabecalhoView titulo="Acompanhamento do Sprint">
+                {!fechado ? (
+                    <BotaoComCarregamento
+                        variant="outlined"
+                        carregando={fechando}
+                        onClick={() => setConfirmandoFechar(true)}>
+                        Fechar
+                    </BotaoComCarregamento>
+                ) : undefined}
                 <Button variant="outlined" onClick={() => setDialogoInfoAberto(true)}>
                     Informações
                 </Button>
-                <BotaoComCarregamento
-                    startIcon={<SearchIcon />}
-                    onClick={() => {
-                        if (buscaAberta) {
-                            setTermoBusca('');
-                        }
-                        setBuscaAberta((a) => !a);
-                    }}>
-                    {buscaAberta ? 'Fechar busca' : 'Buscar por descrição'}
-                </BotaoComCarregamento>
-                <BotaoComCarregamento onClick={() => setFiltrosAbertos((a) => !a)}>
-                    {filtrosAbertos ? 'Fechar filtros' : 'Filtros'}
-                </BotaoComCarregamento>
                 <Button variant="outlined" onClick={limparOrdenacao} disabled={ordenacao === null}>
                     Limpar ordenação
                 </Button>
+                <BotaoComCarregamento onClick={() => setFiltrosAbertos((a) => !a)}>
+                    {filtrosAbertos ? 'Fechar filtros' : 'Filtros'}
+                </BotaoComCarregamento>
                 <BotaoComCarregamento onClick={onVoltar}>Voltar</BotaoComCarregamento>
             </CabecalhoView>
 
-            {buscaAberta ? (
-                <TextField
-                    label="Filtrar por código ou descrição"
-                    value={termoBusca}
-                    onChange={(e) => setTermoBusca(e.target.value)}
-                    size="small"
-                    fullWidth
-                    autoFocus />
-            ) : undefined}
-
             {filtrosAbertos ? (
-                <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1 }}>
-                    <Autocomplete
-                        multiple
-                        size="small"
-                        options={opcoesPrioridade.filter((opcao) => !filtroPrioridades.includes(opcao))}
-                        value={filtroPrioridades}
-                        onChange={(_evento, valor) => setFiltroPrioridades(valor)}
-                        sx={{ minWidth: 220, flex: 1 }}
-                        renderInput={(parametros) => <TextField {...parametros} label="Prioridade" placeholder="Todas" />} />
-                    <Autocomplete
-                        multiple
-                        size="small"
-                        options={opcoesSituacao.filter((opcao) => !filtroSituacoes.includes(opcao))}
-                        value={filtroSituacoes}
-                        onChange={(_evento, valor) => setFiltroSituacoes(valor)}
-                        sx={{ minWidth: 220, flex: 1 }}
-                        renderInput={(parametros) => <TextField {...parametros} label="Status" placeholder="Todos" />} />
-                    <Autocomplete
-                        multiple
-                        size="small"
-                        options={opcoesColaborador.filter((opcao) => !filtroColaboradores.includes(opcao))}
-                        value={filtroColaboradores}
-                        onChange={(_evento, valor) => setFiltroColaboradores(valor)}
-                        sx={{ minWidth: 220, flex: 1 }}
-                        renderInput={(parametros) => <TextField {...parametros} label="Colaborador" placeholder="Todos" />} />
-                    <Button variant="outlined" onClick={limparFiltros} disabled={filtrosVazios}>
-                        Limpar
-                    </Button>
+                <Stack spacing={1} sx={{ mt: '0.5rem !important' }}>
+                    <Stack
+                        direction={{ xs: 'column', sm: 'row' }}
+                        sx={{ flexWrap: { sm: 'wrap' }, gap: 1, alignItems: { xs: 'stretch', sm: 'flex-start' } }}>
+                        <TextField
+                            label="Filtrar por código ou descrição"
+                            value={termoBusca}
+                            onChange={(e) => setTermoBusca(e.target.value)}
+                            size="small"
+                            sx={{ minWidth: { xs: 0, sm: 200 }, flex: 1 }} />
+                        <Autocomplete
+                            multiple
+                            size="small"
+                            options={opcoesPrioridade.filter((opcao) => !filtroPrioridades.includes(opcao))}
+                            value={filtroPrioridades}
+                            onChange={(_evento, valor) => setFiltroPrioridades(valor)}
+                            sx={{ minWidth: { xs: 0, sm: 200 }, flex: 1 }}
+                            renderInput={(parametros) => <TextField {...parametros} label="Prioridade" placeholder="Todas" />} />
+                        <Autocomplete
+                            multiple
+                            size="small"
+                            options={opcoesSituacao.filter((opcao) => !filtroSituacoes.includes(opcao))}
+                            value={filtroSituacoes}
+                            onChange={(_evento, valor) => setFiltroSituacoes(valor)}
+                            sx={{ minWidth: { xs: 0, sm: 200 }, flex: 1 }}
+                            renderInput={(parametros) => <TextField {...parametros} label="Status" placeholder="Todos" />} />
+                    </Stack>
+                    <Stack
+                        direction={{ xs: 'column', sm: 'row' }}
+                        sx={{ flexWrap: { sm: 'wrap' }, gap: 1, alignItems: { xs: 'stretch', sm: 'flex-start' } }}>
+                        <Autocomplete
+                            multiple
+                            size="small"
+                            options={opcoesColaborador.filter((opcao) => !filtroColaboradores.includes(opcao))}
+                            value={filtroColaboradores}
+                            onChange={(_evento, valor) => setFiltroColaboradores(valor)}
+                            sx={{ minWidth: { xs: 0, sm: 200 }, flex: 1 }}
+                            renderInput={(parametros) => <TextField {...parametros} label="Colaborador" placeholder="Todos" />} />
+                        <Autocomplete
+                            multiple
+                            size="small"
+                            options={opcoesSituacaoGrupo.filter((opcao) => !filtroSituacaoGrupos.includes(opcao))}
+                            value={filtroSituacaoGrupos}
+                            onChange={(_evento, valor) => setFiltroSituacaoGrupos(valor)}
+                            sx={{ minWidth: { xs: 0, sm: 200 }, flex: 1 }}
+                            renderInput={(parametros) => (
+                                <TextField
+                                    {...parametros}
+                                    label="Situação (DEV/REV/QA)"
+                                    placeholder="Todas"
+                                    helperText={
+                                        filtroColaboradores.length > 0
+                                            ? 'Avalia só o grupo do(s) colaborador(es) selecionado(s) acima'
+                                            : 'Sem colaborador selecionado, avalia qualquer grupo da linha'
+                                    } />
+                            )} />
+                        <Stack direction="row" spacing={1} sx={{ alignItems: 'center', minHeight: 40, flexShrink: 0 }}>
+                            <FormControlLabel
+                                control={<Checkbox checked={inverterFiltros} onChange={(e) => setInverterFiltros(e.target.checked)} />}
+                                label="Inverter filtros" />
+                            <Button variant="outlined" onClick={limparFiltros} disabled={filtrosVazios}>
+                                Limpar
+                            </Button>
+                        </Stack>
+                    </Stack>
                 </Stack>
             ) : undefined}
 
-            {cabecalho ? <SprintCardCapacidade cabecalho={cabecalho} /> : undefined}
+            {cabecalho ? <SprintCardCapacidade cabecalho={cabecalho} statusFinal={statusFinal} /> : undefined}
 
             {veioDoCache ? <AvisoCache /> : undefined}
 
@@ -285,13 +430,14 @@ export function SprintView({ chaveSprint, onVoltar, veioDoCache = false, categor
                 <Alert severity="warning">Nenhum apontamento encontrado para este sprint.</Alert>
             ) : undefined}
 
-            {resultado && tarefas.length > 0 && tarefasFiltradas.length === 0 && buscaOuFiltrosAtivos ? (
+            {resultado && tarefas.length > 0 && tarefasFiltradas.length === 0 && !filtrosVazios ? (
                 <Alert severity="info">Nenhuma linha corresponde ao filtro.</Alert>
             ) : undefined}
 
             {resultado && tarefasFiltradas.length > 0 ? (
-                <TableContainer sx={{ overflowX: 'auto' }}>
+                <TableContainer sx={{ overflowX: 'auto', mt: '0.5rem !important' }}>
                     <Table
+                        ref={refTabela}
                         size="small"
                         sx={{
                             '& th, & td': { borderRight: 1, borderColor: 'divider', py: 0 },
@@ -360,7 +506,9 @@ export function SprintView({ chaveSprint, onVoltar, veioDoCache = false, categor
                                     onAlternarTachado={alternarTachado}
                                     destacada={destacadas.has(id)}
                                     onAlternarDestaque={alternarDestaque}
+                                    onDuploClique={() => setLinhaDetalhe({ linha, codigoDuplicado })}
                                     larguraCodigo={larguraCodigo}
+                                    larguraDescricao={larguraDescricao}
                                     coresStatus={coresStatus}
                                     coresPrioridade={coresPrioridade}
                                     corTag={corTag} />
@@ -376,6 +524,27 @@ export function SprintView({ chaveSprint, onVoltar, veioDoCache = false, categor
                 cabecalho={cabecalho}
                 categorias={categorias}
                 responsabilidade={responsabilidade} />
+
+            <SprintDialogDetalheLinha
+                aberto={linhaDetalhe !== null}
+                onFechar={() => setLinhaDetalhe(null)}
+                linha={linhaDetalhe?.linha ?? null}
+                codigoDuplicado={linhaDetalhe?.codigoDuplicado ?? false}
+                larguraCodigo={larguraCodigo}
+                coresStatus={coresStatus}
+                coresPrioridade={coresPrioridade}
+                corTag={corTag} />
+
+            <DialogoConfirmacao
+                aberto={confirmandoFechar}
+                titulo="Fechar sprint"
+                mensagem="Isso trava os dados atuais (Toggl e Jira) como definitivos para este sprint: novas consultas sempre usarão o cache já salvo, sem chamar a API de novo. Você pode reabrir depois na listagem de sprints. Deseja continuar?"
+                textoConfirmar="Fechar"
+                textoCancelar="Cancelar"
+                focoNoCancelar
+                carregando={fechando}
+                onConfirmar={() => void confirmarFechar()}
+                onCancelar={() => setConfirmandoFechar(false)} />
         </Stack>
     );
 }

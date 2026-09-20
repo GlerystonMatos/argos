@@ -439,7 +439,7 @@ e roda o health check. Acompanhe em Console GCP → Cloud Build → Histórico.
       `health-check`) — se `health-check` falhar, o deploy já aconteceu mas
       algo está errado; não assuma que "build vermelho" = "nada mudou".
 - [ ] `curl https://<url-do-backend>/health` retorna `Healthy`.
-- [ ] Abrir a URL do frontend no navegador — a aba "Usuários" carrega, sem
+- [ ] Abrir a URL do frontend no navegador — o "Resumo da aplicação" (página inicial) carrega, sem
       erro de CORS/conexão no console do navegador (confirma que o
       `VITE_API_URL` foi gravado com a URL certa do backend).
 - [ ] `gcloud artifacts repositories list` Esse comando mostra todos os 

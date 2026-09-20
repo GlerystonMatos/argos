@@ -1,68 +1,66 @@
 namespace RelatorioToggl.Configuracao;
 
-public static class CaminhosDados
+public sealed class CaminhosDados
 {
     private const string NomePasta = "dados";
 
-    private const string NomeArquivoConfiguracao = "RelatorioParametros.ini";
+    private const string PrefixoCacheSprint = "SprintData_";
 
-    private const string NomeArquivoUsuarios = "TogglUsuarios.ini";
+    private const string PrefixoCacheJiraSprint = "JiraSprintData_";
 
-    private const string NomeArquivoSprints = "Sprints.ini";
+    private const int TamanhoMaximoChaveSprint = 100;
 
-    private const string NomeArquivoCacheSprint = "SprintData.ini";
+    public CaminhosDados(string diretorioBase)
+    {
+        PastaDados = Path.Combine(diretorioBase, NomePasta);
+    }
 
-    private const string NomeArquivoCache = "RelatorioData.ini";
+    public string PastaDados { get; }
 
-    private const string NomeArquivoParametrosGant = "GantParametros.ini";
+    public string Usuarios => Caminho("TogglUsuarios.ini");
 
-    private const string NomeArquivoCacheGant = "GantData.ini";
+    public string TogglConfiguracao => Caminho("TogglConfiguracao.ini");
 
-    private const string NomeArquivoJiraSprintData = "JiraSprintData.ini";
+    public string TogglTags => Caminho("TogglTags.ini");
 
-    private const string NomeArquivoCacheTagsToggl = "TogglTagsCache.ini";
+    public string TogglTagsCache => Caminho("TogglTagsCache.ini");
 
-    private const string NomeArquivoCacheListasJira = "JiraListasCache.ini";
+    public string RelatorioParametros => Caminho("RelatorioParametros.ini");
 
-    private const string NomeArquivoCoresJira = "JiraCores.ini";
+    public string RelatorioData => Caminho("RelatorioData.ini");
 
-    private const string NomeArquivoConfiguracoesGerais = "ConfiguracoesGerais.ini";
+    public string GantParametros => Caminho("GantParametros.ini");
 
-    public static string PastaDados(string diretorioBase) => Path.Combine(diretorioBase, NomePasta);
+    public string GantData => Caminho("GantData.ini");
 
-    public static string CaminhoConfiguracao(string diretorioBase) =>
-        Path.Combine(PastaDados(diretorioBase), NomeArquivoConfiguracao);
+    public string Sprints => Caminho("Sprints.ini");
 
-    public static string CaminhoUsuarios(string diretorioBase) =>
-        Path.Combine(PastaDados(diretorioBase), NomeArquivoUsuarios);
+    public string JiraConexao => Caminho("JiraConexao.ini");
 
-    public static string CaminhoSprints(string diretorioBase) =>
-        Path.Combine(PastaDados(diretorioBase), NomeArquivoSprints);
+    public string JiraCampos => Caminho("JiraCampos.ini");
 
-    public static string CaminhoCacheSprint(string diretorioBase) =>
-        Path.Combine(PastaDados(diretorioBase), NomeArquivoCacheSprint);
+    public string JiraStatus => Caminho("JiraStatus.ini");
 
-    public static string CaminhoCache(string diretorioBase) =>
-        Path.Combine(PastaDados(diretorioBase), NomeArquivoCache);
+    public string JiraPrioridades => Caminho("JiraPrioridades.ini");
 
-    public static string CaminhoParametrosGant(string diretorioBase) =>
-        Path.Combine(PastaDados(diretorioBase), NomeArquivoParametrosGant);
+    public string JiraTogglMapeamento => Caminho("JiraTogglMapeamento.ini");
 
-    public static string CaminhoCacheGant(string diretorioBase) =>
-        Path.Combine(PastaDados(diretorioBase), NomeArquivoCacheGant);
+    public string JiraStatusCache => Caminho("JiraStatusCache.ini");
 
-    public static string CaminhoJiraSprintData(string diretorioBase) =>
-        Path.Combine(PastaDados(diretorioBase), NomeArquivoJiraSprintData);
+    public string JiraPrioridadesCache => Caminho("JiraPrioridadesCache.ini");
 
-    public static string CaminhoCacheTagsToggl(string diretorioBase) =>
-        Path.Combine(PastaDados(diretorioBase), NomeArquivoCacheTagsToggl);
+    public string JiraUsuariosCache => Caminho("JiraUsuariosCache.ini");
 
-    public static string CaminhoCacheListasJira(string diretorioBase) =>
-        Path.Combine(PastaDados(diretorioBase), NomeArquivoCacheListasJira);
+    public string? CacheSprint(DadosSprint sprint) => CaminhoPorSprint(PrefixoCacheSprint, sprint);
 
-    public static string CaminhoCoresJira(string diretorioBase) =>
-        Path.Combine(PastaDados(diretorioBase), NomeArquivoCoresJira);
+    public string? CacheJiraSprint(DadosSprint sprint) => CaminhoPorSprint(PrefixoCacheJiraSprint, sprint);
 
-    public static string CaminhoConfiguracoesGerais(string diretorioBase) =>
-        Path.Combine(PastaDados(diretorioBase), NomeArquivoConfiguracoesGerais);
+    private string Caminho(string nomeArquivo) => Path.Combine(PastaDados, nomeArquivo);
+
+    private string? CaminhoPorSprint(string prefixo, DadosSprint sprint) =>
+        ChaveSprintValida(sprint.Chave) ? Caminho($"{prefixo}{sprint.Chave}.ini") : null;
+
+    private static bool ChaveSprintValida(string chave) =>
+        chave.Length is > 0 and <= TamanhoMaximoChaveSprint
+        && chave.All(caractere => char.IsLetterOrDigit(caractere) || caractere is '-' or '_');
 }

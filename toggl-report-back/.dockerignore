@@ -18,16 +18,3 @@ docker-compose.yml
 
 **/dados/
 .env
-
-ConfiguracoesGerais.ini
-TogglUsuarios.ini
-TogglTagsCache.ini
-JiraListasCache.ini
-JiraCores.ini
-RelatorioParametros.ini
-RelatorioData.ini
-GantParametros.ini
-GantData.ini
-Sprints.ini
-SprintData.ini
-JiraSprintData.ini

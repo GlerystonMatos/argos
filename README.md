@@ -12,7 +12,7 @@ Web API local (autenticação HTTP Basic opcional, documentada via Swagger) que 
 
 ## [`toggl-report-front/`](./toggl-report-front/README.md) — React + TypeScript + MUI
 
-Frontend web que consome a Web API acima, com o fluxo completo (parâmetros → usuários/tokens → consulta → relatório → busca) em uma interface gráfica local.
+Frontend web que consome a Web API acima, com o fluxo completo (usuários e configurações → consulta → relatório → busca) em uma interface gráfica local, navegada por um menu lateral (Toggl, Jira, Configurações, Relatório, Gant, Sprint e Dados).
 
 ➡️ **[Documentação completa do frontend](./toggl-report-front/README.md)**
 
@@ -62,7 +62,7 @@ sem isso, gravações nela (ex.: restaurar backup pelo frontend) falhavam com
 
 ## Segurança
 
-Os arquivos de token/cache (`TogglUsuarios.ini`, `ConfiguracoesGerais.ini` — guarda o token do Jira criptografado, além de consolidar (desde 2026-09-15) as categorias/responsabilidade do Sprint que antes viviam em `TogglSprintCategorias.ini`/`TogglSprintResponsabilidade.ini`/`JiraConfig.ini` —, `RelatorioData.ini`, `GantData.ini`, `SprintData.ini` — gerados na pasta `dados/` de cada executável) guardam API Tokens **criptografados** e nunca são versionados (`.gitignore`); os demais INIs de parâmetros (`RelatorioParametros.ini`, `GantParametros.ini`, `Sprints.ini`) ficam ao lado, sem dado sensível. A Web API não exige autenticação por padrão (uso local) — pode ser ligada (`AUTH__USUARIO`/`AUTH__SENHA`) para uso exposto, com tela de login própria no frontend em vez do popup nativo do navegador (ver `toggl-report-back/README.md#segurança`).
+Os arquivos com token ou cache (`TogglUsuarios.ini`, `JiraConexao.ini`, `RelatorioData.ini`, `GantData.ini`, `SprintData_<sprint>.ini` — gerados na pasta `dados/` de cada executável) guardam API Tokens **criptografados** (chave em `CHAVE_CRIPTOGRAFIA`; sem ela, os tokens gravados não são decifrados e o cache deixa de bater) e nunca são versionados (`.gitignore`); os demais `.ini` de configuração, parâmetros e cache de listagens (`TogglConfiguracao.ini`, `TogglTags.ini`, `Jira*.ini`, `Sprints.ini`, `RelatorioParametros.ini`, `GantParametros.ini`, ...) ficam ao lado, sem token. A Web API não exige autenticação por padrão (uso local) — pode ser ligada (`AUTH__USUARIO`/`AUTH__SENHA`) para uso exposto, com tela de login própria no frontend em vez do popup nativo do navegador (ver `toggl-report-back/README.md#segurança`, que também descreve a pasta `dados/`).
 
 Revisado (2026-09-06) o conteúdo rastreado pelo Git em busca de segredos antes deste repositório se tornar público: nenhuma chave de API, token do GitHub/GCP, credencial de service account ou dado real de usuário foi encontrado versionado. Dois pontos corrigidos: a senha do certificado HTTPS do `docker-compose.yml` estava em texto puro — movida para `.env` (gitignored, com `.env.example` como template); e os IDs reais dos dois projetos GCP foram substituídos por placeholders (`SEU_PROJETO_APP_ID`/`SEU_PROJETO_FINOPS_ID`) em todo `toggl-report-infra/` e nos READMEs — nenhum identificador real de projeto GCP permanece versionado.
 

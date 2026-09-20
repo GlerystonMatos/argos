@@ -9,7 +9,7 @@ namespace RelatorioToggl.Api.Endpoints;
 
 public static class SprintConsultasEndpoints
 {
-    public static void MapSprintConsultasEndpoints(this WebApplication app, string caminhoConfiguracao, string caminhoUsuarios, string caminhoCacheSprint, string caminhoConfiguracoesGerais, string caminhoJiraSprintData)
+    public static void MapSprintConsultasEndpoints(this WebApplication app, CaminhosDados caminhos)
     {
         RouteGroupBuilder grupo = app.MapGroup("/api/sprint").WithTags("Sprint");
 
@@ -21,22 +21,39 @@ public static class SprintConsultasEndpoints
             if (string.IsNullOrWhiteSpace(request.ChaveSprint))
                 return Results.BadRequest("A chave do sprint é obrigatória.");
 
+            DadosSprint? sprintCadastrado = CarregadorSprintsIni.Carregar(caminhos.Sprints)
+                .FirstOrDefault(s => s.Chave == request.ChaveSprint);
+            if (sprintCadastrado is null)
+                return Results.NotFound("Sprint não encontrado.");
+
+            string? caminhoCacheSprint = caminhos.CacheSprint(sprintCadastrado);
+            string? caminhoCacheJiraSprint = caminhos.CacheJiraSprint(sprintCadastrado);
+            if (caminhoCacheSprint is null || caminhoCacheJiraSprint is null)
+                return Results.BadRequest("A chave do sprint é inválida para nome de arquivo de cache.");
+
+            bool sprintFechado = sprintCadastrado.Fechado;
+
             string origem = string.IsNullOrWhiteSpace(request.Origem) ? "nenhum" : request.Origem.Trim().ToLowerInvariant();
             if (origem is not ("nenhum" or "toggl" or "jira" or "ambos"))
                 return Results.BadRequest("Origem inválida. Use \"nenhum\", \"toggl\", \"jira\" ou \"ambos\".");
 
+            if (sprintFechado)
+                origem = "nenhum";
+
             bool forcarToggl = origem is "toggl" or "ambos";
             bool forcarJira = origem is "jira" or "ambos";
 
-            ConfiguracaoApp? configuracao = CarregadorConfiguracaoIni.Carregar(caminhoConfiguracao, caminhoUsuarios);
-            if (configuracao is not null)
-                configuracao.Usuarios = configuracao.Usuarios.Where(u => u.Selecionado).ToList();
+            ConfiguracaoApp configuracao = CarregadorConfiguracaoIni.Carregar(caminhos);
+            configuracao.Usuarios = configuracao.Usuarios.Where(u => u.Selecionado).ToList();
 
-            if (configuracao is null || configuracao.Usuarios.Count == 0)
+            if (configuracao.Usuarios.Count == 0)
                 return Results.BadRequest("Nenhum usuário do Toggl selecionado. Cadastre e selecione ao menos um em POST /api/usuarios-toggl.");
 
-            CacheConsulta? cache = CarregadorCacheSprintIni.CarregarSeExistente(caminhoCacheSprint, request.ChaveSprint);
+            CacheConsulta? cache = CarregadorCacheSprintIni.CarregarSeExistente(caminhoCacheSprint);
             bool usarCacheToggl = !forcarToggl && cache is not null && ServicoConsulta.CacheCorrespondeAosParametros(cache, configuracao, inicio, fim);
+
+            if (sprintFechado && !usarCacheToggl)
+                return Results.Conflict("Este sprint está fechado. Os dados ficam travados no que foi salvo ao fechar — reabra o sprint para consultar de novo.");
 
             Dictionary<string, List<RegistroTempoDto>> registrosParaJira;
             List<EventoConsultaUsuarioToggl> eventos;
@@ -63,7 +80,7 @@ public static class SprintConsultasEndpoints
                 ResultadoConsulta resultado = await ServicoConsulta.ConsultarUsuariosAsync(configuracao, inicio, fim, cacheParaFallback, eventosConsulta.Add);
 
                 CacheConsulta cacheParaSalvar = ServicoConsulta.MontarCache(configuracao, inicio, fim, resultado.RegistrosPorUsuario, resultado.OrdemUsuarios);
-                CarregadorCacheSprintIni.SalvarSeConseguir(caminhoCacheSprint, request.ChaveSprint, cacheParaSalvar);
+                CarregadorCacheSprintIni.SalvarSeConseguir(caminhoCacheSprint, cacheParaSalvar);
 
                 eventos = eventosConsulta;
                 registrosParaJira = resultado.RegistrosPorUsuario;
@@ -71,17 +88,17 @@ public static class SprintConsultasEndpoints
             }
 
             if (forcarJira || houveConsultaRealToggl)
-                await AtualizarCacheJiraAsync(caminhoConfiguracoesGerais, caminhoJiraSprintData, request.ChaveSprint, registrosParaJira);
+                await AtualizarCacheJiraAsync(caminhos, caminhoCacheJiraSprint, registrosParaJira);
 
             return Results.Ok(new ConsultarResponse(request.DataInicio, request.DataFim, VeioDoCache: !houveConsultaRealToggl, eventos));
         })
-        .WithSummary("Consulta o Toggl e/ou o Jira para o período do sprint; origem escolhe o que forçar (\"nenhum\" reaproveita o cache dos dois quando possível).");
+        .WithSummary("Consulta o Toggl e/ou o Jira para o período do sprint; origem escolhe o que forçar (\"nenhum\" reaproveita o cache dos dois quando possível). Sprint fechado sempre usa \"nenhum\" e nunca chama a API de verdade.");
     }
 
-    private static async Task AtualizarCacheJiraAsync(string caminhoConfiguracoesGerais, string caminhoJiraSprintData, string chaveSprint, Dictionary<string, List<RegistroTempoDto>> registrosPorUsuario)
+    private static async Task AtualizarCacheJiraAsync(CaminhosDados caminhos, string caminhoCacheJiraSprint, Dictionary<string, List<RegistroTempoDto>> registrosPorUsuario)
     {
-        ConfiguracaoJira? configuracaoJira = CarregadorConfiguracaoJiraIni.Carregar(caminhoConfiguracoesGerais);
-        if (configuracaoJira is null || string.IsNullOrWhiteSpace(configuracaoJira.ApiToken))
+        ConfiguracaoJira configuracaoJira = CarregadorConfiguracaoJiraIni.Carregar(caminhos);
+        if (string.IsNullOrWhiteSpace(configuracaoJira.ApiToken))
             return;
 
         List<string> codigos = ServicoSprint.ExtrairCodigosJira(registrosPorUsuario);
@@ -91,9 +108,9 @@ public static class SprintConsultasEndpoints
         try
         {
             ClienteApiJira cliente = new(configuracaoJira.UrlDominio, configuracaoJira.Email, configuracaoJira.ApiToken);
-            ResultadoApiJira<List<IssueJira>> resultado = await cliente.BuscarIssuesAsync(codigos, configuracaoJira.CampoEstimativaEsforcoId, configuracaoJira.CampoRevisadoPorId);
+            ResultadoApiJira<List<IssueJira>> resultado = await cliente.BuscarIssuesAsync(codigos, configuracaoJira.CampoEstimativaDesenvolvimentoId, configuracaoJira.CampoRevisadoPorId, configuracaoJira.CampoEstimativaRevisaoId, configuracaoJira.CampoEstimativaTestesId);
             if (resultado.Sucesso)
-                CarregadorCacheJiraSprintIni.SalvarParaSprint(caminhoJiraSprintData, chaveSprint, resultado.Dados!);
+                CarregadorCacheJiraSprintIni.SalvarParaSprint(caminhoCacheJiraSprint, resultado.Dados!);
         }
         catch (UriFormatException)
         {

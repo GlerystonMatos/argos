@@ -16,9 +16,9 @@ O repositório reúne **dois projetos independentes**:
 - **`toggl-report-front/`** — React 19 + TypeScript + MUI (Vite) que consome a Web API.
 
 Aplicação: gera relatórios de tempo trabalhado a partir da **API v9 do Toggl Track**,
-com três visualizações independentes — **Relatório**, **Gráfico de Gant** e
-**Sprint** — cada uma com parâmetros e cache de consulta próprios, compartilhando só a
-lista de usuários e o serviço de consulta (cache-first + rate limit).
+com três visualizações independentes — **Relatório**, **Gant** e **Sprint** — cada uma
+com parâmetros e cache de consulta próprios, compartilhando só a lista de usuários, a
+configuração de agrupamento/tags e o serviço de consulta (cache-first + rate limit).
 
 **Tudo em pt-BR**: interface, mensagens, identificadores, pastas, namespaces
 (`RelatorioToggl`/`RelatorioToggl.Api`/`RelatorioToggl.Sprints`). Em inglês só o
@@ -33,21 +33,17 @@ ficam aqui, não inline). O frontend usa comentários com moderação.
 
 - **Multiusuário**: cada usuário do Toggl tem seu API Token pessoal; o relatório
   consolida todos. `ConfiguracaoUsuarioToggl` tem `Chave`/`NomeExibicao`/`TokenApi` +
-  quatro campos exclusivos da web: `Sigla` (rótulo curto), `Cor` (hex), `Selecionado`
-  (`bool`, decide quem entra na **próxima consulta** de relatório/Gant/Sprint) e
-  `Administrador` (`bool`, desde 2026-09-13 — marca qual usuário tem seu token usado
-  em chamadas sem usuário específico, como listar tags reais do workspace do Toggl).
-  **Só um `Administrador` por vez**: `ServicoUsuariosToggl.DesmarcarOutrosAdministradores`
-  desmarca o anterior ao marcar um novo, no POST/PUT de `/api/usuarios-toggl` (desde
-  2026-09-15).
-- **Cache de consulta**: cada visualização tem seu `.ini` de cache próprio
-  (`RelatorioData.ini`/`GantData.ini`/`SprintData.ini`, mesmo formato)
-  guardando o retorno **cru** da última consulta por usuário. Período+usuários iguais
-  → oferece carregar do cache em vez de chamar a API de novo; agrupamento/cálculo
-  sempre roda em runtime (o cache nunca guarda resultado processado). Serve também de
-  reserva quando o rate limit (ver §2) é atingido. `ServicoConsulta` (núcleo)
-  centraliza essa decisão para as 3 visualizações — cada consumidor só decide
-  **quando** chamar (parâmetro `forcarConsultaApi`).
+  `Sigla` (rótulo curto), `Cor` (hex), `Selecionado` (decide quem entra na **próxima
+  consulta** de relatório/Gant/Sprint) e `Administrador` (o token dele é usado em
+  chamadas sem usuário específico, como listar tags reais do workspace). **Só um
+  `Administrador` por vez**: `ServicoUsuariosToggl.DesmarcarOutrosAdministradores`
+  desmarca o anterior no POST/PUT de `/api/usuarios-toggl`.
+- **Cache de consulta**: cada visualização tem seu cache `.ini` guardando o retorno
+  **cru** da última consulta por usuário. Período+usuários iguais → reaproveita o cache
+  em vez de chamar a API; agrupamento/cálculo sempre roda em runtime (o cache nunca
+  guarda resultado processado). Serve também de reserva quando o rate limit (§2) é
+  atingido. `ServicoConsulta` (núcleo) centraliza essa decisão para as 3 visualizações
+  — cada consumidor só decide **quando** chamar (`forcarConsultaApi`).
 - **Sem exportação para CSV** — dados só existem no frontend e no cache.
 - **Poucas dependências**: núcleo sem nenhum `PackageReference`; API só com
   `Swashbuckle.AspNetCore` (Swagger).
@@ -59,7 +55,7 @@ ficam aqui, não inline). O frontend usa comentários com moderação.
 ```
 Configuracao/    modelos + carregadores/salvadores de todos os .ini, criptografia de token,
                  parser INI compartilhado (AnalisadorIni), helpers (ServicoChaves, DiasUteis,
-                 Agrupamento.EhValido), CaminhosDados (monta todos os caminhos dados/*.ini)
+                 Agrupamento.EhValido), CaminhosDados (instância: um caminho por arquivo)
 Gant/            CelulaGant / LinhaGant / ResultadoGant / ServicoGant.Montar
 Sprint/          (namespace RelatorioToggl.Sprints, plural — evita colidir com
                  Configuracao.Sprint) CabecalhoSprint / BlocoCategoriaSprint /
@@ -73,6 +69,42 @@ Jira/            ClienteApiJira (HTTP Basic email:apiToken, normaliza a URL do d
                  CampoJira, ResultadoApiJira (Ok/Falha, mesmo padrão do Toggl)
 ```
 
+### Modelo de dados (`dados/`, plana, INI relacional)
+
+Formato **único**, sem lógica de migração/compatibilidade no código: mudar nome ou formato
+de `.ini` = trocar a constante em `CaminhosDados` e ajustar/renomear o arquivo real à mão
+(o cache antigo só fica órfão; uma nova consulta recria).
+
+| Arquivo | Conteúdo |
+|---|---|
+| `TogglUsuarios.ini` | `[Usuario:<chave>]`; `TokenApi` criptografado (`enc:`) |
+| `TogglConfiguracao.ini` | `[Geral]` `Agrupamento`/`CorTag` — **fonte única** de agrupamento do Relatório/Gant/Sprint |
+| `TogglTags.ini` | `[Tag:<nome>]` `Categorias` (Dev,Rev,Qa) / `Detalhar` |
+| `JiraConexao.ini` | `[Conexao]` URL/e-mail/token (`enc:`) |
+| `JiraCampos.ini` | `[Campo:EstimativaDesenvolvimento\|EstimativaRevisao\|EstimativaTestes\|RevisadoPor]` `Id`/`Nome` |
+| `JiraStatus.ini` | `[Status:<nome>]` `Cor`/`Responsaveis`/`Final` (Concluido\|Ignorado) |
+| `JiraPrioridades.ini` | `[Prioridade:<nome>]` `Cor` |
+| `JiraTogglMapeamento.ini` | `[Usuario:<displayName Jira>]` `ChaveToggl`/`Sigla`/`Cor` |
+| `Sprints.ini` | `[Sprint:<chave>]` Nome/HorasPorDia/DataInicio/DataFim/`Fechado` (default `False`) |
+| `RelatorioParametros.ini`, `GantParametros.ini` | `[Geral]` só `DataInicio`/`DataFim` |
+| `RelatorioData.ini`, `GantData.ini` | cache **global** por período (se sobrescreve ao trocar de período) |
+| `SprintData_<chave>.ini`, `JiraSprintData_<chave>.ini` | cache **um arquivo por sprint** (Toggl / Jira) |
+| `TogglTagsCache.ini`, `JiraStatusCache.ini`, `JiraPrioridadesCache.ini`, `JiraUsuariosCache.ini` | listagens reais cacheadas |
+
+- **Cache por sprint**: `DELETE` do sprint apaga os dois arquivos; o caminho só é montado a
+  partir de sprint **existente** em `Sprints.ini` + validação de caracteres da chave
+  (anti path-traversal) — `POST /api/sprint/consultas` com chave inexistente = 404,
+  inválida = 400. Isolar por sprint é deliberado: consultar um sprint não perde o cache de
+  outro.
+- **`JiraStatus.ini`** (cor + responsabilidade DEV/REV/QA + final Concluído/Ignorado por
+  status) é gravado por **3 endpoints** (`/api/sprint/responsabilidade`,
+  `/api/sprint/status-final`, `/api/jira/cores`) vindos de duas abas independentes do
+  front (Status dispara 2 PUTs em paralelo, Cores 1), então `ArquivoStatusJiraIni` faz
+  read-modify-write (merge por seção) sob **lock estático**. Os demais arquivos ainda não
+  têm lock.
+- `PUT /api/configuracao` e `PUT /api/gant/parametros`: datas → arquivos de parâmetros
+  próprios; agrupamento/tags → fonte única (`TogglConfiguracao.ini`/`TogglTags.ini`).
+
 ### Regras de domínio importantes
 
 - **`RegistroTempoDto.Duracao`** negativo = timer em execução (isolado por
@@ -83,66 +115,42 @@ Jira/            ClienteApiJira (HTTP Basic email:apiToken, normaliza a URL do d
   "TEL - 0000 - AA" antes de somar tempos (`ServicoAgrupamento.NormalizarDescricaoTel`).
   Só reformata quando há dígitos logo após "TEL" (não mexe em "TELA"/"TELEFONE").
 - **Agrupamento** (relatório/Gant/Sprint): `descricao` | `tag` | `ambos`. Com
-  `TagsDetalhadas`/`TagsSelecionadas` preenchidas e agrupamento "ambos": essas tags
-  aparecem detalhadas por descrição e ficam fora do agrupamento por tag; as demais só
-  aparecem agregadas por tag. "Por descrição" com agrupamento "descricao" puro traz
-  tudo (não filtra por `TagsDetalhadas`).
-- **Usuários vivem em `TogglUsuarios.ini`**, separado dos parâmetros do relatório —
-  compartilhado por relatório, Gant e Sprint. `TokenApi` é **criptografado em
-  repouso** (AES, chave de `CHAVE_CRIPTOGRAFIA`, fallback embutido se a env var não
-  estiver configurada — proteção básica, não resiste a quem lê o código-fonte). Prefixo
-  `enc:`; texto sem esse prefixo é tratado como legado e migra sozinho no próximo save.
+  `TagsDetalhadas` preenchidas e agrupamento "ambos": essas tags aparecem detalhadas por
+  descrição e ficam fora do agrupamento por tag; as demais só aparecem agregadas por tag.
+  Agrupamento "descricao" puro traz tudo (não filtra por `TagsDetalhadas`).
+- **`TokenApi` (Toggl e Jira) é criptografado em repouso** (AES, chave de
+  `CHAVE_CRIPTOGRAFIA`, fallback embutido se a env var não estiver configurada —
+  proteção básica, não resiste a quem lê o código-fonte). Prefixo `enc:`; texto sem esse
+  prefixo é tratado como legado e migra sozinho no próximo save. Token do Jira nunca
+  volta em texto puro depois de salvo (`ServicoUsuariosToggl.MascararToken`).
 - **Cache indexado por `Chave` de usuário** (não por `NomeExibicao`, que pode mudar).
   Bater os parâmetros exige mesmo período **e** todo usuário atual achar seu par no
-  cache por `Chave` + `TokenApi`.
+  cache por `Chave` + `TokenApi` (descriptografado).
 - **Rate limit (30 req/hora/usuário) é só em memória por processo** — reinicia a cada
   execução; não é o mesmo mecanismo do retry de 429 do `ClienteApiToggl` (esse trata o
   limite que a própria API do Toggl impõe, com `Retry-After` e 1 retry).
 - **Erros da API do Toggl não usam exceptions** — `ResultadoApiToggl<T>` (Ok/Falha);
   401 reporta e pula o usuário sem abortar a consulta inteira.
-- **Renomear/mudar formato de `.ini` não usa mais migração automática** (decisão de
-  2026-09-15, revertendo a convenção anterior): o prefixo `Toggl` foi removido de
-  a maioria dos nomes de arquivo em disco (`RelatorioParametros.ini`,
-  `RelatorioData.ini`, `GantParametros.ini`, `GantData.ini`, `Sprints.ini`,
-  `SprintData.ini`, `ConfiguracoesGerais.ini`, `TagsCache.ini`) com um rename manual
-  único na pasta `dados/` de produção — sem código de fallback/migração no carregador.
-  `TogglUsuarios.ini` manteve o prefixo de propósito (guarda usuários **do Toggl**,
-  nome mais claro que só "Usuarios"). Renomear/mudar formato de `.ini` daqui pra
-  frente é: trocar a constante, renomear o arquivo real manualmente, sem manter
-  nenhuma lógica de compatibilidade no código.
-- **Configurações gerais consolidadas em `ConfiguracoesGerais.ini`** (desde
-  2026-09-15): `JiraConfig.ini`/`TogglSprintCategorias.ini`/
-  `TogglSprintResponsabilidade.ini` viraram seções (`[Jira]`/`[SprintCategorias]`/
-  `[SprintResponsabilidade]`) de um arquivo só (carregadores recebem só
-  `caminhoConsolidado`; sem a seção, cada um cai no padrão do próprio modelo). A
-  migração lazy desses três arquivos legados para o consolidado já foi concluída em
-  produção e o fallback de leitura foi removido do código; os três arquivos
-  ficaram órfãos e foram apagados manualmente da pasta `dados/`. `TogglUsuarios.ini`/
-  `JiraCores.ini` continuam separados. Desde 2026-09-16, uma 4ª seção,
-  `[JiraTogglMapeamento]` (`ConfiguracaoMapeamentoJiraToggl`/
-  `CarregadorConfiguracaoMapeamentoJiraTogglIni`), guarda o mapeamento nome do Jira →
-  `Chave` de usuário Toggl (ver bloco Jira do Sprint) — nasceu direto no arquivo
-  consolidado, sem arquivo legado próprio a migrar.
 
-### Sprint — regras de negócio (não óbvias, decididas com o usuário)
+### Sprint — regras de negócio (decididas com o usuário)
 
-Terceira visualização, com **gestão** (CRUD de sprints) além do acompanhamento.
-Arquivos próprios: `Sprints.ini` (`[Sprint:<chave>]`: Nome/HorasPorDia/DataInicio/
-DataFim), seção `[SprintCategorias]` de `ConfiguracoesGerais.ini` (mapeamento
-**global** TAG→categoria Dev/Rev/Qa + Agrupamento + TagsDetalhadas + `CorTag` (cor do
-badge/label "Tag" no Sprint, editável em Configurações → Toggl: agrupamento e tags —
-sem TAG default, `Padrao()` vem vazio, `CorTag` também vem vazio; sem cor configurada,
-o frontend usa `CORES.corIndisponivel` (cinza) só na exibição, nunca persiste um
-default; ver §2 "Configurações gerais consolidadas"),
-`SprintData.ini` (cache — **isolado por sprint** desde 2026-09-13, seções
-`[Sprint:<chave>]`/`[Sprint:<chave>:Usuario:<chave>]` via `CarregadorCacheSprintIni`,
-diferente do cache único/global do relatório/Gant, que bate só por período+usuários e
-se sobrescreve ao trocar de período — decisão deliberada para não perder o cache de
-um sprint ao consultar outro). **Não seguem** o padrão `Toggl<Domínio>Parametros/
-Data.ini` do relatório/Gant — são arquivos novos, sem "nome antigo" a migrar; a
-mudança de formato do cache também não migra automaticamente (não dá pra saber a que
-sprint um cache no formato antigo pertencia) — só fica órfão, uma nova consulta
-recria no formato novo.
+Terceira visualização, com **gestão** (CRUD de sprints) além do acompanhamento. O
+mapeamento **global** TAG→categoria Dev/Rev/Qa + `CorTag` vive em `TogglTags.ini`/
+`TogglConfiguracao.ini` (sem TAG default; sem `CorTag` configurada o frontend usa
+`CORES.corIndisponivel` só na exibição, nunca persiste um default).
+
+**Fechar/reabrir sprint** (`DadosSprint.Fechado`): "Fechar" fica no Acompanhamento
+(`SprintView`), "Reabrir" na listagem (`SprintsPanel`), ambos com confirmação. Fechar
+**não copia** dado nenhum — o cache por sprint já salvo vira "definitivo" por nunca mais
+ser sobrescrito; reabrir só volta `Fechado` para `false`. Sempre reforçado no
+**backend** (o estado `origem` do hook `useConsultaSprint` não reseta ao trocar de
+sprint — um resíduo não pode furar a trava):
+- `PUT /api/sprints/{chave}` devolve 409 se `Fechado`; no front o `SprintFormDialog` já
+  abre todo `disabled` — o 409 é rede de segurança.
+- `POST /api/sprint/consultas` carrega o sprint pela `ChaveSprint`; se `Fechado`, ignora
+  o `origem` recebido e força `"nenhum"`, e sem cache do Toggl batendo devolve 409 em vez
+  de cair na API real — nunca busca Toggl/Jira de verdade para sprint fechado.
+- `Fechado` só muda via Fechar/Reabrir (`EditarSprintRequest` nem tem o campo).
 
 **Cálculo de capacidade** (`ServicoSprint.Montar`):
 ```
@@ -154,165 +162,136 @@ ct         = td * nº de colaboradores selecionados   # capacidade total
 ```
 Não é "70% do total" nem "70% de 70%" — só a fórmula acima é válida.
 
-**Grid de tarefas**: uma linha por `(Chave, Agrupada)`, `Chave`/`Agrupada` vindos de
-`ChaveAgrupamento` (mesma regra descricao/tag/ambos do Gant, usando
-`registro.Tags[0]`). Linha de descrição: `Codigo`/`Descricao` separados via regex
-`^(TEL - \d+)(?: - (.+))?$`. Linha de tag: todo o tempo do colaborador vai para **um**
-grupo — QA se ele tem ≥1 apontamento com tag ∈ `categorias.Qa`, senão DEV (REV nunca
-recebe tag-agg).
+**Totalizadores do cabeçalho "Pendentes"/"Concluído"** (`CabecalhoSprint`): duas listas
+globais de status do Jira (`Final` = `Concluido`/`Ignorado` em `JiraStatus.ini`),
+**mutuamente exclusivas** (a UI esconde de uma o que está na outra; o backend rejeita
+com 400 se `PUT /api/sprint/status-final` trouxer status nas duas). **Concluídas** =
+descrições distintas (nunca linha de tag) com `Situacao` em `StatusConcluido`;
+**Pendentes** = descrições distintas com `Situacao` fora de `StatusConcluido` e de
+`StatusIgnorado` (ignorado não conta em nenhum). Sem nenhuma das listas preenchida,
+toda descrição conta como Pendente.
 
+**"Quantidade pendentes/concluídas" por colaborador** (`LinhaColaboradorSprint`): cálculo
+**independente** do cabeçalho — não usa `StatusConcluido`/`StatusIgnorado`; reaproveita a
+classificação Pendente/Concluído **por grupo** (DEV/REV/QA) da coluna "Situação" da grid
+(`GrupoResponsavelStatus`/`SituacaoSemGrupoResponsavel`, ver "Responsabilidade por
+status"). Cada grupo que o colaborador ocupa numa linha conta à parte (DEV pendente e REV
+concluído na mesma linha dão resultados diferentes). Linhas de tag nunca contam.
+
+**Grid de tarefas**: uma linha por `(Chave, Agrupada)`, vindos de `ChaveAgrupamento`
+(mesma regra descricao/tag/ambos do Gant, usando `registro.Tags[0]`). Linha de descrição:
+`Codigo`/`Descricao` separados via regex `^(TEL - \d+)(?: - (.+))?$`. Linha de tag: todo
+o tempo do colaborador vai para **um** grupo — QA se ele tem ≥1 apontamento com tag ∈
+`categorias.Qa`, senão DEV (REV nunca recebe tag-agg).
 - **Mesclagem de colaboradores só em linhas de descrição** (`Agrupada == false`):
   empacotamento guloso — cada colaborador entra na primeira linha aberta cujos slots
-  Dev/Rev/Qa que ele ocupa estejam todos livres; senão abre linha nova. Dois
-  colaboradores só ocupando categorias diferentes da mesma descrição mesclam numa
-  linha (um por bloco); dois na **mesma** categoria ficam em linhas separadas.
-- **Linhas de tag (`Agrupada == true`) nunca mesclam** — cada colaborador sempre abre
-  sua própria linha, independente da posição DEV/QA (o empacotamento guloso acima só
-  vale para linhas de descrição).
-- Ordenação por **número do código** (`NumeroCodigo`, dígitos extraídos de `Codigo`),
-  não por string — `TEL - 994 → TEL - 1000 → TEL - 1118`.
-- **Prioridade/Situação/PRE(DEV) vêm do Jira quando integrado** (ver bloco Jira
-  abaixo) — sem integração ou issue não encontrada, caem no padrão fixo
-  ("Baixa"/"Pendente"/PRE 0h); nunca editáveis nem persistidos pelo app.
-- Frontend detecta **duplicidade visual** (`calcularColisaoPosicao`, cliente): quando
-  a mesclagem abre >1 linha de descrição para a mesma `(codigo, descricao)` por dois
-  colaboradores disputarem a mesma posição, Código+Descrição ficam em vermelho —
-  **restrito a linhas de descrição**, nunca em linhas de tag (lá a mesclagem já não
-  ocorre, então não há duplicidade a marcar).
+  Dev/Rev/Qa que ele ocupa estejam todos livres; senão abre linha nova. Dois colaboradores
+  em categorias diferentes da mesma descrição mesclam numa linha; na **mesma** categoria
+  ficam em linhas separadas.
+- **Linhas de tag nunca mesclam** — cada colaborador abre sua própria linha.
+- Ordenação por **número do código** (`NumeroCodigo`), não por string —
+  `TEL - 994 → TEL - 1000 → TEL - 1118`.
+- **Duplicidade visual** (`calcularColisaoPosicao`, cliente): mesclagem que abre >1 linha
+  de descrição para a mesma `(codigo, descricao)` por disputa da mesma posição → Código+
+  Descrição em vermelho; **só linhas de descrição**. A cor vai **direto no link** (`sx` do
+  próprio `<a>`), nunca por herança de `TableCell` — elemento com `color` próprio não
+  herda do pai, nem com `!important`.
 - **Tachado (checkbox) persistido em `localStorage`**, isolado por sprint (chave
-  `sprint-tachados-<chaveSprint>`), único uso de `localStorage` no projeto. Reset só em
+  `sprint-tachados-<chaveSprint>`), um dos 2 usos de `localStorage` (§4). Reset só em
   **nova consulta real à API** (`veioDoCache === false`), nunca ao carregar do cache.
+- **Descrição da grid trunca de forma responsiva** (`ResizeObserver` mede o que sobra
+  para a coluna e CSS corta com "…", sem limite fixo de caracteres); tooltip e
+  `SprintDialogDetalheLinha` (duplo clique na linha) sempre com o texto completo.
+- **Prioridade/Situação/PRE vêm do Jira** — sem integração ou issue não encontrada,
+  Prioridade e Situação caem em "Nenhuma" (cinza) e PRE em "–"; nunca editáveis nem
+  persistidos pelo app.
 
-**Integração Jira (opcional, por sprint)**: `POST /api/sprint/consultas` extrai os
-códigos TEL de **todos** os registros crus do Toggl recém-buscados (independe do
-`Agrupamento` configurado — usa `ServicoAgrupamento.NormalizarDescricaoTel` + o mesmo
-regex de `Codigo`), busca em lote (`key in (...)`) via `ClienteApiJira.BuscarIssuesAsync`
-e grava em `JiraSprintData.ini` (`[Sprint:<chave>]`, isolado por sprint — mesma ideia
-do `SprintData.ini`, também isolado por sprint desde 2026-09-13, mas em arquivo
-e carregador (`CarregadorCacheSprintIni`) separados). Só roda quando o Jira está
-configurado e há uma consulta real (não em reaproveitamento de cache); falha de
-rede/autenticação do Jira nunca quebra a consulta do Toggl. `ServicoSprint.Montar`
-aplica o resultado só a linhas de descrição (nunca tag-agg): `Prioridade`/`Situacao`
-da linha e `PreHoras`/`EstimativaOriginalHoras` do bloco **DEV** (REV/QA continuam
-sempre 0/null). **`GET /rest/api/3/search` foi descontinuado pelo Jira** (410 Gone) —
-usar sempre `POST /rest/api/3/search/jql`. `IssueJira.UrlIssue` (`<dominio>/browse/<chave>`) vira link no Código da grid; a cor
-de duplicidade é aplicada **direto no link** (`sx` do próprio `<a>`), nunca por
-herança de um `TableCell` ancestral — um elemento com `color` próprio não herda do
-pai mesmo com `!important` no ancestral.
-- **`search/jql` pagina em blocos de até 100 issues** (`nextPageToken`/`isLast` no
-  corpo da resposta — campos confirmados só ao vivo contra o Jira real, não
-  documentados) — bug real já mordeu o usuário: `BuscarIssuesAsync` mandava
-  `maxResults = chaves.Count` numa única chamada, e o Jira Cloud limita esse endpoint
-  a 100 resultados/página independente do que é pedido, perdendo issues em silêncio
-  em sprints com >100 códigos TEL (confirmado: sprint com 129 códigos, só 100 issues
-  voltavam). Corrigido com loop até `isLast == true` ou `nextPageToken` vazio,
-  `maxResults` fixo em 100 (nunca mais `chaves.Count`).
-- **`IssueJira.Responsavel`/`RevisadoPor`**: `Responsavel` vem sempre do campo nativo
-  `assignee` (não configurável); `RevisadoPor` vem de um campo customizado do Jira,
-  configurável em Configurações → Jira: conexão (`ConfiguracaoJira.
-  CampoRevisadoPorId`/`CampoRevisadoPorNome`, mesmo molde de
-  `CampoEstimativaEsforcoId`/`Nome` — não é hardcoded, é específico de cada instância
-  Jira). Os dois são extraídos do mesmo formato "user picker" do Jira
-  (`{accountId, displayName, ...}`), só o `displayName`.
-- **Fallback DEV/REV via mapeamento Jira↔Toggl** — regra crítica, já reimplementada
-  mais de uma vez em prompts anteriores; **DEV vem de `Responsavel`, REV vem de
-  `RevisadoPor`, nunca o contrário**. `ConfiguracaoMapeamentoJiraToggl.Mapeamento`
-  (`[JiraTogglMapeamento]` de `ConfiguracoesGerais.ini`, editável no 5º estágio do
-  wizard de Configurações) é `Dictionary<string, EntradaMapeamentoJiraToggl>`
-  (`displayName do Jira` → entrada) — desde 2026-09-16 cada entrada guarda
-  `ChaveToggl`/`Sigla`/`Cor` (não só a chave), suportando usuários **exclusivos do
-  Jira** (sem conta Toggl) com Sigla/Cor próprias. `ServicoSprint.Montar`/
-  `AplicarFallbackJira` preenche o bloco **DEV** com o usuário mapeado a partir de
-  `Responsavel`, e o **REV** a partir de `RevisadoPor` — regra de domínio não óbvia,
-  só preenche quando **(a)** nenhuma linha daquela descrição já tem colaborador
-  nesse bloco (nunca sobrescreve tempo real de ninguém) e **(b)** se a entrada tem
-  `ChaveToggl`, esse usuário precisa estar entre os `usuariosSelecionados` **desta**
-  consulta de sprint (deliberadamente não busca fora dos selecionados); se a
-  entrada é exclusiva do Jira (sem `ChaveToggl`), usa `Sigla`/`Cor` direto, sem
-  exigir seleção nenhuma. Só afeta a 1ª linha de descrição do grupo, nunca linhas
-  de tag. É uma sugestão visual (0 segundos) — não conta como `ReaSegundos`/tempo
-  realizado, não afeta capacidade nem `TarefasPendentes`/`Concluidas` do
-  colaborador. UI de edição (Configurações → Jira ↔ Toggl): tabela de 3 colunas
-  (Usuário Jira | Usuário Toggl | Sigla/Cor); Sigla/Cor de um nome exclusivo do
-  Jira se edita num modal por linha.
-- **`BlocoCategoriaSprint.NomeExibicao` (não `ReaSegundos`) é quem decide "tem
-  colaborador" no frontend** (`SprintLinhaTarefa.tsx`, `temColaborador`) — antes do
-  fallback acima existir, os dois sempre coincidiam (só havia `NomeExibicao` quando
-  havia tempo real), então checar `reaSegundos > 0` "funcionava" por acidente; virou
-  bug real quando o fallback passou a setar `NomeExibicao` com `ReaSegundos = 0`
-  (corrigido em 2026-09-16). Nas colunas **PRE**/**REA** da grid do Sprint, valor `0`
-  vindo do Jira/Toggl mostra `"–"` (mesmo padrão do badge/situação sem colaborador);
-  qualquer valor real, mesmo arredondando pra baixo na exibição (`00h` para poucos
-  minutos), mostra a hora normalmente — a distinção é sempre "tem valor real vindo do
-  Jira/Toggl" vs. "não tem", nunca o texto exibido. Desde 2026-09-16, PRE e REA usam
-  a mesma cor de destaque quando têm valor; REA fica vermelho (`corPendente`) quando
-  ultrapassa o PRE daquele bloco — só quando há PRE real, nunca em REV/QA (que nunca
-  têm PRE).
+**Integração Jira (opcional, por sprint)**: `POST /api/sprint/consultas` extrai os códigos
+TEL de **todos** os registros crus do Toggl recém-buscados (independe do `Agrupamento`;
+usa `NormalizarDescricaoTel` + o regex de `Codigo`), busca em lote (`key in (...)`) via
+`ClienteApiJira.BuscarIssuesAsync` e grava em `JiraSprintData_<chave>.ini`. Só roda com o
+Jira configurado; falha de rede/autenticação do Jira nunca quebra a consulta do Toggl.
+`ServicoSprint.Montar` aplica o resultado só a linhas de descrição: `Prioridade`/`Situacao`
+da linha e `PreHoras` de **cada** bloco DEV/REV/QA a partir de um campo customizado do
+Jira próprio por grupo (`CampoEstimativaDesenvolvimentoId`/`Revisao`/`Testes`) — sem o
+campo do grupo configurado, `PreHoras` = 0. A "Estimativa original"
+(`timeoriginalestimate`) foi **removida por completo** — não recriar sem pedido explícito.
+`IssueJira.UrlIssue` (`<dominio>/browse/<chave>`) vira link no Código da grid.
+- **`GET /rest/api/3/search` foi descontinuado pelo Jira** (410 Gone) — usar sempre
+  `POST /rest/api/3/search/jql`, que **pagina em blocos de até 100 issues**
+  (`nextPageToken`/`isLast`, confirmados só ao vivo). Bug real já mordeu o usuário:
+  `maxResults = chaves.Count` numa chamada só perdia issues em silêncio em sprints com
+  >100 códigos TEL (129 códigos, só 100 voltavam). `BuscarIssuesAsync` faz loop até
+  `isLast == true` ou `nextPageToken` vazio, `maxResults` fixo em 100 — nunca mais
+  `chaves.Count`.
+- **`Responsavel`/`RevisadoPor`**: `Responsavel` vem do campo nativo `assignee` (não
+  configurável); `RevisadoPor` de um campo customizado configurável
+  (`CampoRevisadoPorId`/`Nome`, específico de cada instância Jira). Ambos: só o
+  `displayName` do formato "user picker" (`{accountId, displayName, ...}`).
+- **Fallback DEV/REV via mapeamento Jira↔Toggl** — regra crítica, já reimplementada mais
+  de uma vez; **DEV vem de `Responsavel`, REV vem de `RevisadoPor`, nunca o contrário**.
+  `[Usuario:<displayName Jira>]` de `JiraTogglMapeamento.ini` guarda
+  `ChaveToggl`/`Sigla`/`Cor` (suporta usuários **exclusivos do Jira**, sem conta Toggl,
+  com Sigla/Cor próprias). `AplicarFallbackJira` preenche o bloco DEV a partir de
+  `Responsavel` e o REV a partir de `RevisadoPor`, só quando **(a)** nenhuma linha
+  daquela descrição já tem colaborador nesse bloco (nunca sobrescreve tempo real) e
+  **(b)** se a entrada tem `ChaveToggl`, esse usuário está entre os
+  `usuariosSelecionados` **desta** consulta (não busca fora deles); entrada exclusiva do
+  Jira usa `Sigla`/`Cor` direto, sem exigir seleção. Só afeta a 1ª linha de descrição do
+  grupo, nunca linhas de tag. É sugestão visual (0 segundos): não conta como
+  `ReaSegundos`, capacidade nem `TarefasPendentes`/`Concluidas`.
+- **`BlocoCategoriaSprint.NomeExibicao` (não `ReaSegundos`) decide "tem colaborador" no
+  frontend** (`SprintLinhaTarefa.tsx`, `temColaborador`): antes do fallback os dois
+  coincidiam por acidente; virou bug real quando o fallback passou a setar
+  `NomeExibicao` com `ReaSegundos = 0`. Em **PRE**/**REA**, valor `0` vindo do Jira/Toggl
+  mostra `"–"`; qualquer valor real, mesmo que arredonde para `00h`, mostra a hora — a
+  distinção é "tem valor real" vs. "não tem", nunca o texto exibido. PRE e REA usam a
+  mesma cor de destaque; REA fica vermelho (`corPendente`) quando ultrapassa o PRE do
+  bloco (só com PRE real; REV/QA nunca têm PRE).
 
-**Consulta do Sprint — o que forçar** (`origem: "nenhum"|"toggl"|"jira"|"ambos"`,
-`POST /api/sprint/consultas`, desde 2026-09-16, default `"nenhum"`): controla o que
-é **forçado** a atualizar, não "de onde vêm os dados" — os dois lados sempre podem
-rodar, a diferença é se ignoram o cache. `forcarToggl = origem in ("toggl","ambos")`,
-`forcarJira = origem in ("jira","ambos")`. Toggl: com `forcarToggl` sempre busca de
-novo (ignora cache, como o antigo checkbox "Forçar nova consulta à API"); sem
-`forcarToggl`, cache-first normal (só busca se não houver cache válido pro
-período/usuários — isso pode acontecer mesmo com `origem = "nenhum"`, não é
-"forçar", é a única forma de ter dado). Jira: atualiza (`AtualizarCacheJiraAsync`)
-sempre que `forcarJira` for true, **ou** sempre que o Toggl tiver feito uma consulta
-real (mesmo sem forçar) — preserva a regra antiga de nunca atualizar o Jira só por
-reaproveitar cache do Toggl. Não existe mais bloqueio/409 para "só Jira sem cache
-prévio do Toggl": nesse caso o Toggl cai no cache-first normal (busca porque não tem
-cache, não porque foi forçado) e o Jira atualiza junto. Na tela (`ConsultaPanel`,
-compartilhado com Relatório/Gant), o seletor de 4 opções ("Forçar nova consulta
-em:") substitui o checkbox de forçar só para o Sprint — Relatório/Gant continuam
-com o checkbox simples de sempre, sem esse seletor.
+**Consulta do Sprint — o que forçar** (`origem: "nenhum"|"toggl"|"jira"|"ambos"`, default
+`"nenhum"`): controla o que é **forçado** a atualizar, não "de onde vêm os dados".
+`forcarToggl = origem in ("toggl","ambos")`, `forcarJira = origem in ("jira","ambos")`.
+Toggl: com `forcarToggl` sempre busca de novo; sem, cache-first normal (busca só se não
+houver cache válido — pode acontecer com `origem = "nenhum"`, não é "forçar"). Jira:
+atualiza sempre que `forcarJira`, **ou** sempre que o Toggl tiver feito consulta real
+(mesmo sem forçar) — nunca atualiza o Jira só por reaproveitar cache do Toggl. Não há
+bloqueio/409 para "só Jira sem cache prévio do Toggl": o Toggl busca por falta de cache.
+Só o Sprint tem o seletor; Relatório/Gant têm o checkbox simples de forçar.
 
-**Listagem do Sprint — filtros e ordenação** (`SprintView.tsx`, desde 2026-09-16): a
-coluna de status da tarefa é **"Status"** (renomeada de "Situação"; a "Situação"
-por bloco DEV/REV/QA — Pendente/Concluído — continua com esse nome, é outro
-conceito). Filtro múltiplo por Prioridade/Status/Colaborador (sobre os dados já
-carregados, sem nova consulta) atrás do botão "Filtros", com botão "Limpar"
-dedicado (reseta só esses 3 filtros). Ordenação clicável nos cabeçalhos de
-Prioridade (por severidade) e Status (alfabética), com botão "Limpar ordenação"
-separado (reseta só a ordenação) — os dois botões de reset são deliberadamente
-independentes, um nunca afeta o outro.
+**Listagem do Sprint — filtros** (`SprintView.tsx`): "Status" = texto bruto do status do
+Jira; "Situação" (DEV/REV/QA) = Pendente/Concluído por bloco — outro conceito. Filtros de
+seleção: Prioridade, Status, Colaborador e Situação (`situacaoGrupo` em `calculos.ts`,
+mesma classificação da coluna "Situação"; linhas de tag entram com valor "Tag").
+**Situação combinada com Colaborador**: sem colaborador, a linha atende se **qualquer**
+grupo com colaborador bater; com colaborador(es), só conta o(s) grupo(s) **daquele(s)**
+colaborador(es) — por isso usam um bloco combinado dedicado (não dois `if` encadeados: a
+linha já teria sido excluída pelo filtro de Colaborador antes de "Inverter filtros"
+agir, dando falso positivo). "Inverter filtros" faz os 4 filtros de seleção **excluírem**
+em vez de restringir (a busca por texto nunca é afetada). "Limpar" (busca+filtros+inversão)
+e "Limpar ordenação" (Prioridade por severidade, Status alfabético) são deliberadamente
+independentes.
 
-**Prioridade/Situação/responsabilidade**: a API do Jira não expõe cor por prioridade
-dentro da busca de issues (só no endpoint `GET /rest/api/3/priority`, que exigiria
-uma chamada extra); status também não tem cor individual — só `statusCategory.key`
-(`new`/`indeterminate`/`done`), capturado em
-`IssueJira.SituacaoCategoria`. Por isso a cor de cada badge vem de um **mapeamento
-configurável por nome exato** (`GET/PUT /api/jira/cores`, `JiraCores.ini`,
-`ConfiguracaoCoresJira`/`CarregadorConfiguracaoCoresJiraIni`), alimentado pela
-listagem **real** de nomes (`GET /api/jira/status`/`/prioridades`, cacheadas em
-`JiraListasCache.ini`); sem cor configurada, **Prioridade** cai numa paleta fixa por
-severidade (`Muito alta/Alta/Média/Baixa/Muito baixa`), mas **Status** vai direto
-para o mesmo cinza (`corIndisponivel`) do badge "Nenhuma"/tarefa não localizada no
-Jira — a paleta intermediária por `SituacaoCategoria` (`new`/`indeterminate`/`done`)
-foi removida em 2026-09-16 (o fallback amarelo de "indeterminate" se confundia com
-cor configurada de verdade). Badge de
-tag usa a `CorTag` de `[SprintCategorias]` (ver acima) — configurável desde
-2026-09-16, cinza (`corIndisponivel`) só como exibição quando nada foi configurado,
-nunca `accentRoxo` nem um hex fixo no código.
-**Responsabilidade por status** (seção `[SprintResponsabilidade]` de
-`ConfiguracoesGerais.ini`, `ConfiguracaoResponsabilidadeSprint`/
-`CarregadorConfiguracaoResponsabilidadeSprintIni`, mesmo molde de
-`[SprintCategorias]`) mapeia status do Jira → DEV/REV/QA;
-`ServicoSprint.Montar` calcula `LinhaTarefaSprint.GrupoResponsavelStatus`/
+**Prioridade/Situação — cores e responsabilidade**: a busca de issues do Jira não expõe
+cor de prioridade/status; a cor vem de **mapeamento configurável por nome exato**
+(`GET/PUT /api/jira/cores` → `Cor` em `JiraStatus.ini`/`JiraPrioridades.ini`), alimentado
+pela listagem **real** (`GET /api/jira/status`/`/prioridades`, cacheadas). Sem cor
+configurada, **Prioridade** cai numa paleta fixa por severidade
+(`Muito alta/Alta/Média/Baixa/Muito baixa`); **Status** vai direto ao cinza
+(`corIndisponivel`, o mesmo de "Nenhuma") — **não** usar `statusCategory` como fallback
+(o amarelo de "indeterminate" se confundia com cor configurada). Badge de tag usa
+`CorTag`. Todo texto de badge usa `text.primary` (não branco fixo); `BadgeTexto` tem
+**largura fixa** com ellipsis + `Tooltip`, para badges iguais na mesma coluna.
+
+**Responsabilidade por status** (`Responsaveis` em `JiraStatus.ini`, mapeia status do Jira →
+DEV/REV/QA): `ServicoSprint.Montar` calcula `GrupoResponsavelStatus`/
 `SituacaoSemGrupoResponsavel` comparando `Situacao` a essas listas — três casos:
-(1) bate com um grupo → esse grupo "Pendente", os demais (com colaborador)
-"Concluído"; (2) responsabilidade configurada (pelo menos uma lista não vazia) e
-tarefa encontrada no Jira, mas o status não bate com nenhuma das três listas →
-`SituacaoSemGrupoResponsavel = true`, todo grupo com colaborador mostra "Concluído"
-(decidido com o usuário em 2026-09-16 — antes caía no mesmo "Pendente" do caso 3,
-misturando "sem responsável definido" com "não há mais nada pendente"); (3) sem
-nenhuma responsabilidade configurada, ou tarefa não encontrada no Jira, todo grupo
-com colaborador mostra "Pendente" (padrão antigo, preservado). Todo texto de badge
-(Prioridade/Situação/TAG/`BadgeSigla`) é sempre branco (`common.white`), inclusive
-nas cores mais claras (ex.: "Muito baixa"). Os badges de Prioridade/Situação
-(`BadgeTexto`) têm **largura fixa** (não só mínima) com `text-overflow: ellipsis` +
-`Tooltip` do nome completo — evita que um status longo do Jira alargue só a própria
-badge dentro da coluna, deixando badges de tamanhos desiguais na mesma coluna.
+(1) bate com um grupo → esse grupo "Pendente", os demais (com colaborador) "Concluído";
+(2) responsabilidade configurada (≥1 lista não vazia) e tarefa achada no Jira, mas status
+fora das três listas → `SituacaoSemGrupoResponsavel = true`, todo grupo com colaborador
+"Concluído" (decidido com o usuário — "sem responsável definido" ≠ "nada pendente");
+(3) sem responsabilidade configurada, ou tarefa não achada no Jira, todo grupo com
+colaborador "Pendente".
 
 ---
 
@@ -326,31 +305,33 @@ global, Swagger em `/swagger` (título "Toggl Report API"). Sobe em
 
 | Método | Rota | Descrição |
 |---|---|---|
-| `GET/PUT` | `/api/configuracao` | agrupamento, tags, período do relatório; `dataInicio`/`dataFim` opcionais no PUT (omitidos preservam o período salvo) |
+| `GET/PUT` | `/api/configuracao` | agrupamento, tags, período do relatório; `dataInicio`/`dataFim` opcionais no PUT (omitidos preservam o período salvo); datas em `RelatorioParametros.ini`, agrupamento/tags na fonte única |
 | `GET/POST/PUT/DELETE` | `/api/usuarios-toggl` | CRUD de usuários do Toggl (inclui `administrador`); `POST .../validar-token` |
-| `GET` | `/api/usuarios-toggl/tags?forcarAtualizacao=` | tags reais do workspace via token do usuário `Administrador`, cacheadas (`TagsCache.ini`) |
+| `GET` | `/api/usuarios-toggl/tags?forcarAtualizacao=` | tags reais do workspace via token do `Administrador`, cacheadas (`TogglTagsCache.ini`) |
 | `POST` | `/api/consultas` | cache-first via `ServicoConsulta`, grava `RelatorioData.ini` |
 | `GET` | `/api/relatorio?dataInicio=&dataFim=` | 409 se não há cache exato p/ o período |
-| `GET` | `/api/busca?termo=` | busca por descrição sobre o cache |
-| `GET` | `/api/dados/download` | zip de toda a pasta `dados/` |
-| `POST` | `/api/dados/restaurar` | restaura `dados/` a partir de um `.zip` |
-| `GET/PUT` | `/api/gant/parametros` | parâmetros próprios do Gant; `dataInicio`/`dataFim` opcionais no PUT, mesma regra de `/api/configuracao` |
+| `GET` | `/api/busca?termo=` | busca por descrição sobre o cache do relatório |
+| `GET` | `/api/dados/download` | zip de toda a raiz de `dados/` |
+| `POST` | `/api/dados/restaurar` | restaura `dados/` a partir de um `.zip` (arquivos na raiz do zip; sobrescreve os de mesmo nome) |
+| `GET/PUT` | `/api/gant/parametros` | período próprio do Gant (`GantParametros.ini`) + agrupamento/tags da fonte única; `dataInicio`/`dataFim` opcionais no PUT |
 | `POST` | `/api/gant/consultas` | idem `/api/consultas`, grava `GantData.ini` |
 | `GET` | `/api/gant?dataInicio=&dataFim=&termo=` | 409 sem cache; `termo` filtra antes de agrupar |
-| `GET/POST/PUT/DELETE` | `/api/sprints` | CRUD de sprints |
-| `GET/PUT` | `/api/sprint/categorias` | mapeamento DEV/REV/QA + agrupamento + tags (fonte usada pela aba Configurações) |
-| `GET/PUT` | `/api/sprint/responsabilidade` | mapeamento status do Jira → DEV/REV/QA |
-| `POST` | `/api/sprint/consultas` | cache-first via `ServicoConsulta`; `chaveSprint` (obrigatório) isola a seção gravada em `SprintData.ini`/`JiraSprintData.ini`; `origem` (`nenhum`\|`toggl`\|`jira`\|`ambos`, default `nenhum`) escolhe o que forçar (não a fonte) |
+| `GET/POST/PUT/DELETE` | `/api/sprints` | CRUD de sprints; `PUT` 409 se fechado; `DELETE` apaga os 2 caches do sprint |
+| `POST` | `/api/sprints/{chave}/fechar` \| `/reabrir` | trava/destrava edição e consulta |
+| `GET/PUT` | `/api/sprint/categorias` | mapeamento DEV/REV/QA + agrupamento + tags detalhadas + `CorTag` (`TogglTags.ini`/`TogglConfiguracao.ini`) |
+| `GET/PUT` | `/api/sprint/responsabilidade` | status do Jira → DEV/REV/QA (`JiraStatus.ini`) |
+| `GET/PUT` | `/api/sprint/status-final` | status Concluído/Ignorado nos totalizadores (`JiraStatus.ini`); `PUT` 400 se um status estiver nas duas listas |
+| `POST` | `/api/sprint/consultas` | cache-first via `ServicoConsulta`; `chaveSprint` (obrigatório; 404 inexistente, 400 inválida) isola os caches; `origem` (`nenhum`\|`toggl`\|`jira`\|`ambos`) escolhe o que forçar; sprint fechado ignora `origem` e devolve 409 sem cache |
 | `GET` | `/api/sprint?chaveSprint=` | 409 sem cache p/ o período do sprint |
-| `GET/PUT` | `/api/jira/configuracao` | URL/e-mail/campo de estimativa; token sempre mascarado na resposta |
+| `GET/PUT` | `/api/jira/configuracao` | conexão + campos customizados (`JiraConexao.ini`/`JiraCampos.ini`); token sempre mascarado na resposta |
 | `POST` | `/api/jira/testar-conexao` | credenciais explícitas, sem salvar (`GET /rest/api/3/myself`) |
-| `POST` | `/api/jira/campos` | credenciais explícitas ou já salvas (`GET /rest/api/3/field`, só customizados) |
+| `POST` | `/api/jira/campos` | credenciais explícitas ou salvas (`GET /rest/api/3/field`, só `custom: true`) |
 | `POST` | `/api/jira/issues` | busca em lote (`key in (...)`) prioridade/situação/estimativas, config salva |
-| `GET` | `/api/jira/status?forcarAtualizacao=` | nomes reais de status (`GET /rest/api/3/status`), cacheados (`JiraListasCache.ini`) |
-| `GET` | `/api/jira/prioridades?forcarAtualizacao=` | idem, `GET /rest/api/3/priority` |
-| `GET/PUT` | `/api/jira/cores` | mapeamento configurável nome→cor por status e por prioridade (`JiraCores.ini`), usado pelas badges do Sprint |
-| `GET` | `/api/jira/usuarios?forcarAtualizacao=` | nomes reais de usuários do Jira (`GET /rest/api/3/users/search`, paginado, `accountType == atlassian && active`), cacheados (`JiraListasCache.ini`) |
-| `GET/PUT` | `/api/jira/usuarios-mapeamento` | mapeamento configurável `displayName` do Jira → `Chave` do usuário Toggl (`[JiraTogglMapeamento]`), alimenta o fallback DEV/REV do Sprint |
+| `GET` | `/api/jira/status?forcarAtualizacao=` | nomes reais de status (`GET /rest/api/3/status`), cacheados (`JiraStatusCache.ini`) |
+| `GET` | `/api/jira/prioridades?forcarAtualizacao=` | idem, `GET /rest/api/3/priority` (`JiraPrioridadesCache.ini`) |
+| `GET/PUT` | `/api/jira/cores` | mapeamento nome→cor de status e prioridade, usado pelas badges do Sprint |
+| `GET` | `/api/jira/usuarios?forcarAtualizacao=` | nomes reais de usuários (`GET /rest/api/3/users/search`, paginado, `accountType == atlassian && active`), cacheados (`JiraUsuariosCache.ini`) |
+| `GET/PUT` | `/api/jira/usuarios-mapeamento` | `displayName` do Jira → `ChaveToggl`/`Sigla`/`Cor`, alimenta o fallback DEV/REV do Sprint |
 
 **Erros**: 400 (parâmetros/datas inválidas, agrupamento fora de
 `descricao`/`tag`/`ambos`), 404 (recurso não encontrado), 409 (nome em uso; sem cache
@@ -358,19 +339,9 @@ correspondente), 500 (`Results.Problem`, falha de I/O). `GET /api/relatorio`/`/b
 `/gant`/`/sprint` **exigem cache prévio** — nunca disparam consulta implícita, para
 manter explícito quando uma chamada HTTP externa ao Toggl acontece (rate limit).
 
-**Jira tem duas frentes**: (1) config isolada (seção `[Jira]` de
-`ConfiguracoesGerais.ini`) — URL do domínio,
-e-mail, API Token (criptografado como o do Toggl) e o campo customizado de "estimativa
-de esforço" (descoberto via `POST /api/jira/campos`, filtrado a `custom: true`); token
-nunca volta em texto puro depois de salvo (`ServicoUsuariosToggl.MascararToken`,
-reaproveitado); (2) integração real com o Sprint (`POST /api/jira/issues`, embutida em
-`POST /api/sprint/consultas`) — busca em lote por JQL prioridade/situação/estimativas,
-mais listagem real de status/prioridades + mapeamento configurável de cor (ver tabela
-acima e nota de domínio do Sprint).
-
-**`emAndamento` do relatório está em snake_case** (`workspace_id`, `duration`, etc.) —
-é o `RegistroTempoDto` cru com `[JsonPropertyName]` batendo na API do Toggl; todo o
-resto do contrato é camelCase.
+**`emAndamento` do relatório está em snake_case** (`workspace_id`, `duration`, etc.) — é
+o `RegistroTempoDto` cru com `[JsonPropertyName]` batendo na API do Toggl; todo o resto
+do contrato é camelCase.
 
 ### Autenticação HTTP Basic (opcional)
 
@@ -385,98 +356,112 @@ resposta 401 de propósito — evita o popup nativo do navegador; o frontend tra
 ## 4. Frontend (`toggl-report-front`)
 
 React 19 + TypeScript + MUI 9, Vite. `VITE_API_URL` configura o endereço da API
-(default `http://localhost:5180`). Navegação por `Tabs`: **Configurações** (fixa,
-default, primeira posição), **Relatório**, **Gant**, **Sprint** — as três últimas
-`disabled` até a configuração obrigatória estar completa, cada uma com `Stepper`
-próprio (Sprint tem 3 passos desde 2026-09-13: Sprints → Consultar → Acompanhamento —
-a etapa "Parâmetros" foi absorvida pela aba Configurações).
-
-**Aba Configurações** (`features/configuracoes/ConfiguracoesView.tsx`) substituiu as
-antigas abas "Usuários do Toggl" e "Jira", centralizando os campos compartilhados por
-Relatório/Gant/Sprint. Desde 2026-09-15 é um orquestrador simples
-(`modo: 'resumo' | 'wizard'`, default `'resumo'`) entre `ConfiguracoesResumo.tsx`
-(tela padrão ao abrir a aba, estilo `ConsultaPanel` — status dos 4 blocos obrigatórios
-com ícone completo/incompleto e botão "Configurar") e `ConfiguracoesWizard.tsx`
-(`Stepper`/`StepButton` `nonLinear`, mesmo padrão do stepper da aba Sprint, **5**
-estágios desde 2026-09-16: **Usuários do Toggl** — CRUD embutido, exige ≥1
-`Administrador` para avançar; **Toggl: agrupamento e tags** — inclui a cor da tag do
-Sprint (`CorTag`, ver §2); **Jira: conexão** — embutido, `ConfiguracaoJiraPanel`
-expõe `forwardRef`/`useImperativeHandle`; **Jira: status e cores** — Status
-DEV/REV/QA + `CoresJiraPanel` (também `forwardRef`/`useImperativeHandle`) embutido,
-mostra "Avançar" (não mais o último estágio); **Jira ↔ Toggl** (`MapeamentoJiraTogglPanel`,
-novo 5º e último estágio) — um `Select` por nome real de usuário do Jira
-(`GET /api/jira/usuarios`) escolhendo o usuário Toggl correspondente ou "sem
-mapeamento" (`GET/PUT /api/jira/usuarios-mapeamento`), alimenta o fallback DEV/REV do
-Sprint (ver §2); é quem mostra "Concluir", sem bloqueio adicional).
-`UsuariosTogglModal.tsx`/`ConfiguracaoJiraModal.tsx` foram **removidos** — conteúdo
-migrou para os estágios 1 e 3. **Nenhum estágio tem botão "Salvar" próprio** — a
-barra de ações de cada estágio é sempre `[Resumo] [Voltar] [Avançar|Concluir]`
-(estágio 0, sem "Voltar": `[Resumo] [Avançar]`), e todos os pontos de navegação
-(Resumo, Voltar, Avançar/Concluir, e o clique direto no `StepButton` do Stepper do
-topo) salvam a etapa atual antes de navegar (`salvarEtapaAtual`, centralizado em
-`ConfiguracoesWizard.tsx`) — decisão de 2026-09-15/16, substituindo um botão "Voltar
-ao resumo" único e incondicional que ficava fixo no topo do wizard (ver nota abaixo).
-As 4 configurações continuam obrigatórias para habilitar Relatório/Gant/Sprint
-(`onAlterado`/`configuracaoCompleta`, calculado independente do modo exibido); o
-mapeamento Jira↔Toggl é opcional (só habilita o fallback quando preenchido).
+(default `http://localhost:5180`).
 
 ```bash
 cd toggl-report-front && npm install && npm run dev   # :5173
 npm run build   # tsc -b && vite build
 ```
 
+### Navegação e gate de configuração
+
+Sem fluxo em etapas nem abas de topo: **menu lateral** (`MenuLateral`: `Drawer` permanente
+em `md+`, que um botão no AppBar esconde/exibe — preferência em `localStorage`
+(`utils/preferenciasMenu.ts`); temporário em `xs`, sem persistência) com 7 seções — Toggl,
+Jira, Configurações, Relatório, Gant, Sprint, Dados. O **Resumo da aplicação** é a página
+inicial e o destino do clique na logo (não é item de menu). Não confundir
+`features/configuracoes/` (plural = seção Configurações) com o antigo formulário de
+parâmetros do Relatório, hoje em `features/relatorio/` (espelha `features/gant/`).
+- **`useResumoConfiguracao` (`features/resumo`) é a fonte ÚNICA do gate** e das
+  categorias/responsabilidade/status-final consumidas pelo Sprint (o `App` não guarda
+  cópias; o `SprintView` recebe os dados frescos do hook). Recarrega a cada troca de seção
+  e após salvamentos (inclusive a Conexão Jira); `recarregar` **coalesce recargas
+  concorrentes** (a mais recente prevalece). Relatório/Gant/Sprint ficam `disabled` no menu até a configuração
+  obrigatória estar completa (`configuracoes/completude.ts`): Agrupamento, Tags detalhadas
+  (exigidas exceto no agrupamento "descricao"), Tags DEV/REV/QA do Toggl e Status DEV/REV/QA
+  do Jira. Cadastro de usuários e conexão do Jira **não** entram nesse cálculo; só o
+  mapeamento Jira↔Toggl é de fato opcional.
+- **Toggl** = CRUD de usuários (exige ≥1 `Administrador` para liberar Configurações).
+  **Jira** = só a conexão (URL/e-mail/token, "Testar conexão", "Salvar").
+- **Resumo** = 7 blocos (Usuários do Toggl; Toggl: Configurações [+ cor da tag]; Jira:
+  Conexão; Jira: Campos personalizados; Jira: Status; Jira: Cores; Jira ↔ Toggl:
+  Mapeamento) com atalho para a aba certa; entre os do Jira só Status é obrigatório.
+- **Configurações** = 5 abas (Toggl; Jira: Campos personalizados; Jira: Status — DEV/REV/QA +
+  Concluído/Ignorado, mutuamente exclusivos; Jira: Cores; Jira ↔ Toggl), com botão Salvar
+  por aba (as abas Status/Cores gravam o mesmo `JiraStatus.ini`, de forma independente);
+  **salva a aba suja antes de trocar de aba ou sair da seção** (ref `salvarAtual` no `App`; se falhar, permanece). Tem **gate próprio**:
+  só abre com `Administrador` do Toggl **e** Jira configurado (URL+e-mail; token fora);
+  senão mostra os pré-requisitos com atalhos.
+- **Relatório/Gant**: tela de parâmetros (período + checkbox "Forçar nova consulta à API",
+  estado local não persistido) e botão único **Consultar** — salva os parâmetros, pede
+  confirmação se forçar, consulta e mostra a view (com "Voltar"). Busca por descrição
+  inline nas duas views.
+- **Sprint**: lista de sprints + "Selecionar" → abre na hora o modal `ConsultaSprintDialog`
+  (só nome do sprint + seletor "Forçar nova consulta em:", ou Alert de sprint fechado) →
+  se forçar Toggl, segundo diálogo de confirmação → Acompanhamento (`SprintView`, com
+  "Voltar"). Totalizadores/legenda Concluído/Ignorado ficam em Configurações → Jira: Status
+  e no Resumo, não no modal. Painel de filtros em 2 linhas em `sm+` (empilhado em `xs`).
+- **Dados** = baixar/importar `.zip` (fetch autenticado + blob) + lista dos `.ini` possíveis
+  (`features/dados/arquivosIni.ts`, **manual**: ver §6). O primeiro carregamento sem nenhum
+  usuário do Toggl abre o diálogo de importação automaticamente. O rodapé só tem o crédito
+  e fica no fluxo, não fixo.
+- **Responsividade**: a **página nunca rola na horizontal** — só tabelas/grades em container
+  próprio com `overflow-x`; gutter do `Container` `px: { xs: 1, sm: 2 }`; `CabecalhoView`
+  quebra linha; dialogs largos (`SprintDialogInfo`, `SprintDialogDetalheLinha`) em
+  `fullScreen` abaixo de `sm`; `Tabs variant="scrollable"`.
+
 ### Estrutura
 
 ```
-src/api/        fetch tipado (http.ts) + tipos espelhando os DTOs/records C#
-src/features/   usuarios-toggl, jira (config isolada), configuracao, consulta
-                (compartilhado), relatorio, busca, gant, sprint, dados (import/export .zip)
-src/components/ peças reusadas entre features (ver lista abaixo)
-src/hooks/      bases genéricas de hook (useRecurso, useRecursoEditavel, useColecaoCrud,
+src/api/        fetch tipado (http.ts) + tipos espelhando os DTOs/records C# (tipos.ts)
+src/features/   auth, usuarios-toggl, jira (conexão/campos), configuracoes (abas,
+                completude), resumo, consulta, relatorio (inclui o form de parâmetros),
+                busca, gant, sprint, dados
+src/components/ peças reusadas entre features
+src/hooks/      bases genéricas (useRecurso, useRecursoEditavel, useColecaoCrud,
                 useNotificacao, useExpansao)
-src/utils/      duracao.ts (HHhMMmSSs), datas.ts, rotulos.ts, texto.ts, tipografia.ts
+src/utils/      duracao.ts (HHhMMmSSs), datas.ts, rotulos.ts, texto.ts, tipografia.ts, consulta.ts,
+                preferenciasMenu.ts
 theme.ts        tema MUI único, claro — CORES exportado (paleta central)
-App.tsx         Tabs + Steppers + estado elevado (configuracao/configuracaoGant/parametrosSprint)
+App.tsx         menu lateral + seção ativa + estado elevado (consultas concluídas, sprint)
 ```
 
-**Componentes compartilhados a preferir antes de duplicar**: `BadgeSigla` (tooltip
-com nome completo via `nome`, texto sempre branco, replicado no
-`<Chip>` do Gant; cantos retos por padrão, arredondado (`borderRadius: 1`) em três
-lugares: listagem de Usuários do Toggl, `AccordionSummary` do Relatório e tabela
-"Colaboradores" do Sprint — grid DEV/REV/QA e grade do Gant seguem quadrados;
-`ConsultaPanel` mostra "usuários selecionados" inline, sem tabela/grid),
-`SelectListaCacheada` (seleção, não digitação, sobre listagem real cacheada — tags do
-Toggl/status do Jira, substituiu `CampoTags`, removido), `MapaCoresLista` (grade de
-color pickers por nome real, usado pelo mapeamento de cores do Jira),
-`SelectAgrupamento`, `CabecalhoView`, `MarcaTogglReport` (logo+wordmark), `AvisoCache`,
-`EsqueletoCarregando`, `DialogoConfirmacao`, `ParametrosFormBase` (hoje só o período —
-Agrupamento/Tags saíram para a aba Configurações), `IconeAjuda`
-(ícone `HelpOutlined` + `Tooltip`, usado como `endAdornment` de `TextField` — API
-Token do Toggl e os três campos da config do Jira).
+**Componentes compartilhados a preferir antes de duplicar**: `BadgeSigla` (tooltip com
+nome completo; texto em `text.primary`; replicado no `<Chip>` do Gant; cantos retos por
+padrão, arredondado — `borderRadius: 1` — só em Usuários do Toggl, `AccordionSummary` do
+Relatório e tabela "Colaboradores" do Sprint), `SelectListaCacheada` (seleção, não
+digitação, sobre listagem real cacheada), `MapaCoresLista` (grade compacta de color
+pickers por nome real), `ParametrosFormBase` (período + forçar + Consultar, base de
+Relatório e Gant), `SelectAgrupamento`, `CabecalhoView`, `MarcaTogglReport`,
+`AvisoCache`, `EsqueletoCarregando`, `DialogoConfirmacao`, `BotaoComCarregamento`,
+`IconeAjuda` (`HelpOutlined` + `Tooltip`, usado como `endAdornment` de `TextField`).
 
 ### Decisões técnicas importantes
 
-- **`fetch` nativo com wrapper tipado** (`src/api/http.ts`), não axios; erros da API
-  são strings simples (`ErroApi`).
-- **Zero `any`**; sem `enum` do TS (`erasableSyntaxOnly`) — usar union de strings
-  literais.
-- **Download/upload de `dados/` via `fetch` autenticado + blob**, nunca `<a href>`
-  direto — um link de navegação normal não carrega a credencial Basic Auth (a API não
-  usa cookie/sessão de propósito).
+- **`fetch` nativo com wrapper tipado** (`src/api/http.ts`), não axios. `http.ts` precisa
+  extrair a mensagem de erro de `ProblemDetails` (`detail`/`title`), não só de string
+  simples — `Results.Problem` (ex.: 502 de `/api/usuarios-toggl/tags`) devolve
+  `{type,title,status,detail}`; sem isso a UI mostra só "Bad Gateway".
+- **Zero `any`**; sem `enum` do TS (`erasableSyntaxOnly`) — usar union de strings.
+- **Download/upload de `dados/` via `fetch` autenticado + blob**, nunca `<a href>` direto
+  — um link normal não carrega a credencial Basic Auth (a API não usa cookie/sessão).
 - **Curadoria de exibição "TEL primeiro" é replicada aqui** (`curarPorDescricao`),
   simetria com a normalização do núcleo — o backend não ordena, só agrupa.
-- **Seleção de usuário para consulta não é um passo do wizard** — vem do campo
-  `Selecionado` de cada usuário (aba "Usuários do Toggl"), refletido como lista somente-leitura
-  em `ConsultaPanel`.
-- **`localStorage` só é usado em `features/sprint/tachados.ts`** (tachado de linhas,
-  isolado por sprint) — não usar para mais nada sem necessidade equivalente.
+- **Seleção de usuário para consulta** vem do campo `Selecionado` de cada usuário (seção
+  Toggl); as telas de consulta não escolhem usuários.
+- **`localStorage` só em 2 lugares**: `features/sprint/tachados.ts` (tachado por sprint) e
+  `utils/preferenciasMenu.ts` (menu visível); a credencial do login fica em `sessionStorage`
+  (`api/credencial.ts`). Não usar para mais nada sem necessidade equivalente.
+- **Cada painel da Jira reenvia a parte que não edita**: `PUT /api/jira/configuracao`
+  **substitui a configuração inteira** (conexão + campos); cada painel faz GET fresco e
+  reenvia o restante. `apiToken` vazio/null mantém o salvo.
 
 ### Tema
 
 Tema único claro (`theme.ts`) — um tema escuro chegou a ser implementado e foi
 **removido por completo** a pedido do usuário; não reintroduzir sem pedido explícito.
-`CORES` é a paleta central (exportada) — nenhuma cor hex deve ficar solta fora de
-`theme.ts`. `error` é propositalmente o vermelho padrão do MUI (não sobrescrever).
+`CORES` é a paleta central — nenhuma cor hex deve ficar solta fora de `theme.ts`.
+`error` é propositalmente o vermelho padrão do MUI (não sobrescrever).
 
 ---
 
@@ -503,22 +488,30 @@ por pronta uma mudança.
   execução** — o processo trava o próprio `.dll`, e um `dotnet build` que falha só com
   `MSB3026`/`MSB3027` (erro de cópia, não `error CS...`) é esse processo travando o
   arquivo, não um bug de código.
+- **Rodar a API sem a `CHAVE_CRIPTOGRAFIA` correta (a do `.env`) é perigoso**: usa a
+  chave embutida, não descriptografa os tokens `enc:`, o cache nunca "bate" (compara
+  `TokenApi` descriptografado) e a consulta cai na **rede real** do Toggl — e, se todos
+  falharem, `RelatorioData.ini` é regravado só com `[Geral]` (perde o cache). Em
+  testes/validações use sempre **cópia** de `dados/`, a chave certa e proxy morto.
+  Mudar a chave embutida também rotaciona a criptografia: `.ini` com `enc:` gravados
+  sem a env var precisam ter os tokens reinseridos.
+- **O zip de `/api/dados/download` inclui qualquer arquivo da raiz de `dados/`** (inclusive
+  um `dados.zip` antigo esquecido lá) e a restauração não tem whitelist de nomes.
 - **Padrões do `.gitignore` para pastas devem ser ancorados com `/` na frente**
-  (`/dados/`, `/certificado/`) — sem a barra, o padrão bate em qualquer pasta com esse
-  nome em qualquer profundidade, o que já ignorou silenciosamente código-fonte legítimo
-  dentro de `toggl-report-front/src/features/dados/`.
-- **Nomenclatura "Gant" (um "t" só)** é a correta neste projeto, não "Gant".
-- **Mudar a chave padrão embutida de `CHAVE_CRIPTOGRAFIA` rotaciona a criptografia** —
-  `.ini` com tokens `enc:` gravados sem a env var configurada precisam ser
-  reinseridos após isso.
+  (`/dados/`, `/certificado/`) — sem a barra, o padrão bate em qualquer profundidade, o
+  que já ignorou silenciosamente código-fonte legítimo (`src/features/dados/`).
 - Todo `.ini` novo com dado sensível (token) ou de cache precisa entrar no
   `.gitignore`/`.dockerignore` (raiz + `toggl-report-back/`).
-- **`http.ts` precisa extrair a mensagem de erro de `ProblemDetails`, não só de
-  string simples** — `Results.Problem(mensagem, status)` (ex.: 502 de
-  `/api/usuarios-toggl/tags`) devolve um corpo `{type,title,status,detail}`; sem
-  `extrairMensagemDeProblemDetails` lendo `detail`/`title`, a UI mostra só
-  `resposta.statusText` genérico (ex. "Bad Gateway"), escondendo a causa real.
-- **Tags reais do Toggl** usam o token do usuário `Administrador` em `GET /me`; o campo de workspace da resposta é `default_workspace_id` (snake_case). Contas do Toggl com múltiplos workspaces podem devolver esse campo `null` mesmo com token válido (200) — desde 2026-09-15, `ClienteApiToggl.ObterTagsAsync` cai para `GET /workspaces` e usa o primeiro da lista nesse caso, só falhando se a lista vier vazia. `MapaCoresLista` mantém status/prioridades em grade compacta uniforme (swatch fixo de 24px, nome ao lado). Navegação do wizard de Configurações: ver §4 (4 pontos de navegação por estágio, não um botão único no topo — revertido em 2026-09-15/16).
+- **`features/dados/arquivosIni.ts` é lista manual** dos `.ini` (tipo, explicação, selo de
+  token): ao criar/renomear/remover um `.ini` em `CaminhosDados`, atualize-a junto.
+- **Medir overflow horizontal/mobile** com um iframe de 360–400px (o `resize_window` do
+  Chrome MCP é instável).
+- **Nomenclatura "Gant" (um "t" só)** é a correta neste projeto, mesmo que pedidos digam
+  "Gantt".
+- **Tags reais do Toggl** usam o token do `Administrador` em `GET /me`; o campo de
+  workspace é `default_workspace_id` (snake_case). Contas com vários workspaces podem
+  devolvê-lo `null` com token válido (200) — `ClienteApiToggl.ObterTagsAsync` cai para
+  `GET /workspaces` e usa o primeiro, só falhando se a lista vier vazia.
 
 ---
 

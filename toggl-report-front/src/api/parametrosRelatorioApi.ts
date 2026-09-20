@@ -1,11 +1,11 @@
 import { http } from './http';
 import type { AtualizarParametrosRequest, ParametrosConfiguracao } from './tipos';
 
-export function obterConfiguracao(): Promise<ParametrosConfiguracao> {
+export function obterParametrosRelatorio(): Promise<ParametrosConfiguracao> {
     return http.get<ParametrosConfiguracao>('/api/configuracao');
 }
 
-export function atualizarConfiguracao(
+export function atualizarParametrosRelatorio(
     dados: AtualizarParametrosRequest,
 ): Promise<ParametrosConfiguracao> {
     return http.put<ParametrosConfiguracao>('/api/configuracao', dados);

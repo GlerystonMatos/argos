@@ -26,11 +26,12 @@ export function LoginScreen({ entrando, erro, onEntrar }: LoginScreenProps): Rea
             sx={{
                 display: 'flex',
                 minHeight: '100vh',
+                px: 2,
                 alignItems: 'center',
                 justifyContent: 'center',
                 bgcolor: CORES.navbarFundo,
             }}>
-            <Paper variant="outlined" component="form" onSubmit={aoSubmeter} sx={{ p: 4, width: 360 }}>
+            <Paper variant="outlined" component="form" onSubmit={aoSubmeter} sx={{ p: { xs: 3, sm: 4 }, width: 360, maxWidth: '100%', boxSizing: 'border-box' }}>
                 <Stack spacing={2}>
                     <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', justifyContent: 'center', mb: '12px !important', mt: '-5px !important' }}>
                         <MarcaTogglReport corTexto="text.primary" />

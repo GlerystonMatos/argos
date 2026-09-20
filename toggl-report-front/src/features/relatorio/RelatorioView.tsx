@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { useEffect, useState } from 'react';
+import { useBusca } from '../busca/useBusca';
 import { useRelatorio } from './useRelatorio';
 import { BuscaPanel } from '../busca/BuscaPanel';
 import { Alert, Box, Stack } from '@mui/material';
@@ -32,6 +33,7 @@ export function RelatorioView({
     onVoltar,
     veioDoCache,
 }: RelatorioViewProps): ReactNode {
+    const busca = useBusca();
     const { notificarErro } = useNotificacao();
     const [buscaAberta, setBuscaAberta] = useState(false);
     const { relatorio, carregando, carregar } = useRelatorio();
@@ -46,8 +48,11 @@ export function RelatorioView({
         );
     }, [dataInicio, dataFim]);
 
-    if (buscaAberta) {
-        return <BuscaPanel onFechar={() => setBuscaAberta(false)} />;
+    const resultadoBuscaVisivel = buscaAberta && busca.resultado !== null;
+
+    function alternarBusca(): void {
+        if (buscaAberta) busca.limpar();
+        setBuscaAberta((atual) => !atual);
     }
 
     return (
@@ -55,29 +60,31 @@ export function RelatorioView({
             <CabecalhoView titulo={`Relatório — ${formatarPeriodo(dataInicio, dataFim)}`}>
                 <BotaoComCarregamento
                     startIcon={<SearchIcon />}
-                    onClick={() => setBuscaAberta(true)}
+                    onClick={alternarBusca}
                     disabled={!relatorio}>
-                    Buscar por descrição
+                    {buscaAberta ? 'Fechar busca' : 'Buscar por descrição'}
                 </BotaoComCarregamento>
                 <BotaoComCarregamento
                     startIcon={todosExpandidos ? <UnfoldLessIcon /> : <UnfoldMoreIcon />}
                     onClick={alternarTodos}
-                    disabled={!relatorio || relatorio.usuarios.length === 0}>
+                    disabled={!relatorio || relatorio.usuarios.length === 0 || resultadoBuscaVisivel}>
                     {todosExpandidos ? 'Colapsar tudo' : 'Expandir tudo'}
                 </BotaoComCarregamento>
                 <BotaoComCarregamento onClick={onVoltar}>Voltar</BotaoComCarregamento>
             </CabecalhoView>
 
+            {buscaAberta ? <BuscaPanel busca={busca} /> : undefined}
+
             {veioDoCache ? <AvisoCache /> : undefined}
 
             {carregando && !relatorio ? <EsqueletoCarregando /> : undefined}
 
-            {relatorio && relatorio.usuarios.length === 0 ? (
+            {relatorio && relatorio.usuarios.length === 0 && !resultadoBuscaVisivel ? (
                 <Alert severity="warning">Nenhum usuário do Toggl com dados para este período.</Alert>
             ) : undefined}
 
-            {relatorio ? (
-                <Box>
+            {relatorio && !resultadoBuscaVisivel ? (
+                <Box sx={{ mt: '0.5rem !important' }}>
                     {relatorio.usuarios.map((usuario) => (
                         <RelatorioUsuarioCard
                             key={usuario.nomeExibicao}

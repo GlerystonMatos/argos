@@ -113,20 +113,28 @@ export interface ConfiguracaoJira {
     urlDominio: string;
     email: string;
     tokenMascarado: string;
-    campoEstimativaEsforcoId: string;
-    campoEstimativaEsforcoNome: string;
+    campoEstimativaDesenvolvimentoId: string;
+    campoEstimativaDesenvolvimentoNome: string;
     campoRevisadoPorId: string;
     campoRevisadoPorNome: string;
+    campoEstimativaRevisaoId: string;
+    campoEstimativaRevisaoNome: string;
+    campoEstimativaTestesId: string;
+    campoEstimativaTestesNome: string;
 }
 
 export interface SalvarConfiguracaoJiraRequest {
     urlDominio: string;
     email: string;
     apiToken?: string | null;
-    campoEstimativaEsforcoId: string;
-    campoEstimativaEsforcoNome: string;
+    campoEstimativaDesenvolvimentoId: string;
+    campoEstimativaDesenvolvimentoNome: string;
     campoRevisadoPorId: string;
     campoRevisadoPorNome: string;
+    campoEstimativaRevisaoId: string;
+    campoEstimativaRevisaoNome: string;
+    campoEstimativaTestesId: string;
+    campoEstimativaTestesNome: string;
 }
 
 export interface EntradaMapeamentoJiraToggl {
@@ -224,6 +232,7 @@ export interface Sprint {
     horasPorDia: number;
     dataInicio: string;
     dataFim: string;
+    fechado: boolean;
 }
 
 export interface CriarSprintRequest {
@@ -286,7 +295,6 @@ export interface BlocoCategoriaSprint {
     nomeExibicao: string | null;
     sigla: string | null;
     cor: string | null;
-    estimativaOriginalHoras: number | null;
 }
 
 export interface LinhaTarefaSprint {
@@ -315,6 +323,16 @@ export interface AtualizarResponsabilidadeSprintRequest {
     statusDev: string[];
     statusRev: string[];
     statusQa: string[];
+}
+
+export interface StatusFinalSprint {
+    statusConcluido: string[];
+    statusIgnorado: string[];
+}
+
+export interface AtualizarStatusFinalSprintRequest {
+    statusConcluido: string[];
+    statusIgnorado: string[];
 }
 
 export interface CabecalhoSprint {

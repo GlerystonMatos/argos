@@ -1,194 +1,123 @@
-import { Stack } from '@mui/material';
 import type { ReactNode } from 'react';
-import { useEffect, useState } from 'react';
-import { useCoresJira } from './useCoresJira';
-import { useNotificacao } from '../../hooks/useNotificacao';
-import { ConfiguracoesResumo } from './ConfiguracoesResumo';
-import { ConfiguracoesWizard } from './ConfiguracoesWizard';
-import { useParametrosGant } from '../gant/useParametrosGant';
-import { useConfiguracao } from '../configuracao/useConfiguracao';
-import { useConfiguracaoJira } from '../jira/useConfiguracaoJira';
-import { useMapeamentoJiraToggl } from './useMapeamentoJiraToggl';
-import { useCategoriasSprint } from '../sprint/useCategoriasSprint';
-import { useUsuariosToggl } from '../usuarios-toggl/useUsuariosToggl';
-import { useResponsabilidadeSprint } from '../sprint/useResponsabilidadeSprint';
-import { togglObrigatorioCompleto, configuracaoObrigatoriaCompleta } from './completude';
-import type { Agrupamento, CategoriasSprint, UsuarioTogglResumo, EntradaMapeamentoJiraToggl } from '../../api/tipos';
+import SaveIcon from '@mui/icons-material/Save';
+import type { Secao } from '../../components/MenuLateral';
+import { JiraCamposPanel } from '../jira/JiraCamposPanel';
+import { ConfiguracaoTogglTab } from './ConfiguracaoTogglTab';
+import { CabecalhoView } from '../../components/CabecalhoView';
+import { Card, Tab, Tabs, Stack, CardContent } from '@mui/material';
+import { MapeamentoJiraTogglPanel } from './MapeamentoJiraTogglPanel';
+import { ConfiguracaoJiraCoresTab } from './ConfiguracaoJiraCoresTab';
+import type { AbaConfiguracoes, AbaConfiguracoesHandle } from './abas';
+import { ConfiguracaoJiraStatusTab } from './ConfiguracaoJiraStatusTab';
+import type { ResumoConfiguracao } from '../resumo/useResumoConfiguracao';
+import { PreRequisitosConfiguracoes } from './PreRequisitosConfiguracoes';
+import { EsqueletoCarregando } from '../../components/EsqueletoCarregando';
+import { BotaoComCarregamento } from '../../components/BotaoComCarregamento';
+import { useCallback, useImperativeHandle, useRef, useState, forwardRef } from 'react';
+
+export interface ConfiguracoesViewHandle {
+    salvarAtual: () => Promise<boolean>;
+}
 
 interface ConfiguracoesViewProps {
-    onAlterado?: (completa: boolean) => void;
+    resumo: ResumoConfiguracao;
+    abaInicial?: AbaConfiguracoes;
+    onNavegar: (secao: Secao, aba?: AbaConfiguracoes) => void;
+    onSalvo: () => void;
 }
 
-export function ConfiguracoesView({ onAlterado }: ConfiguracoesViewProps): ReactNode {
-    const { carregar, salvar, carregando, salvando } = useCategoriasSprint();
+export const ConfiguracoesView = forwardRef<ConfiguracoesViewHandle, ConfiguracoesViewProps>(
+    function ConfiguracoesView({ resumo, abaInicial = 'toggl', onNavegar, onSalvo }, ref): ReactNode {
+        const { carregado, carregando, existeUsuarioAdministrador, jiraConfigurado } = resumo;
 
-    const {
-        carregar: carregarResponsabilidade,
-        salvar: salvarResponsabilidade,
-        carregando: carregandoResponsabilidade,
-        salvando: salvandoResponsabilidade,
-    } = useResponsabilidadeSprint();
+        const [aba, setAba] = useState<AbaConfiguracoes>(abaInicial);
+        const [sujo, setSujo] = useState(false);
+        const [salvando, setSalvando] = useState(false);
 
-    const { salvar: salvarConfiguracao, salvando: salvandoConfiguracao } = useConfiguracao();
-    const { salvar: salvarParametrosGant, salvando: salvandoParametrosGant } = useParametrosGant();
-    const { carregar: carregarUsuarios } = useUsuariosToggl();
-    const { configuracao: configuracaoJira, carregar: carregarConfiguracaoJira } = useConfiguracaoJira();
-    const { dados: coresJira, carregar: carregarCoresJira } = useCoresJira();
-    const { carregar: carregarMapeamentoJiraToggl } = useMapeamentoJiraToggl();
-    const { notificarErro } = useNotificacao();
+        const sujoRef = useRef(false);
+        const salvandoRef = useRef(false);
+        const refAba = useRef<AbaConfiguracoesHandle>(null);
 
-    const [modo, setModo] = useState<'resumo' | 'wizard'>('resumo');
+        const marcarAlterado = useCallback((): void => {
+            sujoRef.current = true;
+            setSujo(true);
+        }, []);
 
-    const [agrupamento, setAgrupamento] = useState<Agrupamento>('ambos');
-    const [tagsDetalhadas, setTagsDetalhadas] = useState<string[]>([]);
-    const [dev, setDev] = useState<string[]>([]);
-    const [rev, setRev] = useState<string[]>([]);
-    const [qa, setQa] = useState<string[]>([]);
-    const [corTag, setCorTag] = useState<string>('');
-    const [statusDev, setStatusDev] = useState<string[]>([]);
-    const [statusRev, setStatusRev] = useState<string[]>([]);
-    const [statusQa, setStatusQa] = useState<string[]>([]);
+        async function salvarAtual(): Promise<boolean> {
+            if (salvandoRef.current) return false;
+            if (!sujoRef.current) return true;
 
-    const [usuarios, setUsuarios] = useState<UsuarioTogglResumo[]>([]);
-    const [mapeamentoJira, setMapeamentoJira] = useState<Record<string, EntradaMapeamentoJiraToggl>>({});
-    const [jiraConexaoValida, setJiraConexaoValida] = useState(false);
+            salvandoRef.current = true;
+            setSalvando(true);
+            try {
+                const salvo = (await refAba.current?.salvar()) ?? false;
+                if (salvo) {
+                    sujoRef.current = false;
+                    setSujo(false);
+                    onSalvo();
+                }
+                return salvo;
+            } finally {
+                salvandoRef.current = false;
+                setSalvando(false);
+            }
+        }
 
-    useEffect(() => {
-        let cancelado = false;
+        useImperativeHandle(ref, () => ({ salvarAtual }));
 
-        carregar()
-            .then((dados: CategoriasSprint) => {
-                if (cancelado) return;
-                setAgrupamento(dados.agrupamento);
-                setTagsDetalhadas(dados.tagsDetalhadas);
-                setDev(dados.dev);
-                setRev(dados.rev);
-                setQa(dados.qa);
-                setCorTag(dados.corTag);
-            })
-            .catch((erro: unknown) => {
-                if (!cancelado) notificarErro(erro, 'Não foi possível carregar as configurações');
-            });
+        async function trocarAba(novaAba: AbaConfiguracoes): Promise<void> {
+            if (novaAba === aba) return;
+            if (await salvarAtual()) setAba(novaAba);
+        }
 
-        carregarResponsabilidade()
-            .then((dados) => {
-                if (cancelado) return;
-                setStatusDev(dados.statusDev);
-                setStatusRev(dados.statusRev);
-                setStatusQa(dados.statusQa);
-            })
-            .catch((erro: unknown) => {
-                if (!cancelado) notificarErro(erro, 'Não foi possível carregar o status por responsável');
-            });
+        const liberado = existeUsuarioAdministrador && jiraConfigurado;
 
-        return () => {
-            cancelado = true;
-        };
-    }, []);
+        if (!liberado) {
+            if (!carregado || carregando) return <EsqueletoCarregando />;
 
-    useEffect(() => {
-        if (modo !== 'resumo') return;
-        let cancelado = false;
-
-        carregarUsuarios()
-            .then((lista) => {
-                if (!cancelado) setUsuarios(lista);
-            })
-            .catch((erro: unknown) => {
-                if (!cancelado) notificarErro(erro, 'Não foi possível listar os usuários do Toggl');
-            });
-
-        carregarConfiguracaoJira().catch((erro: unknown) => {
-            if (!cancelado) notificarErro(erro, 'Não foi possível carregar a configuração do Jira');
-        });
-
-        carregarCoresJira().catch((erro: unknown) => {
-            if (!cancelado) notificarErro(erro, 'Não foi possível carregar o mapeamento de cores do Jira');
-        });
-
-        carregarMapeamentoJiraToggl()
-            .then((dados) => {
-                if (!cancelado) setMapeamentoJira(dados.mapeamento);
-            })
-            .catch((erro: unknown) => {
-                if (!cancelado) notificarErro(erro, 'Não foi possível carregar o mapeamento Jira ↔ Toggl');
-            });
-
-        return () => {
-            cancelado = true;
-        };
-    }, [modo]);
-
-    const carregandoTudo = carregando || carregandoResponsabilidade;
-    const existeUsuarioAdministrador = usuarios.some((usuario) => usuario.administrador);
-    const togglCompleto = togglObrigatorioCompleto({ agrupamento, tagsDetalhadas, dev, rev, qa });
-    const completa = configuracaoObrigatoriaCompleta({ agrupamento, tagsDetalhadas, dev, rev, qa, statusDev, statusRev, statusQa });
-    const jiraConfigurado = Boolean(configuracaoJira && configuracaoJira.urlDominio.trim() !== '' && configuracaoJira.email.trim() !== '');
-    const quantidadeCoresStatus = coresJira ? Object.keys(coresJira.coresStatus).length : 0;
-    const quantidadeCoresPrioridade = coresJira ? Object.keys(coresJira.coresPrioridade).length : 0;
-
-    useEffect(() => {
-        if (!carregandoTudo) onAlterado?.(completa);
-    }, [carregandoTudo, completa]);
-
-    return (
-        <Stack spacing={2}>
-            {modo === 'resumo' ? (
-                <ConfiguracoesResumo
-                    usuarios={usuarios}
-                    togglCompleto={togglCompleto}
-                    agrupamento={agrupamento}
-                    tagsDetalhadas={tagsDetalhadas}
-                    dev={dev}
-                    rev={rev}
-                    qa={qa}
-                    statusDev={statusDev}
-                    statusRev={statusRev}
-                    statusQa={statusQa}
-                    jiraConfigurado={jiraConfigurado}
-                    jiraUrlDominio={configuracaoJira?.urlDominio ?? ''}
-                    quantidadeCoresStatus={quantidadeCoresStatus}
-                    quantidadeCoresPrioridade={quantidadeCoresPrioridade}
-                    mapeamentoJira={mapeamentoJira}
-                    aoConfigurar={() => setModo('wizard')} />
-            ) : (
-                <ConfiguracoesWizard
-                    agrupamento={agrupamento}
-                    setAgrupamento={setAgrupamento}
-                    tagsDetalhadas={tagsDetalhadas}
-                    setTagsDetalhadas={setTagsDetalhadas}
-                    dev={dev}
-                    setDev={setDev}
-                    rev={rev}
-                    setRev={setRev}
-                    qa={qa}
-                    setQa={setQa}
-                    corTag={corTag}
-                    setCorTag={setCorTag}
-                    statusDev={statusDev}
-                    setStatusDev={setStatusDev}
-                    statusRev={statusRev}
-                    setStatusRev={setStatusRev}
-                    statusQa={statusQa}
-                    setStatusQa={setStatusQa}
+            return (
+                <PreRequisitosConfiguracoes
                     existeUsuarioAdministrador={existeUsuarioAdministrador}
-                    onUsuariosAlterados={setUsuarios}
-                    jiraConexaoValida={jiraConexaoValida}
-                    setJiraConexaoValida={setJiraConexaoValida}
-                    carregandoTudo={carregandoTudo}
-                    togglCompleto={togglCompleto}
-                    completa={completa}
-                    salvando={salvando}
-                    salvandoConfiguracao={salvandoConfiguracao}
-                    salvandoParametrosGant={salvandoParametrosGant}
-                    salvandoResponsabilidade={salvandoResponsabilidade}
-                    salvarCategorias={salvar}
-                    salvarConfiguracao={salvarConfiguracao}
-                    salvarParametrosGant={salvarParametrosGant}
-                    salvarResponsabilidade={salvarResponsabilidade}
-                    aoConcluir={() => setModo('resumo')}
-                    aoVoltarResumo={() => setModo('resumo')} />
-            )}
-        </Stack>
-    );
-}
+                    jiraConfigurado={jiraConfigurado}
+                    onNavegar={onNavegar} />
+            );
+        }
+
+        return (
+            <Card variant="outlined">
+                <CardContent>
+                    <Stack spacing={2}>
+                        <CabecalhoView titulo="Configurações">
+                            <BotaoComCarregamento
+                                variant="contained"
+                                startIcon={<SaveIcon />}
+                                carregando={salvando}
+                                disabled={!sujo}
+                                onClick={() => void salvarAtual()}>
+                                Salvar
+                            </BotaoComCarregamento>
+                        </CabecalhoView>
+
+                        <Tabs
+                            value={aba}
+                            variant="scrollable"
+                            scrollButtons="auto"
+                            onChange={(_, valor: AbaConfiguracoes) => void trocarAba(valor)}>
+                            <Tab label="Toggl" value="toggl" />
+                            <Tab label="Jira: Campos personalizados" value="jira-campos" />
+                            <Tab label="Jira: Status" value="jira-status" />
+                            <Tab label="Jira: Cores" value="jira-cores" />
+                            <Tab label="Jira ↔ Toggl" value="jira-toggl" />
+                        </Tabs>
+
+                        {aba === 'toggl' ? <ConfiguracaoTogglTab ref={refAba} onAlterado={marcarAlterado} /> : undefined}
+                        {aba === 'jira-campos' ? <JiraCamposPanel ref={refAba} onAlterado={marcarAlterado} /> : undefined}
+                        {aba === 'jira-status' ? <ConfiguracaoJiraStatusTab ref={refAba} onAlterado={marcarAlterado} /> : undefined}
+                        {aba === 'jira-cores' ? <ConfiguracaoJiraCoresTab ref={refAba} onAlterado={marcarAlterado} /> : undefined}
+                        {aba === 'jira-toggl' ? <MapeamentoJiraTogglPanel ref={refAba} onAlterado={marcarAlterado} /> : undefined}
+                    </Stack>
+                </CardContent>
+            </Card>
+        );
+    },
+);

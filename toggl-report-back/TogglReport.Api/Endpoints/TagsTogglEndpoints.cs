@@ -6,7 +6,7 @@ namespace RelatorioToggl.Api.Endpoints;
 
 public static class TagsTogglEndpoints
 {
-    public static void MapTagsTogglEndpoints(this WebApplication app, string caminhoConfiguracao, string caminhoUsuarios, string caminhoCacheTagsToggl)
+    public static void MapTagsTogglEndpoints(this WebApplication app, CaminhosDados caminhos)
     {
         RouteGroupBuilder grupo = app.MapGroup("/api/usuarios-toggl").WithTags("Usuários do Toggl");
 
@@ -14,13 +14,12 @@ public static class TagsTogglEndpoints
         {
             if (!forcarAtualizacao)
             {
-                CacheTagsToggl? cacheExistente = CarregadorCacheTagsTogglIni.Carregar(caminhoCacheTagsToggl);
+                CacheTagsToggl? cacheExistente = CarregadorCacheTagsTogglIni.Carregar(caminhos.TogglTagsCache);
                 if (cacheExistente is not null)
                     return Results.Ok(new TagsTogglResponse(cacheExistente.Tags, true, cacheExistente.AtualizadoEm));
             }
 
-            ConfiguracaoApp configuracao = CarregadorConfiguracaoIni.Carregar(caminhoConfiguracao, caminhoUsuarios) ?? new ConfiguracaoApp();
-            ConfiguracaoUsuarioToggl? administrador = configuracao.Usuarios.FirstOrDefault(u => u.Administrador);
+            ConfiguracaoUsuarioToggl? administrador = CarregadorUsuariosTogglIni.Carregar(caminhos.Usuarios).FirstOrDefault(u => u.Administrador);
             if (administrador is null)
                 return Results.BadRequest("Nenhum usuário do Toggl está marcado como Administrador. Marque um usuário como Administrador para listar as tags.");
 
@@ -33,7 +32,7 @@ public static class TagsTogglEndpoints
             CacheTagsToggl cache = new() { Tags = resultado.Dados!, AtualizadoEm = atualizadoEm };
 
             IResult? erroPersistencia = TratamentoIo.Executar(
-                () => CarregadorCacheTagsTogglIni.Salvar(caminhoCacheTagsToggl, cache),
+                () => CarregadorCacheTagsTogglIni.Salvar(caminhos.TogglTagsCache, cache),
                 "Não foi possível salvar o cache de tags do Toggl.");
             if (erroPersistencia is not null)
                 return erroPersistencia;

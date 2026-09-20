@@ -1,53 +1,63 @@
-using System.Text;
-using System.Text.Json;
-
 namespace RelatorioToggl.Configuracao;
 
 public static class CarregadorConfiguracaoCoresJiraIni
 {
-    private const string SecaoGeral = "Geral";
-
-    private static readonly JsonSerializerOptions OpcoesJson = new() { PropertyNameCaseInsensitive = true };
+    private const string PrefixoSecaoPrioridade = "Prioridade:";
 
     public static ConfiguracaoCoresJira Padrao() => new();
 
-    public static ConfiguracaoCoresJira Carregar(string caminho)
+    public static ConfiguracaoCoresJira Carregar(CaminhosDados caminhos) => new()
     {
+        CoresStatus = ArquivoStatusJiraIni.Carregar(caminhos.JiraStatus).Cores,
+        CoresPrioridade = CarregarPrioridades(caminhos.JiraPrioridades)
+    };
+
+    public static void Salvar(CaminhosDados caminhos, ConfiguracaoCoresJira configuracao)
+    {
+        ArquivoStatusJiraIni.Atualizar(caminhos.JiraStatus, estado =>
+        {
+            estado.Cores = new Dictionary<string, string>(configuracao.CoresStatus, StringComparer.OrdinalIgnoreCase);
+        });
+
+        SalvarPrioridades(caminhos.JiraPrioridades, configuracao.CoresPrioridade);
+    }
+
+    private static Dictionary<string, string> CarregarPrioridades(string caminho)
+    {
+        Dictionary<string, string> cores = new(StringComparer.OrdinalIgnoreCase);
         if (!File.Exists(caminho))
-            return Padrao();
+            return cores;
 
-        Dictionary<string, Dictionary<string, string>> secoes = AnalisadorIni.Analisar(caminho);
-        if (!secoes.TryGetValue(SecaoGeral, out Dictionary<string, string>? geral))
-            return Padrao();
-
-        return new ConfiguracaoCoresJira
+        foreach ((string nomeSecao, Dictionary<string, string> valores) in AnalisadorIni.Analisar(caminho))
         {
-            CoresStatus = LerMapa(geral, "CoresStatus"),
-            CoresPrioridade = LerMapa(geral, "CoresPrioridade")
-        };
+            if (!nomeSecao.StartsWith(PrefixoSecaoPrioridade, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            string prioridade = nomeSecao.Substring(PrefixoSecaoPrioridade.Length).Trim();
+            string? cor = AnalisadorIni.ObterOuNulo(valores, "Cor");
+            if (prioridade.Length > 0 && cor is not null)
+                cores[prioridade] = cor;
+        }
+
+        return cores;
     }
 
-    public static void Salvar(string caminho, ConfiguracaoCoresJira configuracao)
+    private static void SalvarPrioridades(string caminho, Dictionary<string, string> cores)
     {
-        StringBuilder sb = new();
+        Dictionary<string, Dictionary<string, string>> secoes = new(StringComparer.OrdinalIgnoreCase);
 
-        sb.AppendLine($"[{SecaoGeral}]");
-        sb.AppendLine($"CoresStatus={JsonSerializer.Serialize(configuracao.CoresStatus, OpcoesJson)}");
-        sb.AppendLine($"CoresPrioridade={JsonSerializer.Serialize(configuracao.CoresPrioridade, OpcoesJson)}");
-
-        AnalisadorIni.Escrever(caminho, sb.ToString());
-    }
-
-    private static Dictionary<string, string> LerMapa(Dictionary<string, string> secao, string chave)
-    {
-        string json = AnalisadorIni.ObterOuPadrao(secao, chave, "{}");
-        try
+        foreach ((string prioridade, string cor) in cores)
         {
-            return JsonSerializer.Deserialize<Dictionary<string, string>>(json, OpcoesJson) ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            string nome = prioridade.Trim();
+            if (nome.Length == 0)
+                continue;
+
+            secoes[$"{PrefixoSecaoPrioridade}{nome}"] = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Cor"] = cor
+            };
         }
-        catch (JsonException)
-        {
-            return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        }
+
+        AnalisadorIni.EscreverSecoes(caminho, secoes);
     }
 }

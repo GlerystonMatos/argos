@@ -15,10 +15,11 @@ export function IconeStatus({ completo }: { completo: boolean }): ReactNode {
 interface BlocoResumoProps {
     icone: ReactNode;
     titulo: string;
+    acao?: ReactNode;
     children: ReactNode;
 }
 
-export function BlocoResumo({ icone, titulo, children }: BlocoResumoProps): ReactNode {
+export function BlocoResumo({ icone, titulo, acao, children }: BlocoResumoProps): ReactNode {
     return (
         <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start' }}>
             <Stack sx={{ pt: '2px' }}>{icone}</Stack>
@@ -26,6 +27,7 @@ export function BlocoResumo({ icone, titulo, children }: BlocoResumoProps): Reac
                 <Typography variant="subtitle2">{titulo}</Typography>
                 {children}
             </Stack>
+            {acao ? <Stack sx={{ flexShrink: 0 }}>{acao}</Stack> : undefined}
         </Stack>
     );
 }

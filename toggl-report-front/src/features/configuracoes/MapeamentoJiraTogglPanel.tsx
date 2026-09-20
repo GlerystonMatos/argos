@@ -1,3 +1,4 @@
+import { tema } from '../../theme';
 import type { ReactNode } from 'react';
 import EditIcon from '@mui/icons-material/Edit';
 import RefreshIcon from '@mui/icons-material/Refresh';
@@ -7,7 +8,14 @@ import { listarUsuariosJira } from '../../api/jiraListasApi';
 import { useMapeamentoJiraToggl } from './useMapeamentoJiraToggl';
 import type { EntradaMapeamentoJiraToggl } from '../../api/tipos';
 import { useUsuariosToggl } from '../usuarios-toggl/useUsuariosToggl';
-import { Fragment, useEffect, useState, forwardRef, useImperativeHandle } from 'react';
+
+import {
+    Fragment,
+    useState,
+    useEffect,
+    forwardRef,
+    useImperativeHandle,
+} from 'react';
 
 import {
     Box,
@@ -27,8 +35,10 @@ import {
     Typography,
     IconButton,
     DialogTitle,
+    useMediaQuery,
     DialogContent,
     DialogActions,
+    TableContainer,
 } from '@mui/material';
 
 export interface MapeamentoJiraTogglPanelHandle {
@@ -39,11 +49,15 @@ const SEM_MAPEAMENTO = '';
 const ENTRADA_VAZIA: EntradaMapeamentoJiraToggl = { chaveToggl: null, sigla: null, cor: null };
 const COR_PADRAO_EXCLUSIVO = '#9E9E9E';
 
-export const MapeamentoJiraTogglPanel = forwardRef<MapeamentoJiraTogglPanelHandle, object>(
-    function MapeamentoJiraTogglPanel(_props, ref): ReactNode {
+interface MapeamentoJiraTogglPanelProps {
+    onAlterado?: () => void;
+}
+
+export const MapeamentoJiraTogglPanel = forwardRef<MapeamentoJiraTogglPanelHandle, MapeamentoJiraTogglPanelProps>(
+    function MapeamentoJiraTogglPanel({ onAlterado }, ref): ReactNode {
         const { dados: mapeamentoSalvo, carregando, salvando, carregar, salvar } = useMapeamentoJiraToggl();
         const { usuariosToggl, carregar: carregarUsuariosToggl } = useUsuariosToggl();
-        const { notificarErro } = useNotificacao();
+        const { notificarErro, notificarSucesso } = useNotificacao();
 
         const [nomesJira, setNomesJira] = useState<string[]>([]);
         const [carregandoLista, setCarregandoLista] = useState(false);
@@ -52,6 +66,7 @@ export const MapeamentoJiraTogglPanel = forwardRef<MapeamentoJiraTogglPanelHandl
         const [nomeEmEdicao, setNomeEmEdicao] = useState<string | null>(null);
         const [siglaEdicao, setSiglaEdicao] = useState('');
         const [corEdicao, setCorEdicao] = useState(COR_PADRAO_EXCLUSIVO);
+        const duasColunas = useMediaQuery(tema.breakpoints.up('lg'));
 
         useEffect(() => {
             carregar()
@@ -83,6 +98,7 @@ export const MapeamentoJiraTogglPanel = forwardRef<MapeamentoJiraTogglPanelHandl
             try {
                 const atualizado = await salvar({ mapeamento });
                 setMapeamento(atualizado.mapeamento);
+                notificarSucesso('Mapeamento Jira ↔ Toggl salvo.');
                 return true;
             } catch (erro) {
                 notificarErro(erro, 'Não foi possível salvar o mapeamento Jira ↔ Toggl');
@@ -110,6 +126,7 @@ export const MapeamentoJiraTogglPanel = forwardRef<MapeamentoJiraTogglPanelHandl
                 }
                 return { ...atual, [nome]: { chaveToggl: null, sigla: siglaLimpa, cor: corEdicao } };
             });
+            onAlterado?.();
             setNomeEmEdicao(null);
         }
 
@@ -126,7 +143,7 @@ export const MapeamentoJiraTogglPanel = forwardRef<MapeamentoJiraTogglPanelHandl
                         </span>
                     </Tooltip>
                     <Alert severity="info" sx={{ py: 0, flexGrow: 1 }}>
-                        Associa cada usuário do Jira (Responsável/Revisado por) a um usuário cadastrado em "Usuários do Toggl" — ou, para
+                        Associa cada usuário do Jira (Responsável/Revisado por) a um usuário cadastrado na seção Toggl — ou, para
                         quem não tem conta no Toggl, define Sigla/Cor próprias para exibir o badge no Sprint.
                     </Alert>
                 </Stack>
@@ -139,7 +156,7 @@ export const MapeamentoJiraTogglPanel = forwardRef<MapeamentoJiraTogglPanelHandl
                     </Typography>
                 ) : (
                     (() => {
-                        const metade = Math.ceil(nomesJira.length / 2);
+                        const metade = duasColunas ? Math.ceil(nomesJira.length / 2) : nomesJira.length;
                         const colunaEsquerda = nomesJira.slice(0, metade);
                         const colunaDireita = nomesJira.slice(metade);
 
@@ -163,7 +180,7 @@ export const MapeamentoJiraTogglPanel = forwardRef<MapeamentoJiraTogglPanelHandl
                                 <>
                                     <TableCell sx={comBordaEsquerda ? { borderLeft: 1, borderColor: 'divider' } : undefined}>
                                         <Tooltip title={nome}>
-                                            <Typography variant="body2" noWrap sx={{ maxWidth: '9rem' }}>
+                                            <Typography variant="body2" noWrap sx={{ maxWidth: { xs: '5.5rem', sm: '9rem' } }}>
                                                 {nome}
                                             </Typography>
                                         </Tooltip>
@@ -172,11 +189,12 @@ export const MapeamentoJiraTogglPanel = forwardRef<MapeamentoJiraTogglPanelHandl
                                         <Select
                                             size="small"
                                             fullWidth
-                                            sx={{ '& .MuiSelect-select': { py: 0.5 } }}
+                                            sx={{ maxWidth: { xs: 150, sm: 'none' }, '& .MuiSelect-select': { py: 0.5 } }}
                                             value={chaveSelecionada}
                                             disabled={carregando || salvando}
                                             onChange={(evento) => {
                                                 const valor = evento.target.value;
+                                                onAlterado?.();
                                                 setMapeamento((atual) => {
                                                     if (valor === SEM_MAPEAMENTO) {
                                                         const atualEntrada = atual[nome];
@@ -234,26 +252,34 @@ export const MapeamentoJiraTogglPanel = forwardRef<MapeamentoJiraTogglPanelHandl
                         }
 
                         return (
-                            <Table size="small" sx={{ '& td, & th': { py: 0.5 } }}>
-                                <TableHead>
-                                    <TableRow>
-                                        <TableCell sx={{ width: '15%' }}>Usuário do Jira</TableCell>
-                                        <TableCell sx={{ width: '22%' }}>Usuário do Toggl</TableCell>
-                                        <TableCell sx={{ width: '13%' }}>Sigla / Cor</TableCell>
-                                        <TableCell sx={{ width: '15%', borderLeft: 1, borderColor: 'divider' }}>Usuário do Jira</TableCell>
-                                        <TableCell sx={{ width: '22%' }}>Usuário do Toggl</TableCell>
-                                        <TableCell sx={{ width: '13%' }}>Sigla / Cor</TableCell>
-                                    </TableRow>
-                                </TableHead>
-                                <TableBody>
-                                    {colunaEsquerda.map((nome, indice) => (
-                                        <TableRow key={nome}>
-                                            <Fragment key="esquerda">{celulasUsuario(nome, false)}</Fragment>
-                                            <Fragment key="direita">{celulasUsuario(colunaDireita[indice], true)}</Fragment>
+                            <TableContainer sx={{ overflowX: 'auto' }}>
+                                <Table size="small" sx={{ '& td, & th': { py: 0.5, px: { xs: 0.75, sm: 2 } } }}>
+                                    <TableHead>
+                                        <TableRow>
+                                            <TableCell sx={{ width: duasColunas ? '15%' : undefined }}>Usuário do Jira</TableCell>
+                                            <TableCell sx={{ width: duasColunas ? '22%' : undefined, minWidth: { xs: 0, sm: 140 } }}>Usuário do Toggl</TableCell>
+                                            <TableCell sx={{ width: duasColunas ? '13%' : undefined }}>Sigla / Cor</TableCell>
+                                            {duasColunas ? (
+                                                <>
+                                                    <TableCell sx={{ width: '15%', borderLeft: 1, borderColor: 'divider' }}>Usuário do Jira</TableCell>
+                                                    <TableCell sx={{ width: '22%', minWidth: 140 }}>Usuário do Toggl</TableCell>
+                                                    <TableCell sx={{ width: '13%' }}>Sigla / Cor</TableCell>
+                                                </>
+                                            ) : undefined}
                                         </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
+                                    </TableHead>
+                                    <TableBody>
+                                        {colunaEsquerda.map((nome, indice) => (
+                                            <TableRow key={nome}>
+                                                <Fragment key="esquerda">{celulasUsuario(nome, false)}</Fragment>
+                                                {duasColunas ? (
+                                                    <Fragment key="direita">{celulasUsuario(colunaDireita[indice], true)}</Fragment>
+                                                ) : undefined}
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            </TableContainer>
                         );
                     })()
                 )}
