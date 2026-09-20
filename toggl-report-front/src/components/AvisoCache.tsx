@@ -4,8 +4,8 @@ import CloudDoneIcon from '@mui/icons-material/CloudDone';
 
 export function AvisoCache(): ReactNode {
     return (
-        <Alert icon={<CloudDoneIcon fontSize="inherit" />} severity="info">
-            Resultado servido do cache local (mesmo período e usuários do Toggl de uma consulta anterior).
+        <Alert icon={<CloudDoneIcon fontSize="inherit" />} severity="info" sx={{ mt: '0.5rem !important' }}>
+            Resultado servido do cache local
         </Alert>
     );
 }

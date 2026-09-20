@@ -6,21 +6,20 @@ namespace RelatorioToggl.Api.Endpoints;
 
 public static class ConsultasEndpoints
 {
-    public static void MapConsultasEndpoints(this WebApplication app, string caminhoConfiguracao, string caminhoUsuarios, string caminhoCache)
+    public static void MapConsultasEndpoints(this WebApplication app, CaminhosDados caminhos)
     {
         app.MapPost("/api/consultas", async (ConsultarRequest request) =>
         {
             if (!ValidacaoDatas.Tenta(request.DataInicio, request.DataFim, out DateTime inicio, out DateTime fim, out IResult? erroDatas))
                 return erroDatas!;
 
-            ConfiguracaoApp? configuracao = CarregadorConfiguracaoIni.Carregar(caminhoConfiguracao, caminhoUsuarios);
-            if (configuracao is not null)
-                configuracao.Usuarios = configuracao.Usuarios.Where(u => u.Selecionado).ToList();
+            ConfiguracaoApp configuracao = CarregadorConfiguracaoIni.Carregar(caminhos);
+            configuracao.Usuarios = configuracao.Usuarios.Where(u => u.Selecionado).ToList();
 
-            if (configuracao is null || configuracao.Usuarios.Count == 0)
+            if (configuracao.Usuarios.Count == 0)
                 return Results.BadRequest("Nenhum usuário do Toggl selecionado. Cadastre e selecione ao menos um em POST /api/usuarios-toggl.");
 
-            CacheConsulta? cache = ServicoConsulta.CarregarCacheSeExistente(caminhoCache);
+            CacheConsulta? cache = ServicoConsulta.CarregarCacheSeExistente(caminhos.RelatorioData);
 
             if (!request.ForcarConsultaApi && cache is not null && ServicoConsulta.CacheCorrespondeAosParametros(cache, configuracao, inicio, fim))
             {
@@ -40,11 +39,11 @@ public static class ConsultasEndpoints
 
             List<EventoConsultaUsuarioToggl> eventos = new();
             ResultadoConsulta resultado = await ServicoConsulta.ConsultarUsuariosAsync(configuracao, inicio, fim, cacheParaFallback, eventos.Add);
-            ServicoConsulta.SalvarCache(caminhoCache, configuracao, inicio, fim, resultado.RegistrosPorUsuario, resultado.OrdemUsuarios);
+            ServicoConsulta.SalvarCache(caminhos.RelatorioData, configuracao, inicio, fim, resultado.RegistrosPorUsuario, resultado.OrdemUsuarios);
 
             return Results.Ok(new ConsultarResponse(request.DataInicio, request.DataFim, VeioDoCache: false, eventos));
         })
         .WithTags("Consultas")
-        .WithSummary("Consulta o Toggl respeitando o cache e o limite de 30 req/hora; salva o retorno cru em TogglRelatorioData.ini");
+        .WithSummary("Consulta o Toggl respeitando o cache e o limite de 30 req/hora; salva o retorno cru em RelatorioData.ini");
     }
 }

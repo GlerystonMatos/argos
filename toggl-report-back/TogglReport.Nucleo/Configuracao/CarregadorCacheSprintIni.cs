@@ -1,41 +1,37 @@
 using RelatorioToggl.Toggl;
-using System.Text;
 using System.Text.Json;
 
 namespace RelatorioToggl.Configuracao;
 
 public static class CarregadorCacheSprintIni
 {
-    private const string PrefixoSprint = "Sprint:";
+    private const string SecaoSprint = "Sprint";
 
-    private const string MarcadorUsuario = ":Usuario:";
+    private const string PrefixoSecaoUsuario = "Usuario:";
 
     private static readonly JsonSerializerOptions OpcoesJson = new() { PropertyNameCaseInsensitive = true };
 
-    public static CacheConsulta? Carregar(string caminho, string chaveSprint)
+    public static CacheConsulta? Carregar(string caminho)
     {
         if (!File.Exists(caminho))
             return null;
 
         Dictionary<string, Dictionary<string, string>> secoes = AnalisadorIni.Analisar(caminho);
-
-        string nomeSecaoPeriodo = $"{PrefixoSprint}{chaveSprint}";
-        if (!secoes.TryGetValue(nomeSecaoPeriodo, out Dictionary<string, string>? periodo))
+        if (!secoes.TryGetValue(SecaoSprint, out Dictionary<string, string>? sprint))
             return null;
 
         CacheConsulta cache = new()
         {
-            DataInicio = AnalisadorIni.ObterOuPadrao(periodo, "DataInicio", ""),
-            DataFim = AnalisadorIni.ObterOuPadrao(periodo, "DataFim", "")
+            DataInicio = AnalisadorIni.ObterOuPadrao(sprint, "DataInicio", ""),
+            DataFim = AnalisadorIni.ObterOuPadrao(sprint, "DataFim", "")
         };
 
-        string prefixoUsuarios = $"{PrefixoSprint}{chaveSprint}{MarcadorUsuario}";
         foreach ((string nomeSecao, Dictionary<string, string> valores) in secoes)
         {
-            if (!nomeSecao.StartsWith(prefixoUsuarios, StringComparison.OrdinalIgnoreCase))
+            if (!nomeSecao.StartsWith(PrefixoSecaoUsuario, StringComparison.OrdinalIgnoreCase))
                 continue;
 
-            string chaveUsuario = nomeSecao.Substring(prefixoUsuarios.Length);
+            string chaveUsuario = nomeSecao.Substring(PrefixoSecaoUsuario.Length);
             cache.Usuarios.Add(new UsuarioTogglCacheado
             {
                 Chave = chaveUsuario,
@@ -48,11 +44,11 @@ public static class CarregadorCacheSprintIni
         return cache;
     }
 
-    public static CacheConsulta? CarregarSeExistente(string caminho, string chaveSprint)
+    public static CacheConsulta? CarregarSeExistente(string caminho)
     {
         try
         {
-            return Carregar(caminho, chaveSprint);
+            return Carregar(caminho);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -60,54 +56,35 @@ public static class CarregadorCacheSprintIni
         }
     }
 
-    public static void Salvar(string caminho, string chaveSprint, CacheConsulta cache)
+    public static void Salvar(string caminho, CacheConsulta cache)
     {
-        Dictionary<string, Dictionary<string, string>> secoes = File.Exists(caminho)
-            ? AnalisadorIni.Analisar(caminho)
-            : new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase);
-
-        string prefixoSprintCompleto = $"{PrefixoSprint}{chaveSprint}";
-        string prefixoUsuarios = $"{prefixoSprintCompleto}{MarcadorUsuario}";
-
-        List<string> secoesParaRemover = secoes.Keys
-            .Where(nome => nome.Equals(prefixoSprintCompleto, StringComparison.OrdinalIgnoreCase)
-                || nome.StartsWith(prefixoUsuarios, StringComparison.OrdinalIgnoreCase))
-            .ToList();
-        foreach (string nome in secoesParaRemover)
-            secoes.Remove(nome);
-
-        StringBuilder sb = new();
-
-        foreach ((string nomeSecao, Dictionary<string, string> valores) in secoes)
+        Dictionary<string, Dictionary<string, string>> secoes = new(StringComparer.OrdinalIgnoreCase)
         {
-            sb.AppendLine($"[{nomeSecao}]");
-            foreach ((string chave, string valor) in valores)
-                sb.AppendLine($"{chave}={valor}");
-            sb.AppendLine();
-        }
-
-        sb.AppendLine($"[{prefixoSprintCompleto}]");
-        sb.AppendLine($"DataInicio={cache.DataInicio}");
-        sb.AppendLine($"DataFim={cache.DataFim}");
-        sb.AppendLine();
+            [SecaoSprint] = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["DataInicio"] = cache.DataInicio,
+                ["DataFim"] = cache.DataFim
+            }
+        };
 
         foreach (UsuarioTogglCacheado usuario in cache.Usuarios)
         {
-            sb.AppendLine($"[{prefixoUsuarios}{usuario.Chave}]");
-            sb.AppendLine($"NomeExibicao={usuario.NomeExibicao}");
-            sb.AppendLine($"TokenApi={CriptografiaToken.Criptografar(usuario.TokenApi)}");
-            sb.AppendLine($"Registros={JsonSerializer.Serialize(usuario.Registros, OpcoesJson)}");
-            sb.AppendLine();
+            secoes[$"{PrefixoSecaoUsuario}{usuario.Chave}"] = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["NomeExibicao"] = usuario.NomeExibicao,
+                ["TokenApi"] = CriptografiaToken.Criptografar(usuario.TokenApi),
+                ["Registros"] = JsonSerializer.Serialize(usuario.Registros, OpcoesJson)
+            };
         }
 
-        AnalisadorIni.Escrever(caminho, sb.ToString());
+        AnalisadorIni.EscreverSecoes(caminho, secoes);
     }
 
-    public static void SalvarSeConseguir(string caminho, string chaveSprint, CacheConsulta cache)
+    public static void SalvarSeConseguir(string caminho, CacheConsulta cache)
     {
         try
         {
-            Salvar(caminho, chaveSprint, cache);
+            Salvar(caminho, cache);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {

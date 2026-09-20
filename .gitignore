@@ -9,16 +9,3 @@ dados.rar
 
 .env
 !.env.example
-
-ConfiguracoesGerais.ini
-TogglUsuarios.ini
-TogglTagsCache.ini
-JiraListasCache.ini
-JiraCores.ini
-RelatorioParametros.ini
-RelatorioData.ini
-GantParametros.ini
-GantData.ini
-Sprints.ini
-SprintData.ini
-JiraSprintData.ini

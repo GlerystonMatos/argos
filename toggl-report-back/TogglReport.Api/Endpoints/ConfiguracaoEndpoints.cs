@@ -5,13 +5,13 @@ namespace RelatorioToggl.Api.Endpoints;
 
 public static class ConfiguracaoEndpoints
 {
-    public static void MapConfiguracaoEndpoints(this WebApplication app, string caminhoConfiguracao, string caminhoUsuarios)
+    public static void MapConfiguracaoEndpoints(this WebApplication app, CaminhosDados caminhos)
     {
         RouteGroupBuilder grupo = app.MapGroup("/api/configuracao").WithTags("Configuração");
 
         grupo.MapGet("/", () =>
         {
-            ConfiguracaoApp configuracao = CarregadorConfiguracaoIni.Carregar(caminhoConfiguracao, caminhoUsuarios) ?? new ConfiguracaoApp();
+            ConfiguracaoApp configuracao = CarregadorConfiguracaoIni.Carregar(caminhos);
             return Results.Ok(new ParametrosConfiguracaoDto(
                 configuracao.AgrupamentoPadrao, configuracao.TagsDetalhadas, configuracao.DataInicioAnterior, configuracao.DataFimAnterior));
         })
@@ -22,29 +22,35 @@ public static class ConfiguracaoEndpoints
             if (!Agrupamento.EhValido(request.Agrupamento))
                 return Results.BadRequest("Agrupamento deve ser 'descricao', 'tag' ou 'ambos'.");
 
-            ConfiguracaoApp configuracao = CarregadorConfiguracaoIni.Carregar(caminhoConfiguracao, caminhoUsuarios) ?? new ConfiguracaoApp();
+            PeriodoSalvo periodo = CarregadorPeriodoIni.Carregar(caminhos.RelatorioParametros);
+            bool atualizarPeriodo = !string.IsNullOrWhiteSpace(request.DataInicio) || !string.IsNullOrWhiteSpace(request.DataFim);
 
-            if (!string.IsNullOrWhiteSpace(request.DataInicio) || !string.IsNullOrWhiteSpace(request.DataFim))
+            if (atualizarPeriodo)
             {
                 if (!ValidacaoDatas.Tenta(request.DataInicio ?? "", request.DataFim ?? "", out DateTime inicio, out DateTime fim, out IResult? erroDatas))
                     return erroDatas!;
 
-                configuracao.DataInicioAnterior = inicio.ToString("yyyy-MM-dd");
-                configuracao.DataFimAnterior = fim.ToString("yyyy-MM-dd");
+                periodo.DataInicio = inicio.ToString("yyyy-MM-dd");
+                periodo.DataFim = fim.ToString("yyyy-MM-dd");
             }
 
-            configuracao.AgrupamentoPadrao = request.Agrupamento;
-            configuracao.TagsDetalhadas = request.TagsDetalhadas;
+            ConfiguracaoCategoriasSprint toggl = CarregadorConfiguracaoCategoriasSprintIni.Carregar(caminhos);
+            toggl.Agrupamento = request.Agrupamento;
+            toggl.TagsDetalhadas = NormalizacaoListas.Normalizar(request.TagsDetalhadas);
 
             IResult? erroPersistencia = TratamentoIo.Executar(
-                () => CarregadorConfiguracaoIni.Salvar(caminhoConfiguracao, caminhoUsuarios, configuracao),
+                () =>
+                {
+                    CarregadorConfiguracaoCategoriasSprintIni.Salvar(caminhos, toggl);
+                    if (atualizarPeriodo)
+                        CarregadorPeriodoIni.Salvar(caminhos.RelatorioParametros, periodo);
+                },
                 "Não foi possível salvar a configuração.");
             if (erroPersistencia is not null)
                 return erroPersistencia;
 
-            return Results.Ok(new ParametrosConfiguracaoDto(
-                configuracao.AgrupamentoPadrao, configuracao.TagsDetalhadas, configuracao.DataInicioAnterior, configuracao.DataFimAnterior));
+            return Results.Ok(new ParametrosConfiguracaoDto(toggl.Agrupamento, toggl.TagsDetalhadas, periodo.DataInicio, periodo.DataFim));
         })
-        .WithSummary("Atualiza agrupamento, tags detalhadas e período; preserva os usuários do Toggl já cadastrados");
+        .WithSummary("Atualiza agrupamento, tags detalhadas (fonte única em TogglConfiguracao.ini/TogglTags.ini, compartilhada com Gant e Sprint) e período; datas omitidas preservam as salvas");
     }
 }

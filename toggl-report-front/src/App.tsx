@@ -1,119 +1,121 @@
 import { tema } from './theme';
 import type { ReactNode } from 'react';
-import { useEffect, useState } from 'react';
+import MenuIcon from '@mui/icons-material/Menu';
 import { useAuth } from './features/auth/useAuth';
+import { RodapeApp } from './components/RodapeApp';
+import { useEffect, useRef, useState } from 'react';
 import { GantView } from './features/gant/GantView';
 import LogoutIcon from '@mui/icons-material/Logout';
+import type { Secao } from './components/MenuLateral';
+import { MenuLateral } from './components/MenuLateral';
+import { DadosView } from './features/dados/DadosView';
+import { ResumoView } from './features/resumo/ResumoView';
 import { LoginScreen } from './features/auth/LoginScreen';
 import { SprintView } from './features/sprint/SprintView';
 import { limparTachados } from './features/sprint/tachados';
 import { ProvedorNotificacao } from './hooks/useNotificacao';
-import { useConsulta } from './features/consulta/useConsulta';
+import type { Sprint, ConsultarResponse } from './api/tipos';
 import { SprintsPanel } from './features/sprint/SprintsPanel';
 import { MarcaTogglReport } from './components/MarcaTogglReport';
-import { ConsultaPanel } from './features/consulta/ConsultaPanel';
-import { useConsultaGant } from './features/gant/useConsultaGant';
-import { RodapeDownloads } from './features/dados/RodapeDownloads';
+import { JiraConexaoView } from './features/jira/JiraConexaoView';
 import { RelatorioView } from './features/relatorio/RelatorioView';
+import type { AbaConfiguracoes } from './features/configuracoes/abas';
 import { useConsultaSprint } from './features/sprint/useConsultaSprint';
-import { ParametrosForm } from './features/configuracao/ParametrosForm';
 import { ParametrosGantForm } from './features/gant/ParametrosGantForm';
 import { BotaoComCarregamento } from './components/BotaoComCarregamento';
 import { ImportarDadosDialog } from './features/dados/ImportarDadosDialog';
-import { useCategoriasSprint } from './features/sprint/useCategoriasSprint';
-import { useUsuariosToggl } from './features/usuarios-toggl/useUsuariosToggl';
+import { lerMenuVisivel, gravarMenuVisivel } from './utils/preferenciasMenu';
+import { ConsultaSprintDialog } from './features/sprint/ConsultaSprintDialog';
 import { ConfiguracoesView } from './features/configuracoes/ConfiguracoesView';
-import { useResponsabilidadeSprint } from './features/sprint/useResponsabilidadeSprint';
-
-import type {
-    Sprint,
-    ParametrosGant,
-    CategoriasSprint,
-    ConsultarResponse,
-    ParametrosConfiguracao,
-    ResponsabilidadeSprint,
-} from './api/tipos';
+import { UsuariosTogglView } from './features/usuarios-toggl/UsuariosTogglView';
+import { useResumoConfiguracao } from './features/resumo/useResumoConfiguracao';
+import { ParametrosRelatorioForm } from './features/relatorio/ParametrosRelatorioForm';
+import type { ConfiguracoesViewHandle } from './features/configuracoes/ConfiguracoesView';
 
 import {
-    Tab,
     Box,
-    Step,
-    Tabs,
     Alert,
     AppBar,
     Tooltip,
-    Stepper,
     Toolbar,
     Container,
-    StepButton,
     IconButton,
     CssBaseline,
+    useMediaQuery,
     ThemeProvider,
 } from '@mui/material';
 
-const ETAPAS_RELATORIO = ['Parâmetros', 'Consulta', 'Relatório'] as const;
-const ETAPAS_GANT = ['Parâmetros', 'Consulta', 'Gant'] as const;
-const ETAPAS_SPRINT = ['Sprints', 'Consultar', 'Acompanhamento'] as const;
+type VisaoConsulta = 'parametros' | 'resultado';
 
-type Modo = 'configuracoes' | 'relatorio' | 'gant' | 'sprint';
+type VisaoSprint = 'sprints' | 'acompanhamento';
+
+const SECOES_DE_CONFIGURACAO: readonly Secao[] = ['resumo', 'toggl', 'jira', 'configuracoes'];
 
 interface AppInternoProps {
     onSair: () => void;
 }
 
 function AppInterno({ onSair }: AppInternoProps): ReactNode {
-    const [modo, setModo] = useState<Modo>('configuracoes');
-    const [configuracaoCompleta, setConfiguracaoCompleta] = useState(false);
+    const [secao, setSecao] = useState<Secao>('resumo');
+    const [menuMobileAberto, setMenuMobileAberto] = useState(false);
+    const [menuVisivel, setMenuVisivel] = useState(() => lerMenuVisivel());
+    const telaGrande = useMediaQuery(tema.breakpoints.up('md'));
+    const [abaConfiguracoesInicial, setAbaConfiguracoesInicial] = useState<AbaConfiguracoes | undefined>(undefined);
 
-    const [etapaAtiva, setEtapaAtiva] = useState(0);
+    const [visaoRelatorio, setVisaoRelatorio] = useState<VisaoConsulta>('parametros');
     const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
-    const [configuracao, setConfiguracao] = useState<ParametrosConfiguracao | null>(null);
     const [consultaConcluida, setConsultaConcluida] = useState<ConsultarResponse | null>(null);
 
-    const [etapaGantAtiva, setEtapaGantAtiva] = useState(0);
-    const [configuracaoGant, setConfiguracaoGant] = useState<ParametrosGant | null>(null);
+    const [visaoGant, setVisaoGant] = useState<VisaoConsulta>('parametros');
     const [consultaGantConcluida, setConsultaGantConcluida] = useState<ConsultarResponse | null>(null);
 
-    const [etapaSprintAtiva, setEtapaSprintAtiva] = useState(0);
+    const [visaoSprint, setVisaoSprint] = useState<VisaoSprint>('sprints');
+    const [consultaSprintAberta, setConsultaSprintAberta] = useState(false);
     const [sprintSelecionado, setSprintSelecionado] = useState<Sprint | null>(null);
-    const [parametrosSprint, setParametrosSprint] = useState<CategoriasSprint | null>(null);
-    const [responsabilidadeSprint, setResponsabilidadeSprint] = useState<ResponsabilidadeSprint | null>(null);
     const [consultaSprintConcluida, setConsultaSprintConcluida] = useState<ConsultarResponse | null>(null);
 
-    const consulta = useConsulta();
-    const consultaGant = useConsultaGant();
     const consultaSprint = useConsultaSprint(sprintSelecionado?.chave ?? '');
 
-    const { usuariosToggl: usuariosToggl, carregando: carregandoUsuariosToggl, carregar: carregarUsuariosToggl } = useUsuariosToggl();
-    const semUsuariosToggl = !carregandoUsuariosToggl && usuariosToggl.length === 0;
-    const { carregar: carregarCategoriasSprint } = useCategoriasSprint();
-    const { carregar: carregarResponsabilidadeSprint } = useResponsabilidadeSprint();
+    const resumo = useResumoConfiguracao();
+    const { recarregar, configuracaoCompleta, semUsuarios: semUsuariosToggl } = resumo;
 
-    const [, setVerificacaoInicialFeita] = useState(false);
+    const refConfiguracoes = useRef<ConfiguracoesViewHandle>(null);
+    const primeiroUsoVerificado = useRef(false);
     const [dialogoImportarAberto, setDialogoImportarAberto] = useState(false);
 
     useEffect(() => {
-        carregarUsuariosToggl()
+        recarregar()
             .then((lista) => {
-                setVerificacaoInicialFeita((jaFeita) => {
-                    if (!jaFeita && lista.length === 0) {
-                        setDialogoImportarAberto(true);
-                    }
-                    return true;
-                });
+                if (lista === null || primeiroUsoVerificado.current) return;
+                primeiroUsoVerificado.current = true;
+                if (lista.length === 0) setDialogoImportarAberto(true);
             })
             .catch(() => { });
-    }, [etapaAtiva, etapaGantAtiva, etapaSprintAtiva, modo, carregarUsuariosToggl]);
+    }, [secao, recarregar]);
 
-    useEffect(() => {
-        if (modo !== 'sprint' || etapaSprintAtiva !== 2) return;
-        Promise.all([carregarCategoriasSprint(), carregarResponsabilidadeSprint()])
-            .then(([config, responsabilidade]) => {
-                setParametrosSprint(config);
-                setResponsabilidadeSprint(responsabilidade);
-            })
-            .catch(() => { });
-    }, [modo, etapaSprintAtiva, carregarCategoriasSprint, carregarResponsabilidadeSprint]);
+    async function navegarComSalvamento(destino: Secao, aba?: AbaConfiguracoes): Promise<void> {
+        if (secao === 'configuracoes') {
+            const salvo = (await refConfiguracoes.current?.salvarAtual()) ?? true;
+            if (!salvo) return;
+        }
+        setSecao(destino);
+        setAbaConfiguracoesInicial(aba);
+    }
+
+    function alternarMenu(): void {
+        if (!telaGrande) {
+            setMenuMobileAberto(true);
+            return;
+        }
+        const proximo = !menuVisivel;
+        setMenuVisivel(proximo);
+        gravarMenuVisivel(proximo);
+    }
+
+    function navegarPara(destino: Secao, aba?: AbaConfiguracoes): void {
+        setMenuMobileAberto(false);
+        void navegarComSalvamento(destino, aba);
+    }
 
     function alternarSelecao(chave: string): void {
         setSelecionados((atual) => {
@@ -127,29 +129,41 @@ function AppInterno({ onSair }: AppInternoProps): ReactNode {
         });
     }
 
-    const etapaLiberada = (indice: number): boolean => {
-        if (indice <= 0) return true;
-        if (indice === 1) return configuracao !== null;
-        return configuracao !== null && consultaConcluida !== null;
-    };
+    function escolherSprint(sprint: Sprint): void {
+        if (sprint.chave !== sprintSelecionado?.chave) {
+            setConsultaSprintConcluida(null);
+            setVisaoSprint('sprints');
+        }
+        setSprintSelecionado(sprint);
+    }
 
-    const etapaGantLiberada = (indice: number): boolean => {
-        if (indice <= 0) return true;
-        if (indice === 1) return configuracaoGant !== null;
-        return configuracaoGant !== null && consultaGantConcluida !== null;
-    };
-
-    const etapaSprintLiberada = (indice: number): boolean => {
-        if (indice <= 0) return true;
-        if (indice === 1) return sprintSelecionado !== null && parametrosSprint !== null;
-        return sprintSelecionado !== null && parametrosSprint !== null && consultaSprintConcluida !== null;
-    };
+    function concluirConsultaSprint(resposta: ConsultarResponse): void {
+        if (!sprintSelecionado) return;
+        setConsultaSprintConcluida(resposta);
+        if (!resposta.veioDoCache) {
+            limparTachados(sprintSelecionado.chave);
+        }
+        setConsultaSprintAberta(false);
+        setVisaoSprint('acompanhamento');
+    }
 
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
             <AppBar position="static" color="primary" enableColorOnDark>
                 <Toolbar>
-                    <MarcaTogglReport sxImagem={{ mr: 1.5 }} sxTitulo={{ flexGrow: 1 }} />
+                    <Tooltip title={telaGrande ? (menuVisivel ? 'Esconder menu' : 'Exibir menu') : 'Abrir menu'}>
+                        <IconButton
+                            color="inherit"
+                            edge="start"
+                            aria-label={telaGrande ? (menuVisivel ? 'esconder menu' : 'exibir menu') : 'abrir menu'}
+                            aria-expanded={telaGrande ? menuVisivel : menuMobileAberto}
+                            onClick={alternarMenu}
+                            sx={{ mr: 1 }}>
+                            <MenuIcon />
+                        </IconButton>
+                    </Tooltip>
+                    <MarcaTogglReport sxImagem={{ mr: 1.5 }} onClick={() => navegarPara('resumo')} />
+                    <Box sx={{ flexGrow: 1 }} />
                     <Tooltip title="Sair">
                         <IconButton color="inherit" onClick={onSair} aria-label="sair">
                             <LogoutIcon />
@@ -158,218 +172,144 @@ function AppInterno({ onSair }: AppInternoProps): ReactNode {
                 </Toolbar>
             </AppBar>
 
-            <Container maxWidth={false} sx={{ flexGrow: 1, py: 1, px: { xs: 1, sm: 2 } }}>
-                <Tabs
-                    value={modo}
-                    onChange={(_, valor: Modo) => setModo(valor)}
-                    sx={{ mb: 1 }}>
-                    <Tab label="Configurações" value="configuracoes" />
-                    <Tab label="Relatório" value="relatorio" disabled={!configuracaoCompleta} />
-                    <Tab label="Gant" value="gant" disabled={!configuracaoCompleta} />
-                    <Tab label="Sprint" value="sprint" disabled={!configuracaoCompleta} />
-                </Tabs>
+            <Box sx={{ display: 'flex', flexGrow: 1 }}>
+                <MenuLateral
+                    secaoAtiva={secao}
+                    configuracaoCompleta={configuracaoCompleta}
+                    mobileAberto={menuMobileAberto}
+                    visivelDesktop={menuVisivel}
+                    onSelecionar={navegarPara}
+                    onFecharMobile={() => setMenuMobileAberto(false)} />
 
-                {semUsuariosToggl ? (
-                    <Alert
-                        severity="warning"
-                        sx={{ mb: 2 }}
-                        action={
-                            <BotaoComCarregamento
-                                size="small"
-                                onClick={() => setModo('configuracoes')}>
-                                Cadastrar usuário do Toggl
-                            </BotaoComCarregamento>
-                        }>
-                        Nenhum usuário do Toggl cadastrado. Cadastre pelo menos um antes de continuar.
-                    </Alert>
-                ) : undefined}
-
-                {!configuracaoCompleta && modo !== 'configuracoes' ? (
-                    <Alert
-                        severity="warning"
-                        sx={{ mb: 2 }}
-                        action={
-                            <BotaoComCarregamento size="small" onClick={() => setModo('configuracoes')}>
-                                Ir para Configurações
-                            </BotaoComCarregamento>
-                        }>
-                        Complete as configurações obrigatórias para liberar Relatório, Gant e Sprint.
-                    </Alert>
-                ) : undefined}
-
-                {modo === 'configuracoes' ? (
-                    <ConfiguracoesView onAlterado={setConfiguracaoCompleta} />
-                ) : undefined}
-
-                {modo === 'relatorio' && configuracaoCompleta ? (
-                    <>
-                        <Stepper nonLinear activeStep={etapaAtiva} sx={{ mb: 3 }}>
-                            {ETAPAS_RELATORIO.map((rotulo, indice) => (
-                                <Step key={rotulo} completed={etapaLiberada(indice + 1) && indice < etapaAtiva}>
-                                    <StepButton disabled={!etapaLiberada(indice)} onClick={() => setEtapaAtiva(indice)}>
-                                        {rotulo}
-                                    </StepButton>
-                                </Step>
-                            ))}
-                        </Stepper>
-
-                        {etapaAtiva === 0 ? (
-                            <ParametrosForm
-                                semUsuarios={semUsuariosToggl}
-                                onSalvo={(config) => {
-                                    setConfiguracao(config);
-                                    setEtapaAtiva(1);
-                                }} />
+                <Box component="main" sx={{ display: 'flex', flexDirection: 'column', flexGrow: 1, minWidth: 0 }}>
+                    <Container maxWidth={false} sx={{ py: 1, px: { xs: 1, sm: 2 } }}>
+                        {semUsuariosToggl && secao !== 'toggl' ? (
+                            <Alert
+                                severity="warning"
+                                sx={{ mb: 2 }}
+                                action={
+                                    <BotaoComCarregamento
+                                        size="small"
+                                        onClick={() => navegarPara('toggl')}>
+                                        Cadastrar usuário do Toggl
+                                    </BotaoComCarregamento>
+                                }>
+                                Nenhum usuário do Toggl cadastrado. Cadastre pelo menos um antes de continuar.
+                            </Alert>
                         ) : undefined}
 
-                        {etapaAtiva === 1 && configuracao?.dataInicio && configuracao.dataFim ? (
-                            <ConsultaPanel
-                                dataInicio={configuracao.dataInicio}
-                                dataFim={configuracao.dataFim}
-                                agrupamento={configuracao.agrupamento}
-                                tagsDetalhadas={configuracao.tagsDetalhadas}
-                                resultado={consulta.resultado}
-                                consultando={consulta.consultando}
-                                executar={consulta.executar}
-                                onVoltar={() => setEtapaAtiva(0)}
-                                onConcluida={(resposta) => {
-                                    setConsultaConcluida(resposta);
-                                    if (!resposta.veioDoCache) {
-                                        setSelecionados(new Set());
-                                    }
-                                    setEtapaAtiva(2);
-                                }} />
+                        {resumo.carregado && !configuracaoCompleta && !SECOES_DE_CONFIGURACAO.includes(secao) ? (
+                            <Alert
+                                severity="warning"
+                                sx={{ mb: 2 }}
+                                action={
+                                    <BotaoComCarregamento size="small" onClick={() => navegarPara('configuracoes')}>
+                                        Ir para Configurações
+                                    </BotaoComCarregamento>
+                                }>
+                                Complete as configurações obrigatórias para liberar Relatório, Gant e Sprint.
+                            </Alert>
                         ) : undefined}
 
-                        {etapaAtiva === 2 && consultaConcluida ? (
-                            <RelatorioView
-                                dataInicio={consultaConcluida.dataInicio}
-                                dataFim={consultaConcluida.dataFim}
-                                selecionados={selecionados}
-                                onAlternarSelecao={alternarSelecao}
-                                onVoltar={() => setEtapaAtiva(1)}
-                                veioDoCache={consultaConcluida.veioDoCache} />
-                        ) : undefined}
-                    </>
-                ) : undefined}
-
-                {modo === 'gant' && configuracaoCompleta ? (
-                    <>
-                        <Stepper nonLinear activeStep={etapaGantAtiva} sx={{ mb: 3 }}>
-                            {ETAPAS_GANT.map((rotulo, indice) => (
-                                <Step key={rotulo} completed={etapaGantLiberada(indice + 1) && indice < etapaGantAtiva}>
-                                    <StepButton disabled={!etapaGantLiberada(indice)} onClick={() => setEtapaGantAtiva(indice)}>
-                                        {rotulo}
-                                    </StepButton>
-                                </Step>
-                            ))}
-                        </Stepper>
-
-                        {etapaGantAtiva === 0 ? (
-                            <ParametrosGantForm
-                                semUsuarios={semUsuariosToggl}
-                                onSalvo={(params) => {
-                                    setConfiguracaoGant(params);
-                                    setEtapaGantAtiva(1);
-                                }} />
+                        {secao === 'toggl' ? (
+                            <UsuariosTogglView onUsuariosAlterados={() => { void recarregar(); }} />
                         ) : undefined}
 
-                        {etapaGantAtiva === 1 && configuracaoGant?.dataInicio && configuracaoGant.dataFim ? (
-                            <ConsultaPanel
-                                dataInicio={configuracaoGant.dataInicio}
-                                dataFim={configuracaoGant.dataFim}
-                                agrupamento={configuracaoGant.agrupamento}
-                                tagsDetalhadas={configuracaoGant.tagsSelecionadas}
-                                resultado={consultaGant.resultado}
-                                consultando={consultaGant.consultando}
-                                executar={consultaGant.executar}
-                                onVoltar={() => setEtapaGantAtiva(0)}
-                                onConcluida={(resposta) => {
-                                    setConsultaGantConcluida(resposta);
-                                    setEtapaGantAtiva(2);
-                                }} />
+                        {secao === 'jira' ? <JiraConexaoView onSalvo={() => { void recarregar(); }} /> : undefined}
+
+                        {secao === 'resumo' ? <ResumoView resumo={resumo} onNavegar={navegarPara} /> : undefined}
+
+                        {secao === 'configuracoes' ? (
+                            <ConfiguracoesView
+                                ref={refConfiguracoes}
+                                resumo={resumo}
+                                abaInicial={abaConfiguracoesInicial}
+                                onNavegar={navegarPara}
+                                onSalvo={() => { void recarregar(); }} />
                         ) : undefined}
 
-                        {etapaGantAtiva === 2 && consultaGantConcluida ? (
-                            <GantView
-                                dataInicio={consultaGantConcluida.dataInicio}
-                                dataFim={consultaGantConcluida.dataFim}
-                                onVoltar={() => setEtapaGantAtiva(1)}
-                                veioDoCache={consultaGantConcluida.veioDoCache} />
-                        ) : undefined}
-                    </>
-                ) : undefined}
+                        {secao === 'dados' ? <DadosView /> : undefined}
 
-                {modo === 'sprint' && configuracaoCompleta ? (
-                    <>
-                        <Stepper nonLinear activeStep={etapaSprintAtiva} sx={{ mb: 3 }}>
-                            {ETAPAS_SPRINT.map((rotulo, indice) => (
-                                <Step key={rotulo} completed={etapaSprintLiberada(indice + 1) && indice < etapaSprintAtiva}>
-                                    <StepButton disabled={!etapaSprintLiberada(indice)} onClick={() => setEtapaSprintAtiva(indice)}>
-                                        {rotulo}
-                                    </StepButton>
-                                </Step>
-                            ))}
-                        </Stepper>
-
-                        {etapaSprintAtiva === 0 ? (
-                            <SprintsPanel
-                                sprintSelecionadoChave={sprintSelecionado?.chave ?? null}
-                                onSelecionar={setSprintSelecionado}
-                                semUsuarios={semUsuariosToggl}
-                                onContinuar={() => {
-                                    Promise.all([carregarCategoriasSprint(), carregarResponsabilidadeSprint()])
-                                        .then(([config, responsabilidade]) => {
-                                            setParametrosSprint(config);
-                                            setResponsabilidadeSprint(responsabilidade);
-                                            setEtapaSprintAtiva(1);
-                                        })
-                                        .catch(() => { });
-                                }} />
+                        {secao === 'relatorio' && configuracaoCompleta ? (
+                            visaoRelatorio === 'resultado' && consultaConcluida ? (
+                                <RelatorioView
+                                    dataInicio={consultaConcluida.dataInicio}
+                                    dataFim={consultaConcluida.dataFim}
+                                    selecionados={selecionados}
+                                    onAlternarSelecao={alternarSelecao}
+                                    onVoltar={() => setVisaoRelatorio('parametros')}
+                                    veioDoCache={consultaConcluida.veioDoCache} />
+                            ) : (
+                                <ParametrosRelatorioForm
+                                    semUsuarios={semUsuariosToggl}
+                                    onConcluida={(resposta) => {
+                                        setConsultaConcluida(resposta);
+                                        if (!resposta.veioDoCache) {
+                                            setSelecionados(new Set());
+                                        }
+                                        setVisaoRelatorio('resultado');
+                                    }} />
+                            )
                         ) : undefined}
 
-                        {etapaSprintAtiva === 1 && sprintSelecionado && parametrosSprint ? (
-                            <ConsultaPanel
-                                dataInicio={sprintSelecionado.dataInicio}
-                                dataFim={sprintSelecionado.dataFim}
-                                agrupamento={parametrosSprint.agrupamento}
-                                tagsDetalhadas={parametrosSprint.tagsDetalhadas}
-                                categorias={{ dev: parametrosSprint.dev, rev: parametrosSprint.rev, qa: parametrosSprint.qa }}
-                                responsabilidade={responsabilidadeSprint ?? undefined}
-                                origemConsulta={{ valor: consultaSprint.origem, onChange: consultaSprint.setOrigem }}
-                                resultado={consultaSprint.resultado}
-                                consultando={consultaSprint.consultando}
-                                executar={consultaSprint.executar}
-                                onVoltar={() => setEtapaSprintAtiva(0)}
-                                onConcluida={(resposta) => {
-                                    setConsultaSprintConcluida(resposta);
-                                    if (!resposta.veioDoCache && sprintSelecionado) {
-                                        limparTachados(sprintSelecionado.chave);
-                                    }
-                                    setEtapaSprintAtiva(2);
-                                }} />
+                        {secao === 'gant' && configuracaoCompleta ? (
+                            visaoGant === 'resultado' && consultaGantConcluida ? (
+                                <GantView
+                                    dataInicio={consultaGantConcluida.dataInicio}
+                                    dataFim={consultaGantConcluida.dataFim}
+                                    onVoltar={() => setVisaoGant('parametros')}
+                                    veioDoCache={consultaGantConcluida.veioDoCache} />
+                            ) : (
+                                <ParametrosGantForm
+                                    semUsuarios={semUsuariosToggl}
+                                    onConcluida={(resposta) => {
+                                        setConsultaGantConcluida(resposta);
+                                        setVisaoGant('resultado');
+                                    }} />
+                            )
                         ) : undefined}
 
-                        {etapaSprintAtiva === 2 && sprintSelecionado && consultaSprintConcluida ? (
-                            <SprintView
-                                chaveSprint={sprintSelecionado.chave}
-                                veioDoCache={consultaSprintConcluida.veioDoCache}
-                                categorias={parametrosSprint}
-                                responsabilidade={responsabilidadeSprint}
-                                onVoltar={() => setEtapaSprintAtiva(1)} />
-                        ) : undefined}
-                    </>
-                ) : undefined}
+                        {secao === 'sprint' && configuracaoCompleta ? (
+                            <>
+                                {visaoSprint === 'acompanhamento' && sprintSelecionado && consultaSprintConcluida ? (
+                                    <SprintView
+                                        chaveSprint={sprintSelecionado.chave}
+                                        veioDoCache={consultaSprintConcluida.veioDoCache}
+                                        categorias={resumo.categorias}
+                                        responsabilidade={resumo.responsabilidade}
+                                        fechado={sprintSelecionado.fechado}
+                                        onFechado={setSprintSelecionado}
+                                        onVoltar={() => setVisaoSprint('sprints')} />
+                                ) : (
+                                    <SprintsPanel
+                                        sprintSelecionadoChave={sprintSelecionado?.chave ?? null}
+                                        onSelecionar={escolherSprint}
+                                        onConfirmarSelecao={() => setConsultaSprintAberta(true)}
+                                        semUsuarios={semUsuariosToggl} />
+                                )}
 
-                <RodapeDownloads />
-            </Container>
+                                {sprintSelecionado ? (
+                                    <ConsultaSprintDialog
+                                        aberto={consultaSprintAberta}
+                                        sprint={sprintSelecionado}
+                                        consulta={consultaSprint}
+                                        onCancelar={() => setConsultaSprintAberta(false)}
+                                        onConcluida={concluirConsultaSprint} />
+                                ) : undefined}
+                            </>
+                        ) : undefined}
+                    </Container>
+
+                    <RodapeApp />
+                </Box>
+            </Box>
 
             <ImportarDadosDialog
                 aberto={dialogoImportarAberto}
                 onFechar={() => setDialogoImportarAberto(false)}
                 onImportado={() => {
                     setDialogoImportarAberto(false);
-                    carregarUsuariosToggl().catch(() => { });
+                    void recarregar();
                 }} />
         </Box>
     );

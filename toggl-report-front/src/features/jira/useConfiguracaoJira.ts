@@ -17,20 +17,46 @@ import type {
     SalvarConfiguracaoJiraRequest,
 } from '../../api/tipos';
 
+export type AlteracoesConfiguracaoJira = Partial<SalvarConfiguracaoJiraRequest>;
+
 interface ResultadoUseConfiguracaoJira {
     configuracao: ConfiguracaoJira | null;
     carregando: boolean;
     salvando: boolean;
     carregar: () => Promise<ConfiguracaoJira>;
-    salvar: (dados: SalvarConfiguracaoJiraRequest) => Promise<ConfiguracaoJira>;
+    salvarParcial: (alteracoes: AlteracoesConfiguracaoJira) => Promise<ConfiguracaoJira>;
     testarConexao: (dados: TestarConexaoJiraRequest) => Promise<TestarConexaoJiraResponse>;
     listarCampos: (dados?: ObterCamposJiraRequest) => Promise<CampoJira[]>;
+}
+
+function requestDaConfiguracaoSalva(atual: ConfiguracaoJira): SalvarConfiguracaoJiraRequest {
+    return {
+        urlDominio: atual.urlDominio,
+        email: atual.email,
+        apiToken: null,
+        campoEstimativaDesenvolvimentoId: atual.campoEstimativaDesenvolvimentoId,
+        campoEstimativaDesenvolvimentoNome: atual.campoEstimativaDesenvolvimentoNome,
+        campoRevisadoPorId: atual.campoRevisadoPorId,
+        campoRevisadoPorNome: atual.campoRevisadoPorNome,
+        campoEstimativaRevisaoId: atual.campoEstimativaRevisaoId,
+        campoEstimativaRevisaoNome: atual.campoEstimativaRevisaoNome,
+        campoEstimativaTestesId: atual.campoEstimativaTestesId,
+        campoEstimativaTestesNome: atual.campoEstimativaTestesNome,
+    };
 }
 
 export function useConfiguracaoJira(): ResultadoUseConfiguracaoJira {
     const { dados, carregando, salvando, carregar, salvar } = useRecursoEditavel<ConfiguracaoJira, SalvarConfiguracaoJiraRequest>(
         obterConfiguracaoJira,
         salvarConfiguracaoJira,
+    );
+
+    const salvarParcial = useCallback(
+        async (alteracoes: AlteracoesConfiguracaoJira): Promise<ConfiguracaoJira> => {
+            const atual = await obterConfiguracaoJira();
+            return salvar({ ...requestDaConfiguracaoSalva(atual), ...alteracoes });
+        },
+        [salvar],
     );
 
     const testarConexao = useCallback(
@@ -43,5 +69,5 @@ export function useConfiguracaoJira(): ResultadoUseConfiguracaoJira {
         [],
     );
 
-    return { configuracao: dados, carregando, salvando, carregar, salvar, testarConexao, listarCampos };
+    return { configuracao: dados, carregando, salvando, carregar, salvarParcial, testarConexao, listarCampos };
 }

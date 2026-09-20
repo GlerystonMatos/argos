@@ -1,18 +1,13 @@
 import type { ReactNode } from 'react';
+import { useConsultaGant } from './useConsultaGant';
 import { useParametrosGant } from './useParametrosGant';
-import { useNotificacao } from '../../hooks/useNotificacao';
+import type { AtualizarParametrosGantRequest } from '../../api/tipos';
 import { ParametrosFormBase } from '../../components/ParametrosFormBase';
-import type { DadosParametros } from '../../components/ParametrosFormBase';
-import type { AtualizarParametrosGantRequest, ParametrosGant } from '../../api/tipos';
+import type { DadosParametros, ParametrosConsultaProps } from '../../components/ParametrosFormBase';
 
-interface ParametrosGantFormProps {
-    onSalvo: (params: ParametrosGant) => void;
-    semUsuarios: boolean;
-}
-
-export function ParametrosGantForm({ onSalvo, semUsuarios }: ParametrosGantFormProps): ReactNode {
-    const { carregar, salvar, salvando } = useParametrosGant();
-    const { notificarErro, notificarSucesso } = useNotificacao();
+export function ParametrosGantForm({ semUsuarios, onConcluida }: ParametrosConsultaProps): ReactNode {
+    const { carregar, salvar } = useParametrosGant();
+    const { executar } = useConsultaGant();
 
     function paraRequisicao({ agrupamento, tags, dataInicio, dataFim }: DadosParametros): AtualizarParametrosGantRequest {
         return { dataInicio, dataFim, tagsSelecionadas: tags, agrupamento };
@@ -22,7 +17,6 @@ export function ParametrosGantForm({ onSalvo, semUsuarios }: ParametrosGantFormP
         <ParametrosFormBase
             titulo="Parâmetros do Gant"
             semUsuarios={semUsuarios}
-            salvando={salvando}
             mensagemErroCarregar="Não foi possível carregar os parâmetros do Gant salvos"
             carregarInicial={async () => {
                 const dados = await carregar();
@@ -33,15 +27,8 @@ export function ParametrosGantForm({ onSalvo, semUsuarios }: ParametrosGantFormP
                     dataFim: dados.dataFim,
                 };
             }}
-            aoConfirmar={async (dados) => {
-                try {
-                    const atualizado = await salvar(paraRequisicao(dados));
-                    notificarSucesso('Parâmetros salvos.');
-                    onSalvo(atualizado);
-                } catch (erro) {
-                    notificarErro(erro, 'Não foi possível salvar os parâmetros');
-                }
-            }}
-            aoContinuar={(dados) => onSalvo(paraRequisicao(dados))} />
+            salvarParametros={(dados) => salvar(paraRequisicao(dados))}
+            executarConsulta={executar}
+            onConcluida={onConcluida} />
     );
 }

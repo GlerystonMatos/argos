@@ -2,7 +2,15 @@ namespace RelatorioToggl.Configuracao;
 
 public static class CarregadorConfiguracaoCategoriasSprintIni
 {
-    private const string SecaoConsolidada = "SprintCategorias";
+    private const string SecaoGeral = "Geral";
+
+    private const string PrefixoSecaoTag = "Tag:";
+
+    private const string CategoriaDev = "Dev";
+
+    private const string CategoriaRev = "Rev";
+
+    private const string CategoriaQa = "Qa";
 
     public static ConfiguracaoCategoriasSprint Padrao() => new()
     {
@@ -14,56 +22,86 @@ public static class CarregadorConfiguracaoCategoriasSprintIni
         CorTag = ""
     };
 
-    public static ConfiguracaoCategoriasSprint Carregar(string caminhoConsolidado)
+    public static ConfiguracaoCategoriasSprint Carregar(CaminhosDados caminhos)
     {
-        if (File.Exists(caminhoConsolidado))
+        ConfiguracaoCategoriasSprint configuracao = Padrao();
+
+        if (File.Exists(caminhos.TogglConfiguracao))
         {
-            Dictionary<string, Dictionary<string, string>> secoes = AnalisadorIni.Analisar(caminhoConsolidado);
-            if (secoes.TryGetValue(SecaoConsolidada, out Dictionary<string, string>? secao))
-                return Mapear(secao);
+            Dictionary<string, Dictionary<string, string>> secoes = AnalisadorIni.Analisar(caminhos.TogglConfiguracao);
+            if (secoes.TryGetValue(SecaoGeral, out Dictionary<string, string>? geral))
+            {
+                configuracao.Agrupamento = AnalisadorIni.ObterOuPadrao(geral, "Agrupamento", configuracao.Agrupamento);
+                configuracao.CorTag = AnalisadorIni.ObterOuPadrao(geral, "CorTag", configuracao.CorTag);
+            }
         }
 
-        return Padrao();
+        if (File.Exists(caminhos.TogglTags))
+            CarregarTags(AnalisadorIni.Analisar(caminhos.TogglTags), configuracao);
+
+        return configuracao;
     }
 
-    public static void Salvar(string caminhoConsolidado, ConfiguracaoCategoriasSprint configuracao)
+    public static void Salvar(CaminhosDados caminhos, ConfiguracaoCategoriasSprint configuracao)
     {
-        Dictionary<string, Dictionary<string, string>> secoes = File.Exists(caminhoConsolidado)
-            ? AnalisadorIni.Analisar(caminhoConsolidado)
-            : new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase);
-
-        secoes[SecaoConsolidada] = ParaValores(configuracao);
-
-        AnalisadorIni.EscreverSecoes(caminhoConsolidado, secoes);
-    }
-
-    private static ConfiguracaoCategoriasSprint Mapear(Dictionary<string, string> valores)
-    {
-        ConfiguracaoCategoriasSprint padrao = Padrao();
-        return new ConfiguracaoCategoriasSprint
+        Dictionary<string, Dictionary<string, string>> secoesGeral = new(StringComparer.OrdinalIgnoreCase)
         {
-            Dev = LerLista(valores, "Dev", padrao.Dev),
-            Rev = LerLista(valores, "Rev", padrao.Rev),
-            Qa = LerLista(valores, "Qa", padrao.Qa),
-            Agrupamento = AnalisadorIni.ObterOuPadrao(valores, "Agrupamento", padrao.Agrupamento),
-            TagsDetalhadas = LerLista(valores, "TagsDetalhadas", padrao.TagsDetalhadas),
-            CorTag = AnalisadorIni.ObterOuPadrao(valores, "CorTag", padrao.CorTag)
+            [SecaoGeral] = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Agrupamento"] = configuracao.Agrupamento,
+                ["CorTag"] = configuracao.CorTag
+            }
         };
+
+        AnalisadorIni.EscreverSecoes(caminhos.TogglConfiguracao, secoesGeral);
+        AnalisadorIni.EscreverSecoes(caminhos.TogglTags, MontarSecoesTags(configuracao));
     }
 
-    private static Dictionary<string, string> ParaValores(ConfiguracaoCategoriasSprint configuracao) => new(StringComparer.OrdinalIgnoreCase)
+    private static void CarregarTags(Dictionary<string, Dictionary<string, string>> secoes, ConfiguracaoCategoriasSprint configuracao)
     {
-        ["Dev"] = string.Join(",", configuracao.Dev),
-        ["Rev"] = string.Join(",", configuracao.Rev),
-        ["Qa"] = string.Join(",", configuracao.Qa),
-        ["Agrupamento"] = configuracao.Agrupamento,
-        ["TagsDetalhadas"] = string.Join(",", configuracao.TagsDetalhadas),
-        ["CorTag"] = configuracao.CorTag
-    };
+        foreach ((string nomeSecao, Dictionary<string, string> valores) in secoes)
+        {
+            if (!nomeSecao.StartsWith(PrefixoSecaoTag, StringComparison.OrdinalIgnoreCase))
+                continue;
 
-    private static List<string> LerLista(Dictionary<string, string> secao, string chave, List<string> valorPadrao)
+            string tag = nomeSecao.Substring(PrefixoSecaoTag.Length).Trim();
+            if (tag.Length == 0)
+                continue;
+
+            List<string> categorias = AnalisadorIni.DividirLista(AnalisadorIni.ObterOuNulo(valores, "Categorias"));
+            if (MesclaOrdenada.Contem(categorias, CategoriaDev))
+                configuracao.Dev.Add(tag);
+            if (MesclaOrdenada.Contem(categorias, CategoriaRev))
+                configuracao.Rev.Add(tag);
+            if (MesclaOrdenada.Contem(categorias, CategoriaQa))
+                configuracao.Qa.Add(tag);
+
+            if (bool.TryParse(AnalisadorIni.ObterOuPadrao(valores, "Detalhar", "False"), out bool detalhar) && detalhar)
+                configuracao.TagsDetalhadas.Add(tag);
+        }
+    }
+
+    private static Dictionary<string, Dictionary<string, string>> MontarSecoesTags(ConfiguracaoCategoriasSprint configuracao)
     {
-        string? valor = AnalisadorIni.ObterOuNulo(secao, chave);
-        return valor is null ? valorPadrao : AnalisadorIni.DividirLista(valor);
+        Dictionary<string, Dictionary<string, string>> secoes = new(StringComparer.OrdinalIgnoreCase);
+
+        foreach (string tag in MesclaOrdenada.Unir(configuracao.Dev, configuracao.Rev, configuracao.Qa, configuracao.TagsDetalhadas))
+        {
+            List<string> categorias = new();
+            if (MesclaOrdenada.Contem(configuracao.Dev, tag))
+                categorias.Add(CategoriaDev);
+            if (MesclaOrdenada.Contem(configuracao.Rev, tag))
+                categorias.Add(CategoriaRev);
+            if (MesclaOrdenada.Contem(configuracao.Qa, tag))
+                categorias.Add(CategoriaQa);
+
+            secoes[$"{PrefixoSecaoTag}{tag}"] = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Categorias"] = string.Join(",", categorias),
+                ["Detalhar"] = MesclaOrdenada.Contem(configuracao.TagsDetalhadas, tag).ToString()
+            };
+        }
+
+        return secoes;
     }
 }

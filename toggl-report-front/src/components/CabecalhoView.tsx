@@ -12,7 +12,7 @@ export function CabecalhoView({ titulo, children }: CabecalhoViewProps): ReactNo
             direction="row"
             sx={{ justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
             <Typography variant="h6">{titulo}</Typography>
-            <Stack direction="row" spacing={1}>{children}</Stack>
+            <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1 }}>{children}</Stack>
         </Stack>
     );
 }

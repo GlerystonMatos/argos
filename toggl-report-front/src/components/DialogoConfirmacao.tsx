@@ -33,7 +33,7 @@ export function DialogoConfirmacao({
             <DialogContent>
                 <DialogContentText>{mensagem}</DialogContentText>
             </DialogContent>
-            <DialogActions>
+            <DialogActions sx={{ mb: '0.5rem !important', pr: '0.9rem !important' }}>
                 {textoCancelar ? (
                     <BotaoComCarregamento onClick={onCancelar} disabled={carregando} autoFocus={focoNoCancelar}>
                         {textoCancelar}

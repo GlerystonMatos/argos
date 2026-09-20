@@ -5,15 +5,15 @@ namespace RelatorioToggl.Api.Endpoints;
 
 public static class SprintsEndpoints
 {
-    public static void MapSprintsEndpoints(this WebApplication app, string caminhoSprints)
+    public static void MapSprintsEndpoints(this WebApplication app, CaminhosDados caminhos)
     {
         RouteGroupBuilder grupo = app.MapGroup("/api/sprints").WithTags("Sprints");
 
         grupo.MapGet("/", () =>
         {
-            List<DadosSprint> sprints = CarregadorSprintsIni.Carregar(caminhoSprints);
+            List<DadosSprint> sprints = CarregadorSprintsIni.Carregar(caminhos.Sprints);
             List<SprintDto> resposta = sprints
-                .Select(s => new SprintDto(s.Chave, s.Nome, s.HorasPorDia, s.DataInicio, s.DataFim))
+                .Select(s => new SprintDto(s.Chave, s.Nome, s.HorasPorDia, s.DataInicio, s.DataFim, s.Fechado))
                 .ToList();
             return Results.Ok(resposta);
         })
@@ -30,7 +30,7 @@ public static class SprintsEndpoints
             if (request.HorasPorDia <= 0)
                 return Results.BadRequest("As horas por dia devem ser maiores que zero.");
 
-            List<DadosSprint> sprints = CarregadorSprintsIni.Carregar(caminhoSprints);
+            List<DadosSprint> sprints = CarregadorSprintsIni.Carregar(caminhos.Sprints);
 
             if (ServicoSprints.NomeEmUso(sprints, request.Nome, ignorar: null))
                 return Results.Conflict($"Já existe um sprint chamado '{request.Nome}'.");
@@ -47,22 +47,25 @@ public static class SprintsEndpoints
             sprints.Add(sprint);
 
             IResult? erroPersistencia = TratamentoIo.Executar(
-                () => CarregadorSprintsIni.Salvar(caminhoSprints, sprints),
+                () => CarregadorSprintsIni.Salvar(caminhos.Sprints, sprints),
                 "Não foi possível salvar os sprints.");
             if (erroPersistencia is not null)
                 return erroPersistencia;
 
             return Results.Created($"/api/sprints/{chave}",
-                new SprintDto(sprint.Chave, sprint.Nome, sprint.HorasPorDia, sprint.DataInicio, sprint.DataFim));
+                new SprintDto(sprint.Chave, sprint.Nome, sprint.HorasPorDia, sprint.DataInicio, sprint.DataFim, sprint.Fechado));
         })
         .WithSummary("Cadastra um sprint");
 
         grupo.MapPut("/{chave}", (string chave, EditarSprintRequest request) =>
         {
-            List<DadosSprint> sprints = CarregadorSprintsIni.Carregar(caminhoSprints);
+            List<DadosSprint> sprints = CarregadorSprintsIni.Carregar(caminhos.Sprints);
             DadosSprint? sprint = sprints.FirstOrDefault(s => s.Chave == chave);
             if (sprint is null)
                 return Results.NotFound();
+
+            if (sprint.Fechado)
+                return Results.Conflict("Este sprint está fechado. Reabra-o para editar.");
 
             string nome = string.IsNullOrWhiteSpace(request.Nome) ? sprint.Nome : request.Nome;
             decimal horasPorDia = request.HorasPorDia ?? sprint.HorasPorDia;
@@ -84,32 +87,87 @@ public static class SprintsEndpoints
             sprint.DataFim = fim.ToString("yyyy-MM-dd");
 
             IResult? erroPersistencia = TratamentoIo.Executar(
-                () => CarregadorSprintsIni.Salvar(caminhoSprints, sprints),
+                () => CarregadorSprintsIni.Salvar(caminhos.Sprints, sprints),
                 "Não foi possível salvar os sprints.");
             if (erroPersistencia is not null)
                 return erroPersistencia;
 
-            return Results.Ok(new SprintDto(sprint.Chave, sprint.Nome, sprint.HorasPorDia, sprint.DataInicio, sprint.DataFim));
+            return Results.Ok(new SprintDto(sprint.Chave, sprint.Nome, sprint.HorasPorDia, sprint.DataInicio, sprint.DataFim, sprint.Fechado));
         })
         .WithSummary("Edita um sprint (campos nulos ou omitidos não são alterados)");
 
+        grupo.MapPost("/{chave}/fechar", (string chave) =>
+        {
+            List<DadosSprint> sprints = CarregadorSprintsIni.Carregar(caminhos.Sprints);
+            DadosSprint? sprint = sprints.FirstOrDefault(s => s.Chave == chave);
+            if (sprint is null)
+                return Results.NotFound();
+
+            sprint.Fechado = true;
+
+            IResult? erroPersistencia = TratamentoIo.Executar(
+                () => CarregadorSprintsIni.Salvar(caminhos.Sprints, sprints),
+                "Não foi possível salvar os sprints.");
+            if (erroPersistencia is not null)
+                return erroPersistencia;
+
+            return Results.Ok(new SprintDto(sprint.Chave, sprint.Nome, sprint.HorasPorDia, sprint.DataInicio, sprint.DataFim, sprint.Fechado));
+        })
+        .WithSummary("Fecha o sprint: trava a edição e faz a consulta sempre usar o cache já salvo (Toggl e Jira)");
+
+        grupo.MapPost("/{chave}/reabrir", (string chave) =>
+        {
+            List<DadosSprint> sprints = CarregadorSprintsIni.Carregar(caminhos.Sprints);
+            DadosSprint? sprint = sprints.FirstOrDefault(s => s.Chave == chave);
+            if (sprint is null)
+                return Results.NotFound();
+
+            sprint.Fechado = false;
+
+            IResult? erroPersistencia = TratamentoIo.Executar(
+                () => CarregadorSprintsIni.Salvar(caminhos.Sprints, sprints),
+                "Não foi possível salvar os sprints.");
+            if (erroPersistencia is not null)
+                return erroPersistencia;
+
+            return Results.Ok(new SprintDto(sprint.Chave, sprint.Nome, sprint.HorasPorDia, sprint.DataInicio, sprint.DataFim, sprint.Fechado));
+        })
+        .WithSummary("Reabre o sprint: libera a edição e volta a permitir consulta real à API");
+
         grupo.MapDelete("/{chave}", (string chave) =>
         {
-            List<DadosSprint> sprints = CarregadorSprintsIni.Carregar(caminhoSprints);
+            List<DadosSprint> sprints = CarregadorSprintsIni.Carregar(caminhos.Sprints);
             DadosSprint? sprint = sprints.FirstOrDefault(s => s.Chave == chave);
             if (sprint is null)
                 return Results.NotFound();
 
             sprints.Remove(sprint);
 
+            IResult? erroCaches = TratamentoIo.Executar(
+                () => ApagarCachesDoSprint(caminhos, sprint),
+                "Não foi possível remover os caches do sprint.");
+            if (erroCaches is not null)
+                return erroCaches;
+
             IResult? erroPersistencia = TratamentoIo.Executar(
-                () => CarregadorSprintsIni.Salvar(caminhoSprints, sprints),
+                () => CarregadorSprintsIni.Salvar(caminhos.Sprints, sprints),
                 "Não foi possível salvar os sprints.");
             if (erroPersistencia is not null)
                 return erroPersistencia;
 
             return Results.NoContent();
         })
-        .WithSummary("Remove um sprint cadastrado");
+        .WithSummary("Remove um sprint cadastrado e os caches dele (SprintData_<chave>.ini e JiraSprintData_<chave>.ini)");
+    }
+
+    private static void ApagarCachesDoSprint(CaminhosDados caminhos, DadosSprint sprint)
+    {
+        string? cacheToggl = caminhos.CacheSprint(sprint);
+        if (cacheToggl is not null)
+            File.Delete(cacheToggl);
+
+        string? cacheJira = caminhos.CacheJiraSprint(sprint);
+        if (cacheJira is not null)
+            File.Delete(cacheJira);
     }
 }

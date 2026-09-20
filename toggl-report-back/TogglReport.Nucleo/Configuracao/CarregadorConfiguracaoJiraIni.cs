@@ -2,50 +2,81 @@ namespace RelatorioToggl.Configuracao;
 
 public static class CarregadorConfiguracaoJiraIni
 {
-    private const string SecaoConsolidada = "Jira";
+    private const string SecaoConexao = "Conexao";
 
-    public static ConfiguracaoJira? Carregar(string caminhoConsolidado)
+    private const string PrefixoSecaoCampo = "Campo:";
+
+    private const string CampoEstimativaDesenvolvimento = "EstimativaDesenvolvimento";
+
+    private const string CampoEstimativaRevisao = "EstimativaRevisao";
+
+    private const string CampoEstimativaTestes = "EstimativaTestes";
+
+    private const string CampoRevisadoPor = "RevisadoPor";
+
+    public static ConfiguracaoJira Carregar(CaminhosDados caminhos)
     {
-        if (!File.Exists(caminhoConsolidado))
-            return null;
+        ConfiguracaoJira configuracao = new();
 
-        Dictionary<string, Dictionary<string, string>> secoes = AnalisadorIni.Analisar(caminhoConsolidado);
-        if (!secoes.TryGetValue(SecaoConsolidada, out Dictionary<string, string>? secao))
-            return null;
+        if (File.Exists(caminhos.JiraConexao))
+        {
+            Dictionary<string, Dictionary<string, string>> secoes = AnalisadorIni.Analisar(caminhos.JiraConexao);
+            if (secoes.TryGetValue(SecaoConexao, out Dictionary<string, string>? conexao))
+            {
+                configuracao.UrlDominio = AnalisadorIni.ObterOuPadrao(conexao, "UrlDominio", "");
+                configuracao.Email = AnalisadorIni.ObterOuPadrao(conexao, "Email", "");
+                configuracao.ApiToken = CriptografiaToken.Descriptografar(AnalisadorIni.ObterOuPadrao(conexao, "ApiToken", ""));
+            }
+        }
 
-        return Mapear(secao);
+        if (File.Exists(caminhos.JiraCampos))
+        {
+            Dictionary<string, Dictionary<string, string>> campos = AnalisadorIni.Analisar(caminhos.JiraCampos);
+            (configuracao.CampoEstimativaDesenvolvimentoId, configuracao.CampoEstimativaDesenvolvimentoNome) = LerCampo(campos, CampoEstimativaDesenvolvimento);
+            (configuracao.CampoEstimativaRevisaoId, configuracao.CampoEstimativaRevisaoNome) = LerCampo(campos, CampoEstimativaRevisao);
+            (configuracao.CampoEstimativaTestesId, configuracao.CampoEstimativaTestesNome) = LerCampo(campos, CampoEstimativaTestes);
+            (configuracao.CampoRevisadoPorId, configuracao.CampoRevisadoPorNome) = LerCampo(campos, CampoRevisadoPor);
+        }
+
+        return configuracao;
     }
 
-    public static void Salvar(string caminhoConsolidado, ConfiguracaoJira configuracao)
+    public static void Salvar(CaminhosDados caminhos, ConfiguracaoJira configuracao)
     {
-        Dictionary<string, Dictionary<string, string>> secoes = File.Exists(caminhoConsolidado)
-            ? AnalisadorIni.Analisar(caminhoConsolidado)
-            : new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, Dictionary<string, string>> conexao = new(StringComparer.OrdinalIgnoreCase)
+        {
+            [SecaoConexao] = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["UrlDominio"] = configuracao.UrlDominio,
+                ["Email"] = configuracao.Email,
+                ["ApiToken"] = CriptografiaToken.Criptografar(configuracao.ApiToken)
+            }
+        };
 
-        secoes[SecaoConsolidada] = ParaValores(configuracao);
+        Dictionary<string, Dictionary<string, string>> campos = new(StringComparer.OrdinalIgnoreCase);
+        AdicionarCampo(campos, CampoEstimativaDesenvolvimento, configuracao.CampoEstimativaDesenvolvimentoId, configuracao.CampoEstimativaDesenvolvimentoNome);
+        AdicionarCampo(campos, CampoEstimativaRevisao, configuracao.CampoEstimativaRevisaoId, configuracao.CampoEstimativaRevisaoNome);
+        AdicionarCampo(campos, CampoEstimativaTestes, configuracao.CampoEstimativaTestesId, configuracao.CampoEstimativaTestesNome);
+        AdicionarCampo(campos, CampoRevisadoPor, configuracao.CampoRevisadoPorId, configuracao.CampoRevisadoPorNome);
 
-        AnalisadorIni.EscreverSecoes(caminhoConsolidado, secoes);
+        AnalisadorIni.EscreverSecoes(caminhos.JiraConexao, conexao);
+        AnalisadorIni.EscreverSecoes(caminhos.JiraCampos, campos);
     }
 
-    private static ConfiguracaoJira Mapear(Dictionary<string, string> valores) => new()
+    private static (string Id, string Nome) LerCampo(Dictionary<string, Dictionary<string, string>> secoes, string campo)
     {
-        UrlDominio = AnalisadorIni.ObterOuPadrao(valores, "UrlDominio", ""),
-        Email = AnalisadorIni.ObterOuPadrao(valores, "Email", ""),
-        ApiToken = CriptografiaToken.Descriptografar(AnalisadorIni.ObterOuPadrao(valores, "ApiToken", "")),
-        CampoEstimativaEsforcoId = AnalisadorIni.ObterOuPadrao(valores, "CampoEstimativaEsforcoId", ""),
-        CampoEstimativaEsforcoNome = AnalisadorIni.ObterOuPadrao(valores, "CampoEstimativaEsforcoNome", ""),
-        CampoRevisadoPorId = AnalisadorIni.ObterOuPadrao(valores, "CampoRevisadoPorId", ""),
-        CampoRevisadoPorNome = AnalisadorIni.ObterOuPadrao(valores, "CampoRevisadoPorNome", ""),
-    };
+        if (!secoes.TryGetValue($"{PrefixoSecaoCampo}{campo}", out Dictionary<string, string>? valores))
+            return ("", "");
 
-    private static Dictionary<string, string> ParaValores(ConfiguracaoJira configuracao) => new(StringComparer.OrdinalIgnoreCase)
+        return (AnalisadorIni.ObterOuPadrao(valores, "Id", ""), AnalisadorIni.ObterOuPadrao(valores, "Nome", ""));
+    }
+
+    private static void AdicionarCampo(Dictionary<string, Dictionary<string, string>> secoes, string campo, string id, string nome)
     {
-        ["UrlDominio"] = configuracao.UrlDominio,
-        ["Email"] = configuracao.Email,
-        ["ApiToken"] = CriptografiaToken.Criptografar(configuracao.ApiToken),
-        ["CampoEstimativaEsforcoId"] = configuracao.CampoEstimativaEsforcoId,
-        ["CampoEstimativaEsforcoNome"] = configuracao.CampoEstimativaEsforcoNome,
-        ["CampoRevisadoPorId"] = configuracao.CampoRevisadoPorId,
-        ["CampoRevisadoPorNome"] = configuracao.CampoRevisadoPorNome,
-    };
+        secoes[$"{PrefixoSecaoCampo}{campo}"] = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Id"] = id,
+            ["Nome"] = nome
+        };
+    }
 }

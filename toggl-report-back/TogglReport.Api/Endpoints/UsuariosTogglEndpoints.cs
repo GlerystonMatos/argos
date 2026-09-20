@@ -6,17 +6,16 @@ namespace RelatorioToggl.Api.Endpoints;
 
 public static class UsuariosTogglEndpoints
 {
-    public static void MapUsuariosTogglEndpoints(this WebApplication app, string caminhoConfiguracao, string caminhoUsuarios)
+    public static void MapUsuariosTogglEndpoints(this WebApplication app, CaminhosDados caminhos)
     {
         RouteGroupBuilder grupo = app.MapGroup("/api/usuarios-toggl").WithTags("Usuários do Toggl");
 
         grupo.MapGet("/", () =>
         {
-            ConfiguracaoApp configuracao = CarregadorConfiguracaoIni.Carregar(caminhoConfiguracao, caminhoUsuarios) ?? new ConfiguracaoApp();
-            List<UsuarioTogglResumoDto> usuarios = configuracao.Usuarios
+            List<UsuarioTogglResumoDto> resposta = CarregadorUsuariosTogglIni.Carregar(caminhos.Usuarios)
                 .Select(u => new UsuarioTogglResumoDto(u.Chave, u.NomeExibicao, ServicoUsuariosToggl.MascararToken(u.TokenApi), u.Sigla, u.Cor, u.Selecionado, u.Administrador))
                 .ToList();
-            return Results.Ok(usuarios);
+            return Results.Ok(resposta);
         })
         .WithSummary("Lista os usuários do Toggl cadastrados (token mascarado)");
 
@@ -36,15 +35,15 @@ public static class UsuariosTogglEndpoints
             if (string.IsNullOrWhiteSpace(request.NomeExibicao))
                 return Results.BadRequest("Nome de exibição é obrigatório.");
 
-            ConfiguracaoApp configuracao = CarregadorConfiguracaoIni.Carregar(caminhoConfiguracao, caminhoUsuarios) ?? new ConfiguracaoApp();
+            List<ConfiguracaoUsuarioToggl> usuarios = CarregadorUsuariosTogglIni.Carregar(caminhos.Usuarios);
 
-            if (ServicoUsuariosToggl.NomeEmUso(configuracao.Usuarios, request.NomeExibicao, ignorar: null))
+            if (ServicoUsuariosToggl.NomeEmUso(usuarios, request.NomeExibicao, ignorar: null))
                 return Results.Conflict($"Já existe um usuário do Toggl chamado '{request.NomeExibicao}'.");
 
-            if (ServicoUsuariosToggl.TokenEmUso(configuracao.Usuarios, request.TokenApi, ignorar: null))
+            if (ServicoUsuariosToggl.TokenEmUso(usuarios, request.TokenApi, ignorar: null))
                 return Results.Conflict("Esse API Token já está cadastrado para outro usuário do Toggl.");
 
-            if (!string.IsNullOrWhiteSpace(request.Sigla) && ServicoUsuariosToggl.SiglaEmUso(configuracao.Usuarios, request.Sigla, ignorar: null))
+            if (!string.IsNullOrWhiteSpace(request.Sigla) && ServicoUsuariosToggl.SiglaEmUso(usuarios, request.Sigla, ignorar: null))
                 return Results.Conflict($"A sigla '{request.Sigla}' já está em uso por outro usuário do Toggl.");
 
             if (!request.IgnorarValidacao)
@@ -54,15 +53,15 @@ public static class UsuariosTogglEndpoints
                     return Results.BadRequest("Não foi possível validar o token. Envie ignorarValidacao=true para salvar mesmo assim.");
             }
 
-            string chave = ServicoUsuariosToggl.GerarChaveUnica(request.NomeExibicao, configuracao.Usuarios);
+            string chave = ServicoUsuariosToggl.GerarChaveUnica(request.NomeExibicao, usuarios);
             ConfiguracaoUsuarioToggl usuario = new() { Chave = chave, NomeExibicao = request.NomeExibicao, TokenApi = request.TokenApi, Sigla = request.Sigla, Cor = request.Cor, Selecionado = request.Selecionado, Administrador = request.Administrador };
-            configuracao.Usuarios.Add(usuario);
+            usuarios.Add(usuario);
 
             if (usuario.Administrador)
-                ServicoUsuariosToggl.DesmarcarOutrosAdministradores(configuracao.Usuarios, usuario);
+                ServicoUsuariosToggl.DesmarcarOutrosAdministradores(usuarios, usuario);
 
             IResult? erroPersistencia = TratamentoIo.Executar(
-                () => CarregadorConfiguracaoIni.Salvar(caminhoConfiguracao, caminhoUsuarios, configuracao),
+                () => CarregadorUsuariosTogglIni.Salvar(caminhos.Usuarios, usuarios),
                 "Não foi possível salvar a configuração.");
             if (erroPersistencia is not null)
                 return erroPersistencia;
@@ -74,14 +73,14 @@ public static class UsuariosTogglEndpoints
 
         grupo.MapPut("/{chave}", async (string chave, EditarUsuarioTogglRequest request) =>
         {
-            ConfiguracaoApp configuracao = CarregadorConfiguracaoIni.Carregar(caminhoConfiguracao, caminhoUsuarios) ?? new ConfiguracaoApp();
-            ConfiguracaoUsuarioToggl? usuario = configuracao.Usuarios.FirstOrDefault(u => u.Chave == chave);
+            List<ConfiguracaoUsuarioToggl> usuarios = CarregadorUsuariosTogglIni.Carregar(caminhos.Usuarios);
+            ConfiguracaoUsuarioToggl? usuario = usuarios.FirstOrDefault(u => u.Chave == chave);
             if (usuario is null)
                 return Results.NotFound();
 
             if (!string.IsNullOrWhiteSpace(request.NomeExibicao))
             {
-                if (ServicoUsuariosToggl.NomeEmUso(configuracao.Usuarios, request.NomeExibicao, ignorar: usuario))
+                if (ServicoUsuariosToggl.NomeEmUso(usuarios, request.NomeExibicao, ignorar: usuario))
                     return Results.Conflict($"Já existe um usuário do Toggl chamado '{request.NomeExibicao}'.");
 
                 usuario.NomeExibicao = request.NomeExibicao;
@@ -89,7 +88,7 @@ public static class UsuariosTogglEndpoints
 
             if (!string.IsNullOrWhiteSpace(request.TokenApi))
             {
-                if (ServicoUsuariosToggl.TokenEmUso(configuracao.Usuarios, request.TokenApi, ignorar: usuario))
+                if (ServicoUsuariosToggl.TokenEmUso(usuarios, request.TokenApi, ignorar: usuario))
                     return Results.Conflict("Esse API Token já está cadastrado para outro usuário do Toggl.");
 
                 if (!request.IgnorarValidacao)
@@ -104,7 +103,7 @@ public static class UsuariosTogglEndpoints
 
             if (!string.IsNullOrWhiteSpace(request.Sigla))
             {
-                if (ServicoUsuariosToggl.SiglaEmUso(configuracao.Usuarios, request.Sigla, ignorar: usuario))
+                if (ServicoUsuariosToggl.SiglaEmUso(usuarios, request.Sigla, ignorar: usuario))
                     return Results.Conflict($"A sigla '{request.Sigla}' já está em uso por outro usuário do Toggl.");
 
                 usuario.Sigla = request.Sigla;
@@ -121,11 +120,11 @@ public static class UsuariosTogglEndpoints
                 usuario.Administrador = request.Administrador.Value;
 
                 if (usuario.Administrador)
-                    ServicoUsuariosToggl.DesmarcarOutrosAdministradores(configuracao.Usuarios, usuario);
+                    ServicoUsuariosToggl.DesmarcarOutrosAdministradores(usuarios, usuario);
             }
 
             IResult? erroPersistencia = TratamentoIo.Executar(
-                () => CarregadorConfiguracaoIni.Salvar(caminhoConfiguracao, caminhoUsuarios, configuracao),
+                () => CarregadorUsuariosTogglIni.Salvar(caminhos.Usuarios, usuarios),
                 "Não foi possível salvar a configuração.");
             if (erroPersistencia is not null)
                 return erroPersistencia;
@@ -136,15 +135,15 @@ public static class UsuariosTogglEndpoints
 
         grupo.MapDelete("/{chave}", (string chave) =>
         {
-            ConfiguracaoApp configuracao = CarregadorConfiguracaoIni.Carregar(caminhoConfiguracao, caminhoUsuarios) ?? new ConfiguracaoApp();
-            ConfiguracaoUsuarioToggl? usuario = configuracao.Usuarios.FirstOrDefault(u => u.Chave == chave);
+            List<ConfiguracaoUsuarioToggl> usuarios = CarregadorUsuariosTogglIni.Carregar(caminhos.Usuarios);
+            ConfiguracaoUsuarioToggl? usuario = usuarios.FirstOrDefault(u => u.Chave == chave);
             if (usuario is null)
                 return Results.NotFound();
 
-            configuracao.Usuarios.Remove(usuario);
+            usuarios.Remove(usuario);
 
             IResult? erroPersistencia = TratamentoIo.Executar(
-                () => CarregadorConfiguracaoIni.Salvar(caminhoConfiguracao, caminhoUsuarios, configuracao),
+                () => CarregadorUsuariosTogglIni.Salvar(caminhos.Usuarios, usuarios),
                 "Não foi possível salvar a configuração.");
             if (erroPersistencia is not null)
                 return erroPersistencia;

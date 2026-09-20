@@ -28,12 +28,23 @@ import {
     TableContainer,
 } from '@mui/material';
 
+const CELULA_ACOES_FIXA = {
+    px: 1,
+    right: 0,
+    zIndex: 1,
+    position: 'sticky',
+    bgcolor: 'background.paper',
+    borderColor: 'divider',
+    borderLeft: { xs: 1, sm: 0 },
+} as const;
+
 interface UsuariosTogglPanelProps {
     onUsuariosAlterados?: (usuarios: UsuarioTogglResumo[]) => void;
 }
 
 export function UsuariosTogglPanel({ onUsuariosAlterados }: UsuariosTogglPanelProps = {}): ReactNode {
     const [dialogoAberto, setDialogoAberto] = useState(false);
+    const [listaCarregada, setListaCarregada] = useState(false);
     const { notificarErro, notificarSucesso } = useNotificacao();
     const [removendoChave, setRemovendoChave] = useState<string | null>(null);
     const [usuarioEmEdicao, setUsuarioEmEdicao] = useState<UsuarioTogglResumo | null>(null);
@@ -41,12 +52,14 @@ export function UsuariosTogglPanel({ onUsuariosAlterados }: UsuariosTogglPanelPr
     const [usuarioParaExcluir, setUsuarioParaExcluir] = useState<UsuarioTogglResumo | null>(null);
 
     useEffect(() => {
-        carregar().catch((erro: unknown) => notificarErro(erro, 'Não foi possível listar os usuários do Toggl'));
+        carregar()
+            .then(() => setListaCarregada(true))
+            .catch((erro: unknown) => notificarErro(erro, 'Não foi possível listar os usuários do Toggl'));
     }, []);
 
     useEffect(() => {
-        onUsuariosAlterados?.(usuarios);
-    }, [usuarios]);
+        if (listaCarregada) onUsuariosAlterados?.(usuarios);
+    }, [usuarios, listaCarregada]);
 
     function abrirParaCriar(): void {
         setUsuarioEmEdicao(null);
@@ -109,7 +122,7 @@ export function UsuariosTogglPanel({ onUsuariosAlterados }: UsuariosTogglPanelPr
                                         <TableCell sx={{ px: 1, width: '7%', whiteSpace: 'nowrap' }}>Sigla</TableCell>
                                         <TableCell sx={{ px: 1, width: '9%', whiteSpace: 'nowrap' }}>Token</TableCell>
                                         <TableCell sx={{ px: 1, width: '1%', whiteSpace: 'nowrap' }}>Administrador</TableCell>
-                                        <TableCell align="right" sx={{ px: 1 }}>Ações</TableCell>
+                                        <TableCell align="right" sx={CELULA_ACOES_FIXA}>Ações</TableCell>
                                     </TableRow>
                                 </TableHead>
                                 <TableBody>
@@ -131,7 +144,7 @@ export function UsuariosTogglPanel({ onUsuariosAlterados }: UsuariosTogglPanelPr
                                             <TableCell sx={{ px: 1, whiteSpace: 'nowrap' }}>
                                                 <Chip size="small" color={usuario.administrador ? 'primary' : 'error'} label={usuario.administrador ? 'Sim' : 'Não'} />
                                             </TableCell>
-                                            <TableCell align="right" sx={{ px: 1 }}>
+                                            <TableCell align="right" sx={CELULA_ACOES_FIXA}>
                                                 <Stack direction="row" spacing={0.5} sx={{ justifyContent: 'flex-end' }}>
                                                     <IconButton edge="end" onClick={() => abrirParaEditar(usuario)} aria-label="editar">
                                                         <EditIcon fontSize="small" />

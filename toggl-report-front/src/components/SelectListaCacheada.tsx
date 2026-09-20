@@ -15,11 +15,12 @@ interface SelectListaCacheadaProps {
     onChange: (valor: string[]) => void;
     label: string;
     helperText?: string;
+    excluir?: string[];
     disabled?: boolean;
     obterOpcoes: (forcarAtualizacao: boolean) => Promise<RespostaListaCacheada>;
 }
 
-export function SelectListaCacheada({ value, onChange, label, helperText, disabled, obterOpcoes }: SelectListaCacheadaProps): ReactNode {
+export function SelectListaCacheada({ value, onChange, label, helperText, excluir = [], disabled, obterOpcoes }: SelectListaCacheadaProps): ReactNode {
     const [opcoes, setOpcoes] = useState<string[]>([]);
     const [carregando, setCarregando] = useState(false);
     const [erro, setErro] = useState<string | null>(null);
@@ -51,7 +52,7 @@ export function SelectListaCacheada({ value, onChange, label, helperText, disabl
                 <Autocomplete
                     sx={{ flexGrow: 1 }}
                     multiple
-                    options={opcoes.filter((opcao) => !value.includes(opcao))}
+                    options={opcoes.filter((opcao) => !value.includes(opcao) && !excluir.includes(opcao))}
                     value={value}
                     onChange={(_evento, novoValor) => onChange(novoValor)}
                     disabled={disabled || carregando}

@@ -8,18 +8,18 @@ namespace RelatorioToggl.Api.Endpoints;
 
 public static class RelatorioEndpoints
 {
-    public static void MapRelatorioEndpoints(this WebApplication app, string caminhoConfiguracao, string caminhoUsuarios, string caminhoCache)
+    public static void MapRelatorioEndpoints(this WebApplication app, CaminhosDados caminhos)
     {
         app.MapGet("/api/relatorio", (string dataInicio, string dataFim) =>
         {
             if (!DateTime.TryParse(dataInicio, out _) || !DateTime.TryParse(dataFim, out _))
                 return Results.BadRequest("Datas inválidas. Use o formato AAAA-MM-DD.");
 
-            ConfiguracaoApp? configuracao = CarregadorConfiguracaoIni.Carregar(caminhoConfiguracao, caminhoUsuarios);
-            if (configuracao is null || configuracao.Usuarios.Count == 0)
+            ConfiguracaoApp configuracao = CarregadorConfiguracaoIni.Carregar(caminhos);
+            if (configuracao.Usuarios.Count == 0)
                 return Results.BadRequest("Nenhum usuário do Toggl cadastrado.");
 
-            CacheConsulta? cache = CarregadorCacheIni.Carregar(caminhoCache);
+            CacheConsulta? cache = CarregadorCacheIni.Carregar(caminhos.RelatorioData);
             if (cache is null || cache.DataInicio != dataInicio || cache.DataFim != dataFim)
                 return Results.Conflict("Não há consulta salva para esse período. Chame POST /api/consultas primeiro.");
 

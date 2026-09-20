@@ -9,6 +9,7 @@ import ErrorOutlineIcon from '@mui/icons-material/ErrorOutlineOutlined';
 import {
     GRUPOS,
     corDaSituacao,
+    situacaoGrupo,
     formatarCodigo,
     infoPrioridade,
     formatarHoraResumida,
@@ -30,7 +31,9 @@ interface SprintLinhaTarefaProps {
     onAlternarTachado: (id: string) => void;
     destacada: boolean;
     onAlternarDestaque: (id: string) => void;
+    onDuploClique: () => void;
     larguraCodigo: number;
+    larguraDescricao?: number;
     coresStatus: Record<string, string>;
     coresPrioridade: Record<string, string>;
     corTag: string;
@@ -44,7 +47,9 @@ export function SprintLinhaTarefa({
     onAlternarTachado,
     destacada,
     onAlternarDestaque,
+    onDuploClique,
     larguraCodigo,
+    larguraDescricao,
     coresStatus,
     coresPrioridade,
     corTag,
@@ -56,6 +61,7 @@ export function SprintLinhaTarefa({
             target="_blank"
             rel="noopener noreferrer"
             onClick={(evento) => evento.stopPropagation()}
+            onDoubleClick={(evento) => evento.stopPropagation()}
             sx={{
                 color: codigoDuplicado ? COR_PENDENTE : 'primary.main',
                 textDecoration: 'underline',
@@ -69,13 +75,19 @@ export function SprintLinhaTarefa({
     const prioridade = infoPrioridade(linha.prioridade, coresPrioridade);
 
     return (
-        <TableRow hover selected={destacada} onClick={() => onAlternarDestaque(id)} sx={{ cursor: 'pointer' }}>
+        <TableRow
+            hover
+            selected={destacada}
+            onClick={() => onAlternarDestaque(id)}
+            onDoubleClick={onDuploClique}
+            sx={{ cursor: 'pointer' }}>
             <TableCell sx={{ width: '1%', px: 0.5 }}>
                 <Checkbox
                     size="small"
                     checked={riscada}
                     onChange={() => onAlternarTachado(id)}
                     onClick={(evento) => evento.stopPropagation()}
+                    onDoubleClick={(evento) => evento.stopPropagation()}
                     sx={{ p: 0.25 }} />
             </TableCell>
             <TableCell align="center" sx={{ width: '1%', px: 0.5, whiteSpace: 'nowrap' }}>
@@ -126,7 +138,13 @@ export function SprintLinhaTarefa({
                     ) : undefined}
                 </Stack>
             </TableCell>
-            <TableCell sx={{ maxWidth: 360, px: 0.8 }}>
+            <TableCell
+                sx={{
+                    px: 0.8,
+                    ...(larguraDescricao !== undefined
+                        ? { width: larguraDescricao, maxWidth: larguraDescricao }
+                        : { maxWidth: 360 }),
+                }}>
                 <Tooltip title={linha.descricao}>
                     <Box
                         sx={{
@@ -147,11 +165,11 @@ export function SprintLinhaTarefa({
             {GRUPOS.map((grupo) => {
                 const bloco = linha[grupo.bloco];
                 const temColaborador = bloco.nomeExibicao !== null;
+                const situacao = situacaoGrupo(linha, grupo.bloco);
+                const corSituacao = situacao === 'Tag' ? corTag : situacao === 'Concluído' ? COR_CONCLUIDO : COR_PENDENTE;
                 const preSegundos = Math.round(bloco.preHoras * 3600);
                 const reaExcedePre = preSegundos > 0 && bloco.reaSegundos > preSegundos;
-                const tooltipPre = grupo.bloco === 'dev' && bloco.estimativaOriginalHoras !== null
-                    ? `Estimativa original: ${formatarDuracao(Math.round(bloco.estimativaOriginalHoras * 3600))} · Estimativa de esforço: ${formatarDuracao(preSegundos)}`
-                    : formatarDuracao(preSegundos);
+                const tooltipPre = formatarDuracao(preSegundos);
                 const tooltipRea = reaExcedePre
                     ? `${formatarDuracao(bloco.reaSegundos)} — excede a estimativa (${formatarDuracao(preSegundos)})`
                     : formatarDuracao(bloco.reaSegundos);
@@ -191,17 +209,7 @@ export function SprintLinhaTarefa({
                         </TableCell>
                         <TableCell align="center" sx={{ px: 0.5, width: '1%', whiteSpace: 'nowrap' }}>
                             {temColaborador ? (
-                                linha.agrupada ? (
-                                    <EtiquetaFixa texto="Tag" cor={corTag} />
-                                ) : linha.grupoResponsavelStatus ? (
-                                    <EtiquetaFixa
-                                        texto={grupo.bloco === linha.grupoResponsavelStatus ? 'Pendente' : 'Concluído'}
-                                        cor={grupo.bloco === linha.grupoResponsavelStatus ? COR_PENDENTE : COR_CONCLUIDO} />
-                                ) : linha.situacaoSemGrupoResponsavel ? (
-                                    <EtiquetaFixa texto="Concluído" cor={COR_CONCLUIDO} />
-                                ) : (
-                                    <EtiquetaFixa texto="Pendente" cor={COR_PENDENTE} />
-                                )
+                                <EtiquetaFixa texto={situacao} cor={corSituacao} />
                             ) : (
                                 <EtiquetaFixa texto="–" cor="text.primary" />
                             )}

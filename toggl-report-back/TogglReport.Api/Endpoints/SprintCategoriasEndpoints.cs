@@ -5,13 +5,13 @@ namespace RelatorioToggl.Api.Endpoints;
 
 public static class SprintCategoriasEndpoints
 {
-    public static void MapSprintCategoriasEndpoints(this WebApplication app, string caminhoConfiguracoesGerais)
+    public static void MapSprintCategoriasEndpoints(this WebApplication app, CaminhosDados caminhos)
     {
         RouteGroupBuilder grupo = app.MapGroup("/api/sprint/categorias").WithTags("Sprint");
 
         grupo.MapGet("/", () =>
         {
-            ConfiguracaoCategoriasSprint configuracao = CarregadorConfiguracaoCategoriasSprintIni.Carregar(caminhoConfiguracoesGerais);
+            ConfiguracaoCategoriasSprint configuracao = CarregadorConfiguracaoCategoriasSprintIni.Carregar(caminhos);
             return Results.Ok(new CategoriasSprintDto(configuracao.Dev, configuracao.Rev, configuracao.Qa, configuracao.Agrupamento, configuracao.TagsDetalhadas, configuracao.CorTag));
         })
         .WithSummary("Obtém o mapeamento global de tags por categoria de tarefa (DEV/REV/QA)");
@@ -23,16 +23,16 @@ public static class SprintCategoriasEndpoints
 
             ConfiguracaoCategoriasSprint configuracao = new()
             {
-                Dev = Normalizar(request.Dev),
-                Rev = Normalizar(request.Rev),
-                Qa = Normalizar(request.Qa),
+                Dev = NormalizacaoListas.Normalizar(request.Dev),
+                Rev = NormalizacaoListas.Normalizar(request.Rev),
+                Qa = NormalizacaoListas.Normalizar(request.Qa),
                 Agrupamento = request.Agrupamento,
-                TagsDetalhadas = Normalizar(request.TagsDetalhadas),
+                TagsDetalhadas = NormalizacaoListas.Normalizar(request.TagsDetalhadas),
                 CorTag = string.IsNullOrWhiteSpace(request.CorTag) ? CarregadorConfiguracaoCategoriasSprintIni.Padrao().CorTag : request.CorTag.Trim()
             };
 
             IResult? erroPersistencia = TratamentoIo.Executar(
-                () => CarregadorConfiguracaoCategoriasSprintIni.Salvar(caminhoConfiguracoesGerais, configuracao),
+                () => CarregadorConfiguracaoCategoriasSprintIni.Salvar(caminhos, configuracao),
                 "Não foi possível salvar as categorias.");
             if (erroPersistencia is not null)
                 return erroPersistencia;
@@ -41,11 +41,4 @@ public static class SprintCategoriasEndpoints
         })
         .WithSummary("Atualiza o mapeamento global de tags por categoria de tarefa (DEV/REV/QA)");
     }
-
-    private static List<string> Normalizar(List<string>? tags) =>
-        (tags ?? new List<string>())
-            .Where(tag => !string.IsNullOrWhiteSpace(tag))
-            .Select(tag => tag.Trim())
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
 }
