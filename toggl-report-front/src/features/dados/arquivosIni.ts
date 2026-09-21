@@ -69,15 +69,15 @@ export const ARQUIVOS_INI: readonly ArquivoIni[] = [
     {
         nome: 'JiraConexao.ini',
         tipo: 'configuracao',
-        conteudo: 'Conexão com o Jira: URL do domínio, e-mail e API Token (criptografado).',
+        conteudo: 'Conexão com o Jira: URL do domínio, e-mail, API Token (criptografado) e quadro de DEV.',
         geradoPor: 'Jira: salvar a conexão.',
         contemSegredo: true,
     },
     {
         nome: 'JiraCampos.ini',
         tipo: 'configuracao',
-        conteudo: 'Campos personalizados do Jira: estimativas de Desenvolvimento, Revisão e Testes e "Revisado por".',
-        geradoPor: 'Configurações → Jira: Campos personalizados: salvar.',
+        conteudo: 'Campos do Jira: estimativas de Desenvolvimento, Revisão e Testes, "Revisado por" e "Analisado por".',
+        geradoPor: 'Configurações → Jira: Campos: salvar.',
         contemSegredo: false,
     },
     {
@@ -144,6 +144,13 @@ export const ARQUIVOS_INI: readonly ArquivoIni[] = [
         contemSegredo: false,
     },
     {
+        nome: 'JiraPlanejamentoData_<chaveSprint>.ini',
+        tipo: 'cache',
+        conteudo: 'Cartões do sprint ativo do quadro de DEV do Jira (colunas, status e pessoas) de um sprint. Um arquivo por sprint.',
+        geradoPor: 'Sprint: consulta que atualiza o Jira ou o botão Atualizar do Planejamento.',
+        contemSegredo: false,
+    },
+    {
         nome: 'TogglTagsCache.ini',
         tipo: 'cache',
         conteudo: 'Lista de tags reais do workspace do Toggl e data da última atualização.',
@@ -169,6 +176,13 @@ export const ARQUIVOS_INI: readonly ArquivoIni[] = [
         tipo: 'cache',
         conteudo: 'Nomes reais dos usuários do Jira e data da última atualização.',
         geradoPor: 'Configurações → Jira ↔ Toggl: ao listar ou atualizar os usuários.',
+        contemSegredo: false,
+    },
+    {
+        nome: 'JiraQuadrosCache.ini',
+        tipo: 'cache',
+        conteudo: 'Quadros Scrum reais do Jira (id, nome e projeto) e data da última atualização.',
+        geradoPor: 'Jira: ao listar ou atualizar os quadros na conexão.',
         contemSegredo: false,
     },
 ];

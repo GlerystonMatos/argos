@@ -157,7 +157,7 @@ public static class SprintsEndpoints
 
             return Results.NoContent();
         })
-        .WithSummary("Remove um sprint cadastrado e os caches dele (SprintData_<chave>.ini e JiraSprintData_<chave>.ini)");
+        .WithSummary("Remove um sprint cadastrado e os caches dele (SprintData_<chave>.ini, JiraSprintData_<chave>.ini e JiraPlanejamentoData_<chave>.ini)");
     }
 
     private static void ApagarCachesDoSprint(CaminhosDados caminhos, DadosSprint sprint)
@@ -169,5 +169,9 @@ public static class SprintsEndpoints
         string? cacheJira = caminhos.CacheJiraSprint(sprint);
         if (cacheJira is not null)
             File.Delete(cacheJira);
+
+        string? cachePlanejamento = caminhos.CacheJiraPlanejamento(sprint);
+        if (cachePlanejamento is not null)
+            File.Delete(cachePlanejamento);
     }
 }

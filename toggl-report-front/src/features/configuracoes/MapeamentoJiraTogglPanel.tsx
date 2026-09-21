@@ -1,8 +1,10 @@
-import { tema } from '../../theme';
 import type { ReactNode } from 'react';
 import EditIcon from '@mui/icons-material/Edit';
+import type { AbaConfiguracoesProps } from './abas';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import { BadgeSigla } from '../../components/BadgeSigla';
+import { avaliarMapeamentoJiraToggl } from './completude';
+import { ALTURA_CONTROLE, CORES, tema } from '../../theme';
 import { useNotificacao } from '../../hooks/useNotificacao';
 import { listarUsuariosJira } from '../../api/jiraListasApi';
 import { useMapeamentoJiraToggl } from './useMapeamentoJiraToggl';
@@ -47,14 +49,10 @@ export interface MapeamentoJiraTogglPanelHandle {
 
 const SEM_MAPEAMENTO = '';
 const ENTRADA_VAZIA: EntradaMapeamentoJiraToggl = { chaveToggl: null, sigla: null, cor: null };
-const COR_PADRAO_EXCLUSIVO = '#9E9E9E';
+const COR_PADRAO_EXCLUSIVO: string = CORES.corIndisponivel;
 
-interface MapeamentoJiraTogglPanelProps {
-    onAlterado?: () => void;
-}
-
-export const MapeamentoJiraTogglPanel = forwardRef<MapeamentoJiraTogglPanelHandle, MapeamentoJiraTogglPanelProps>(
-    function MapeamentoJiraTogglPanel({ onAlterado }, ref): ReactNode {
+export const MapeamentoJiraTogglPanel = forwardRef<MapeamentoJiraTogglPanelHandle, AbaConfiguracoesProps>(
+    function MapeamentoJiraTogglPanel({ onAlterado, onValidoChange }, ref): ReactNode {
         const { dados: mapeamentoSalvo, carregando, salvando, carregar, salvar } = useMapeamentoJiraToggl();
         const { usuariosToggl, carregar: carregarUsuariosToggl } = useUsuariosToggl();
         const { notificarErro, notificarSucesso } = useNotificacao();
@@ -77,6 +75,13 @@ export const MapeamentoJiraTogglPanel = forwardRef<MapeamentoJiraTogglPanelHandl
                 notificarErro(erro, 'Não foi possível listar os usuários do Toggl'));
         }, []);
 
+        const avaliacao = avaliarMapeamentoJiraToggl(mapeamento, usuariosToggl);
+        const mapeamentoValido = mapeamentoSalvo === null || avaliacao.completo;
+
+        useEffect(() => {
+            onValidoChange?.(mapeamentoValido);
+        }, [mapeamentoValido]);
+
         async function carregarListaJira(forcarAtualizacao: boolean): Promise<void> {
             setCarregandoLista(true);
             setErroLista(null);
@@ -98,7 +103,7 @@ export const MapeamentoJiraTogglPanel = forwardRef<MapeamentoJiraTogglPanelHandl
             try {
                 const atualizado = await salvar({ mapeamento });
                 setMapeamento(atualizado.mapeamento);
-                notificarSucesso('Mapeamento Jira ↔ Toggl salvo.');
+                notificarSucesso('Configuração de mapeamento do Jira ↔ Toggl salvo com sucesso.');
                 return true;
             } catch (erro) {
                 notificarErro(erro, 'Não foi possível salvar o mapeamento Jira ↔ Toggl');
@@ -132,6 +137,9 @@ export const MapeamentoJiraTogglPanel = forwardRef<MapeamentoJiraTogglPanelHandl
 
         if (!mapeamentoSalvo) return undefined;
 
+        const nomesForaDaLista = Object.keys(mapeamento).filter((nome) => !nomesJira.includes(nome));
+        const nomesTabela = [...nomesJira, ...nomesForaDaLista];
+
         return (
             <Stack spacing={2}>
                 <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
@@ -150,15 +158,15 @@ export const MapeamentoJiraTogglPanel = forwardRef<MapeamentoJiraTogglPanelHandl
 
                 {erroLista ? <Alert severity="warning">{erroLista}</Alert> : undefined}
 
-                {nomesJira.length === 0 && !carregandoLista ? (
+                {nomesTabela.length === 0 && !carregandoLista ? (
                     <Typography variant="body2" color="text.secondary">
                         Nenhum usuário encontrado. Atualize a lista de usuários reais do Jira acima primeiro.
                     </Typography>
                 ) : (
                     (() => {
-                        const metade = duasColunas ? Math.ceil(nomesJira.length / 2) : nomesJira.length;
-                        const colunaEsquerda = nomesJira.slice(0, metade);
-                        const colunaDireita = nomesJira.slice(metade);
+                        const metade = duasColunas ? Math.ceil(nomesTabela.length / 2) : nomesTabela.length;
+                        const colunaEsquerda = nomesTabela.slice(0, metade);
+                        const colunaDireita = nomesTabela.slice(metade);
 
                         function celulasUsuario(nome: string | undefined, comBordaEsquerda: boolean): ReactNode {
                             if (nome === undefined) {
@@ -189,7 +197,10 @@ export const MapeamentoJiraTogglPanel = forwardRef<MapeamentoJiraTogglPanelHandl
                                         <Select
                                             size="small"
                                             fullWidth
-                                            sx={{ maxWidth: { xs: 150, sm: 'none' }, '& .MuiSelect-select': { py: 0.5 } }}
+                                            sx={{
+                                                maxWidth: { xs: 150, sm: 'none' },
+                                                '& .MuiSelect-select.MuiSelect-select': { display: 'flex', alignItems: 'center', boxSizing: 'border-box', height: ALTURA_CONTROLE, py: 0 },
+                                            }}
                                             value={chaveSelecionada}
                                             disabled={carregando || salvando}
                                             onChange={(evento) => {
@@ -283,6 +294,33 @@ export const MapeamentoJiraTogglPanel = forwardRef<MapeamentoJiraTogglPanelHandl
                         );
                     })()
                 )}
+
+                {!avaliacao.completo ? (
+                    <Alert severity="info">
+                        <Stack spacing={0.5}>
+                            <Typography variant="body2">
+                                Associe todo usuário cadastrado no Toggl a um usuário do Jira e defina Sigla/Cor dos usuários
+                                exclusivos do Jira para liberar Relatório, Gant e Sprint.
+                            </Typography>
+                            {avaliacao.usuariosTogglSemPar.length > 0 ? (
+                                <Stack direction="row" useFlexGap sx={{ flexWrap: 'wrap', gap: 1, alignItems: 'center' }}>
+                                    <Typography variant="body2">Sem usuário do Jira:</Typography>
+                                    {avaliacao.usuariosTogglSemPar.map((usuario) => (
+                                        <Stack key={usuario.chave} direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+                                            <BadgeSigla sigla={usuario.sigla} cor={usuario.cor} sx={{ borderRadius: 1 }} />
+                                            <Typography variant="body2">{usuario.nomeExibicao}</Typography>
+                                        </Stack>
+                                    ))}
+                                </Stack>
+                            ) : undefined}
+                            {avaliacao.entradasInvalidas.length > 0 ? (
+                                <Typography variant="body2">
+                                    Mapeamentos inválidos (usuário do Toggl removido ou sem Sigla): {avaliacao.entradasInvalidas.join(', ')}.
+                                </Typography>
+                            ) : undefined}
+                        </Stack>
+                    </Alert>
+                ) : undefined}
 
                 <Dialog open={nomeEmEdicao !== null} onClose={() => setNomeEmEdicao(null)} maxWidth="xs" fullWidth>
                     <DialogTitle>Sigla e cor — {nomeEmEdicao}</DialogTitle>

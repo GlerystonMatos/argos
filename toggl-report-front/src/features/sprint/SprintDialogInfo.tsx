@@ -214,26 +214,26 @@ export function SprintDialogInfo({ aberto, onFechar, cabecalho, categorias, resp
                                     quem lista as tags reais do workspace, usadas em Configurações → Toggl.
                                 </Typography>
                                 <Typography component="li" variant="body2" color="text.secondary">
-                                    Quatro campos obrigatórios em Configurações, sem os quais os itens Relatório,
-                                    Gant e Sprint do menu ficam desabilitados: Agrupamento, Tags detalhadas por
-                                    descrição (só exigido quando o agrupamento é "ambos"), Tags DEV/REV/QA do Toggl e
-                                    Status DEV/REV/QA do Jira (Configurações → Jira: Status).
+                                    Configurações obrigatórias, sem as quais os itens Relatório, Gant e Sprint do menu
+                                    ficam desabilitados: Agrupamento, Tags detalhadas por descrição (exigidas, exceto
+                                    no agrupamento "descricao"), Tags DEV/REV/QA do Toggl, os cinco Campos
+                                    do Jira, Status DEV/REV/QA e Status Concluído/Ignorado do Jira
+                                    (Configurações → Jira: Status) e o mapeamento Jira ↔ Toggl.
                                 </Typography>
                                 <Typography component="li" variant="body2" color="text.secondary">
                                     A conexão com o Jira (seção Jira do menu: URL/e-mail/token) é necessária para abrir
                                     a seção Configurações. O mapeamento Jira ↔ Toggl é{' '}
-                                    <strong>opcional</strong>: sem ele, o fallback automático de colaborador DEV/REV
-                                    não é aplicado. Quando uma tarefa não é encontrada no Jira, Prioridade e Situação
+                                    <strong>obrigatório</strong>: todo usuário do Toggl cadastrado precisa estar
+                                    associado a um usuário do Jira (e os usuários exclusivos do Jira precisam de Sigla).
+                                    Quando uma tarefa não é encontrada no Jira, Prioridade e Situação
                                     dela ficam "Nenhuma" e os três PREs (DEV/REV/QA) ficam "–".
                                 </Typography>
                                 <Typography component="li" variant="body2" color="text.secondary">
                                     Com o Jira conectado, o PRE de cada grupo depende de um campo próprio, configurado
-                                    em Configurações → Jira: Campos personalizados — "Estimativa do desenvolvimento" (DEV),
+                                    em Configurações → Jira: Campos — "Estimativa do desenvolvimento" (DEV),
                                     "Estimativa da revisão" (REV) e "Estimativa dos testes" (QA) — e de a tarefa ser
-                                    encontrada no Jira. Os três campos são independentes: dá para configurar só um
-                                    deles (ex.: "Estimativa do desenvolvimento") e deixar os outros dois em branco —
-                                    nesse caso só o PRE de DEV mostra valor real, REV e QA continuam "–" até terem seu
-                                    próprio campo configurado.
+                                    encontrada no Jira. Os cinco campos (os três de estimativa,
+                                    "Revisado por" e "Analisado por") são obrigatórios; cada grupo usa o seu de forma independente.
                                 </Typography>
                             </Box>
                         </Stack>
@@ -323,7 +323,7 @@ export function SprintDialogInfo({ aberto, onFechar, cabecalho, categorias, resp
                                 grupo DEV de uma linha de descrição fica sem colaborador (ninguém apontou tempo
                                 nele), o Sprint tenta preencher automaticamente a partir do "Responsável" (assignee)
                                 da tarefa no Jira; o mesmo vale para REV a partir do campo "Revisado por" (campo
-                                customizado, configurado em Configurações → Jira: Campos personalizados). O badge exibido vem
+                                customizado, configurado em Configurações → Jira: Campos). O badge exibido vem
                                 sempre do mapeamento salvo em Configurações → Jira ↔ Toggl para aquele nome do Jira:
                                 se o nome está vinculado a um usuário do Toggl, só preenche quando esse usuário está
                                 selecionado neste sprint; se o nome é exclusivo do Jira (sem conta Toggl), usa a
@@ -360,7 +360,7 @@ export function SprintDialogInfo({ aberto, onFechar, cabecalho, categorias, resp
                                 PRE = tempo previsto, REA = tempo realizado (Toggl) — passe o mouse nos títulos das
                                 colunas para ver a legenda, e nos valores para ver a hora completa. Cada grupo
                                 (DEV/REV/QA) tem seu próprio campo de estimativa configurável em Configurações →
-                                Jira: Campos personalizados — "Estimativa do desenvolvimento" (DEV), "Estimativa da revisão" (REV)
+                                Jira: Campos — "Estimativa do desenvolvimento" (DEV), "Estimativa da revisão" (REV)
                                 e "Estimativa dos testes" (QA); sem esse campo configurado para aquele grupo, sem
                                 integração do Jira ou sem a tarefa encontrada, o PRE daquele grupo específico fica
                                 "–" — os três grupos são independentes entre si. PRE e REA usam a mesma cor de destaque quando têm valor; se o tempo

@@ -1,7 +1,7 @@
 import { useGant } from './useGant';
-import { GantLinha } from './GantLinha';
 import type { ReactNode } from 'react';
-import { useEffect, useState } from 'react';
+import { GantLinha } from './GantLinha';
+import { useEffect, useRef, useState } from 'react';
 import SearchIcon from '@mui/icons-material/Search';
 import { useExpansao } from '../../hooks/useExpansao';
 import { AvisoCache } from '../../components/AvisoCache';
@@ -11,6 +11,7 @@ import { useNotificacao } from '../../hooks/useNotificacao';
 import { CabecalhoView } from '../../components/CabecalhoView';
 import { formatarDiaCurto, formatarPeriodo } from '../../utils/datas';
 import { EsqueletoCarregando } from '../../components/EsqueletoCarregando';
+import { useLargurasColunasGant } from '../../hooks/useLargurasColunasGant';
 import { BotaoComCarregamento } from '../../components/BotaoComCarregamento';
 
 import {
@@ -24,6 +25,9 @@ import {
     TableHead,
     TableContainer,
 } from '@mui/material';
+
+const INDICE_COLUNA_DESCRICAO = 1;
+const LARGURA_MINIMA_DESCRICAO = 100;
 
 interface GantViewProps {
     dataInicio: string;
@@ -53,6 +57,9 @@ export function GantView({ dataInicio, dataFim, onVoltar, veioDoCache }: GantVie
     );
 
     const totalColunas = 3 + (gant?.dias.length ?? 0);
+
+    const refTabela = useRef<HTMLTableElement>(null);
+    const { medindo, larguras, somaFixas } = useLargurasColunasGant(refTabela, gant, INDICE_COLUNA_DESCRICAO);
 
     return (
         <Stack spacing={2}>
@@ -121,7 +128,22 @@ export function GantView({ dataInicio, dataFim, onVoltar, veioDoCache }: GantVie
 
             {gant && gant.linhas.length > 0 ? (
                 <TableContainer sx={{ overflowX: 'auto', mt: '0.5rem !important' }}>
-                    <Table size="small">
+                    <Table
+                        size="small"
+                        ref={refTabela}
+                        sx={{
+                            '& .MuiTableCell-root': { whiteSpace: 'nowrap' },
+                            ...(medindo
+                                ? { tableLayout: 'auto', width: 'max-content' }
+                                : { tableLayout: 'fixed', width: '100%', minWidth: somaFixas + LARGURA_MINIMA_DESCRICAO }),
+                        }}>
+                        {medindo ? undefined : (
+                            <colgroup>
+                                {larguras.map((largura, indice) => (
+                                    <col key={indice} style={largura === null ? undefined : { width: largura }} />
+                                ))}
+                            </colgroup>
+                        )}
                         <TableHead>
                             <TableRow>
                                 <TableCell sx={{ py: 0.25 }}>Categoria</TableCell>
@@ -148,6 +170,7 @@ export function GantView({ dataInicio, dataFim, onVoltar, veioDoCache }: GantVie
                                         linha={linha}
                                         dias={gant.dias}
                                         totalColunas={totalColunas}
+                                        medindo={medindo}
                                         primeiraDoUsuario={primeiraDoUsuario}
                                         usuarioExpandido={usuarioExpandido}
                                         onAlternarUsuario={() => alternarUm(linha.usuarioChave)} />

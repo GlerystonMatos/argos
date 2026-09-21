@@ -40,3 +40,14 @@ export function formatarInicioLocal(iso: string): string {
     const minutos = data.getMinutes().toString().padStart(2, '0');
     return `${horas}:${minutos} do dia ${formatarData(paraIso(data))}`;
 }
+
+export function formatarDataLocal(iso: string): string {
+    return formatarData(paraIso(new Date(iso)));
+}
+
+export function formatarDataHoraLocal(iso: string): string {
+    const data = new Date(iso);
+    const horas = data.getHours().toString().padStart(2, '0');
+    const minutos = data.getMinutes().toString().padStart(2, '0');
+    return `${formatarData(paraIso(data))} ${horas}:${minutos}`;
+}

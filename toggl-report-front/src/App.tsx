@@ -13,8 +13,6 @@ import { ResumoView } from './features/resumo/ResumoView';
 import { LoginScreen } from './features/auth/LoginScreen';
 import { SprintView } from './features/sprint/SprintView';
 import { limparTachados } from './features/sprint/tachados';
-import { ProvedorNotificacao } from './hooks/useNotificacao';
-import type { Sprint, ConsultarResponse } from './api/tipos';
 import { SprintsPanel } from './features/sprint/SprintsPanel';
 import { MarcaTogglReport } from './components/MarcaTogglReport';
 import { JiraConexaoView } from './features/jira/JiraConexaoView';
@@ -24,19 +22,22 @@ import { useConsultaSprint } from './features/sprint/useConsultaSprint';
 import { ParametrosGantForm } from './features/gant/ParametrosGantForm';
 import { BotaoComCarregamento } from './components/BotaoComCarregamento';
 import { ImportarDadosDialog } from './features/dados/ImportarDadosDialog';
+import { PlanejamentoView } from './features/planejamento/PlanejamentoView';
 import { lerMenuVisivel, gravarMenuVisivel } from './utils/preferenciasMenu';
 import { ConsultaSprintDialog } from './features/sprint/ConsultaSprintDialog';
 import { ConfiguracoesView } from './features/configuracoes/ConfiguracoesView';
 import { UsuariosTogglView } from './features/usuarios-toggl/UsuariosTogglView';
 import { useResumoConfiguracao } from './features/resumo/useResumoConfiguracao';
+import type { Sprint, ConsultarResponse, OrigemConsultaSprint } from './api/tipos';
 import { ParametrosRelatorioForm } from './features/relatorio/ParametrosRelatorioForm';
 import type { ConfiguracoesViewHandle } from './features/configuracoes/ConfiguracoesView';
+import { ProvedorNotificacao, useNotificacao, mensagemDeErro } from './hooks/useNotificacao';
+import { atualizarPlanejamentoAoVivo } from './features/planejamento/atualizacoesPlanejamento';
 
 import {
     Box,
     Alert,
     AppBar,
-    Tooltip,
     Toolbar,
     Container,
     IconButton,
@@ -47,7 +48,7 @@ import {
 
 type VisaoConsulta = 'parametros' | 'resultado';
 
-type VisaoSprint = 'sprints' | 'acompanhamento';
+type VisaoSprint = 'sprints' | 'acompanhamento' | 'planejamento';
 
 const SECOES_DE_CONFIGURACAO: readonly Secao[] = ['resumo', 'toggl', 'jira', 'configuracoes'];
 
@@ -76,6 +77,7 @@ function AppInterno({ onSair }: AppInternoProps): ReactNode {
 
     const consultaSprint = useConsultaSprint(sprintSelecionado?.chave ?? '');
 
+    const { notificarAviso } = useNotificacao();
     const resumo = useResumoConfiguracao();
     const { recarregar, configuracaoCompleta, semUsuarios: semUsuariosToggl } = resumo;
 
@@ -95,7 +97,7 @@ function AppInterno({ onSair }: AppInternoProps): ReactNode {
 
     async function navegarComSalvamento(destino: Secao, aba?: AbaConfiguracoes): Promise<void> {
         if (secao === 'configuracoes') {
-            const salvo = (await refConfiguracoes.current?.salvarAtual()) ?? true;
+            const salvo = (await refConfiguracoes.current?.salvarTudo()) ?? true;
             if (!salvo) return;
         }
         setSecao(destino);
@@ -137,7 +139,7 @@ function AppInterno({ onSair }: AppInternoProps): ReactNode {
         setSprintSelecionado(sprint);
     }
 
-    function concluirConsultaSprint(resposta: ConsultarResponse): void {
+    function concluirConsultaSprint(resposta: ConsultarResponse, origemEfetiva: OrigemConsultaSprint): void {
         if (!sprintSelecionado) return;
         setConsultaSprintConcluida(resposta);
         if (!resposta.veioDoCache) {
@@ -145,30 +147,38 @@ function AppInterno({ onSair }: AppInternoProps): ReactNode {
         }
         setConsultaSprintAberta(false);
         setVisaoSprint('acompanhamento');
+        if (!sprintSelecionado.fechado && (origemEfetiva === 'jira' || origemEfetiva === 'ambos')) {
+            atualizarPlanejamentoEmSegundoPlano(sprintSelecionado.chave);
+        }
+    }
+
+    // "Jira" e "Ambos" também atualizam o Planejamento, sem bloquear a entrada no Acompanhamento;
+    // sem quadro de DEV configurado o passo é pulado em silêncio.
+    function atualizarPlanejamentoEmSegundoPlano(chaveSprint: string): void {
+        if (resumo.jiraQuadro === null) return;
+        atualizarPlanejamentoAoVivo(chaveSprint).catch((erro: unknown) =>
+            notificarAviso(`Não foi possível atualizar o Planejamento: ${mensagemDeErro(erro)}`),
+        );
     }
 
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
             <AppBar position="static" color="primary" enableColorOnDark>
                 <Toolbar>
-                    <Tooltip title={telaGrande ? (menuVisivel ? 'Esconder menu' : 'Exibir menu') : 'Abrir menu'}>
-                        <IconButton
-                            color="inherit"
-                            edge="start"
-                            aria-label={telaGrande ? (menuVisivel ? 'esconder menu' : 'exibir menu') : 'abrir menu'}
-                            aria-expanded={telaGrande ? menuVisivel : menuMobileAberto}
-                            onClick={alternarMenu}
-                            sx={{ mr: 1 }}>
-                            <MenuIcon />
-                        </IconButton>
-                    </Tooltip>
+                    <IconButton
+                        color="inherit"
+                        edge="start"
+                        aria-label={telaGrande ? (menuVisivel ? 'esconder menu' : 'exibir menu') : 'abrir menu'}
+                        aria-expanded={telaGrande ? menuVisivel : menuMobileAberto}
+                        onClick={alternarMenu}
+                        sx={{ mr: 1 }}>
+                        <MenuIcon />
+                    </IconButton>
                     <MarcaTogglReport sxImagem={{ mr: 1.5 }} onClick={() => navegarPara('resumo')} />
                     <Box sx={{ flexGrow: 1 }} />
-                    <Tooltip title="Sair">
-                        <IconButton color="inherit" onClick={onSair} aria-label="sair">
-                            <LogoutIcon />
-                        </IconButton>
-                    </Tooltip>
+                    <IconButton color="inherit" onClick={onSair} aria-label="sair">
+                        <LogoutIcon />
+                    </IconButton>
                 </Toolbar>
             </AppBar>
 
@@ -271,15 +281,27 @@ function AppInterno({ onSair }: AppInternoProps): ReactNode {
 
                         {secao === 'sprint' && configuracaoCompleta ? (
                             <>
-                                {visaoSprint === 'acompanhamento' && sprintSelecionado && consultaSprintConcluida ? (
-                                    <SprintView
-                                        chaveSprint={sprintSelecionado.chave}
-                                        veioDoCache={consultaSprintConcluida.veioDoCache}
-                                        categorias={resumo.categorias}
-                                        responsabilidade={resumo.responsabilidade}
-                                        fechado={sprintSelecionado.fechado}
-                                        onFechado={setSprintSelecionado}
-                                        onVoltar={() => setVisaoSprint('sprints')} />
+                                {(visaoSprint === 'acompanhamento' || visaoSprint === 'planejamento') && sprintSelecionado && consultaSprintConcluida ? (
+                                    <>
+                                        <Box sx={visaoSprint === 'planejamento' ? { height: 0, overflow: 'hidden', visibility: 'hidden' } : undefined}>
+                                            <SprintView
+                                                chaveSprint={sprintSelecionado.chave}
+                                                veioDoCache={consultaSprintConcluida.veioDoCache}
+                                                categorias={resumo.categorias}
+                                                responsabilidade={resumo.responsabilidade}
+                                                fechado={sprintSelecionado.fechado}
+                                                onFechado={setSprintSelecionado}
+                                                onPlanejar={() => setVisaoSprint('planejamento')}
+                                                quadroConfigurado={resumo.jiraQuadro !== null}
+                                                onConfigurarQuadro={() => navegarPara('jira')}
+                                                onVoltar={() => setVisaoSprint('sprints')} />
+                                        </Box>
+                                        {visaoSprint === 'planejamento' ? (
+                                            <PlanejamentoView
+                                                sprint={sprintSelecionado}
+                                                onVoltar={() => setVisaoSprint('acompanhamento')} />
+                                        ) : undefined}
+                                    </>
                                 ) : (
                                     <SprintsPanel
                                         sprintSelecionadoChave={sprintSelecionado?.chave ?? null}

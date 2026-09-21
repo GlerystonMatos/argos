@@ -6,6 +6,10 @@ export const OPCOES_AGRUPAMENTO: { valor: Agrupamento; rotulo: string }[] = [
     { valor: 'ambos', rotulo: 'Ambos' },
 ];
 
+export function rotularQuadroJira(id: number, nome: string): string {
+    return nome.trim() !== '' ? `${nome} (#${id})` : `#${id}`;
+}
+
 export function rotularAgrupamento(valor: Agrupamento): string {
     return OPCOES_AGRUPAMENTO.find((opcao) => opcao.valor === valor)?.rotulo ?? valor;
 }

@@ -122,6 +122,7 @@ app.MapSprintCategoriasEndpoints(caminhos);
 app.MapSprintResponsabilidadeEndpoints(caminhos);
 app.MapSprintStatusFinalEndpoints(caminhos);
 app.MapSprintConsultasEndpoints(caminhos);
+app.MapSprintPlanejamentoEndpoints(caminhos);
 app.MapSprintAcompanhamentoEndpoints(caminhos);
 app.MapJiraEndpoints(caminhos);
 

@@ -24,7 +24,7 @@ interface ConsultaSprintDialogProps {
     sprint: Sprint;
     consulta: ResultadoUseConsultaSprint;
     onCancelar: () => void;
-    onConcluida: (resposta: ConsultarResponse) => void;
+    onConcluida: (resposta: ConsultarResponse, origemEfetiva: OrigemConsultaSprint) => void;
 }
 
 const ROTULO_CONSULTAR: Record<OrigemConsultaSprint, string> = {
@@ -54,7 +54,7 @@ export function ConsultaSprintDialog({
         try {
             const resposta = await executar(sprint.dataInicio, sprint.dataFim, false, origemEfetiva);
             if (temDadoAproveitavel(resposta)) {
-                onConcluida(resposta);
+                onConcluida(resposta, origemEfetiva);
             } else {
                 setSemDadoAproveitavel(true);
             }
@@ -90,8 +90,8 @@ export function ConsultaSprintDialog({
                         {sprint.fechado ? (
                             <Alert severity="info">
                                 Sprint fechado: os dados ficam travados no que foi salvo ao fechar. A consulta sempre usa
-                                o cache do Toggl e do Jira, sem chamar a API de novo. Reabra o sprint na listagem para
-                                liberar edição e novas consultas.
+                                o cache do Toggl, do Jira e do Planejamento, sem chamar a API de novo. Reabra o sprint
+                                na listagem para liberar edição e novas consultas.
                             </Alert>
                         ) : (
                             <Stack spacing={0.5}>
@@ -110,9 +110,9 @@ export function ConsultaSprintDialog({
                                     <ToggleButton value="ambos">Ambos</ToggleButton>
                                 </ToggleButtonGroup>
                                 <Typography variant="caption" color="text.secondary">
-                                    Nenhum: usa o cache do Toggl e do Jira quando disponível. Toggl: força nova consulta
-                                    ao Toggl (Jira do cache). Jira: força atualização do Jira (Toggl do cache). Ambos:
-                                    força os dois.
+                                    Nenhum: usa o cache do Toggl, do Jira e do Planejamento quando disponível. Toggl:
+                                    força nova consulta ao Toggl (Jira e Planejamento do cache). Jira: atualiza as
+                                    informações do Jira e o Planejamento do sprint (Toggl do cache). Ambos: força tudo.
                                 </Typography>
                             </Stack>
                         )}

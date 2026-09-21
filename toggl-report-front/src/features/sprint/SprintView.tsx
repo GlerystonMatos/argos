@@ -1,12 +1,13 @@
-import { CORES } from '../../theme';
 import type { ReactNode } from 'react';
 import { useSprint } from './useSprint';
 import { fecharSprint } from '../../api/sprintsApi';
+import { CORES, ALTURA_CONTROLE } from '../../theme';
 import { SprintDialogInfo } from './SprintDialogInfo';
 import { obterCoresJira } from '../../api/coresJiraApi';
 import { SprintLinhaTarefa } from './SprintLinhaTarefa';
 import { AvisoCache } from '../../components/AvisoCache';
 import { useNotificacao } from '../../hooks/useNotificacao';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { SprintCardCapacidade } from './SprintCardCapacidade';
 import { CabecalhoView } from '../../components/CabecalhoView';
 import { SprintCardColaboradores } from './SprintCardColaboradores';
@@ -14,9 +15,11 @@ import { SprintDialogDetalheLinha } from './SprintDialogDetalheLinha';
 import { obterStatusFinalSprint } from '../../api/statusFinalSprintApi';
 import { lerTachados, gravarTachados, idLinhaTarefa } from './tachados';
 import { DialogoConfirmacao } from '../../components/DialogoConfirmacao';
+import { FiltroMultiSelecao } from '../../components/FiltroMultiSelecao';
+import EventNoteOutlinedIcon from '@mui/icons-material/EventNoteOutlined';
 import { EsqueletoCarregando } from '../../components/EsqueletoCarregando';
 import { BotaoComCarregamento } from '../../components/BotaoComCarregamento';
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useLarguraColunaRestante } from '../../hooks/useLarguraColunaRestante';
 
 import {
     GRUPOS,
@@ -47,7 +50,6 @@ import {
     TableBody,
     TableCell,
     TableHead,
-    Autocomplete,
     TableSortLabel,
     TableContainer,
     FormControlLabel,
@@ -59,6 +61,9 @@ const NENHUMA = 'Nenhuma';
 interface SprintViewProps {
     chaveSprint: string;
     onVoltar: () => void;
+    onPlanejar: () => void;
+    quadroConfigurado: boolean;
+    onConfigurarQuadro: () => void;
     veioDoCache?: boolean;
     categorias?: CategoriasSprint | null;
     responsabilidade?: ResponsabilidadeSprint | null;
@@ -71,7 +76,7 @@ const INDICE_COLUNA_DESCRICAO = 4;
 const LARGURA_MINIMA_DESCRICAO = 100;
 const MARGEM_SEGURANCA_DESCRICAO = 4;
 
-export function SprintView({ chaveSprint, onVoltar, veioDoCache = false, categorias, responsabilidade, fechado = false, onFechado }: SprintViewProps): ReactNode {
+export function SprintView({ chaveSprint, onVoltar, onPlanejar, quadroConfigurado, onConfigurarQuadro, veioDoCache = false, categorias, responsabilidade, fechado = false, onFechado }: SprintViewProps): ReactNode {
     const [fechando, setFechando] = useState(false);
     const [termoBusca, setTermoBusca] = useState('');
     const { resultado, carregando, carregar } = useSprint();
@@ -81,6 +86,7 @@ export function SprintView({ chaveSprint, onVoltar, veioDoCache = false, categor
     const [inverterFiltros, setInverterFiltros] = useState(false);
     const [dialogoInfoAberto, setDialogoInfoAberto] = useState(false);
     const [confirmandoFechar, setConfirmandoFechar] = useState(false);
+    const [quadroPendente, setQuadroPendente] = useState(false);
     const [destacadas, setDestacadas] = useState<Set<string>>(new Set());
     const [filtroSituacoes, setFiltroSituacoes] = useState<string[]>([]);
     const [filtroPrioridades, setFiltroPrioridades] = useState<string[]>([]);
@@ -93,7 +99,6 @@ export function SprintView({ chaveSprint, onVoltar, veioDoCache = false, categor
     const [ordenacao, setOrdenacao] = useState<{ campo: CampoOrdenacao; direcao: 'asc' | 'desc' } | null>(null);
     const [linhaDetalhe, setLinhaDetalhe] = useState<{ linha: LinhaTarefaSprint; codigoDuplicado: boolean } | null>(null);
     const refTabela = useRef<HTMLTableElement>(null);
-    const [larguraDescricao, setLarguraDescricao] = useState<number | undefined>(undefined);
 
     useEffect(() => {
         obterCoresJira()
@@ -154,6 +159,19 @@ export function SprintView({ chaveSprint, onVoltar, veioDoCache = false, categor
             setFechando(false);
             setConfirmandoFechar(false);
         }
+    }
+
+    function aoClicarPlanejar(): void {
+        if (quadroConfigurado) {
+            onPlanejar();
+            return;
+        }
+        setQuadroPendente(true);
+    }
+
+    function irConfigurarQuadro(): void {
+        setQuadroPendente(false);
+        onConfigurarQuadro();
     }
 
     const cabecalho = resultado?.cabecalho;
@@ -302,29 +320,16 @@ export function SprintView({ chaveSprint, onVoltar, veioDoCache = false, categor
 
     const colaboradores = resultado?.colaboradores ?? [];
 
-    useLayoutEffect(() => {
-        const tabela = refTabela.current;
-        const container = tabela?.parentElement;
-        if (!tabela || !container) return;
-
-        function recalcularLarguraDescricao(): void {
-            const primeiraLinha = tabela!.tBodies[0]?.rows[0];
-            if (!primeiraLinha) return;
-
-            let larguraOutrasColunas = 0;
-            Array.from(primeiraLinha.cells).forEach((celula, indice) => {
-                if (indice !== INDICE_COLUNA_DESCRICAO) larguraOutrasColunas += celula.getBoundingClientRect().width;
-            });
-
-            const disponivel = Math.floor(container!.clientWidth - larguraOutrasColunas) - MARGEM_SEGURANCA_DESCRICAO;
-            setLarguraDescricao(Math.max(LARGURA_MINIMA_DESCRICAO, disponivel));
-        }
-
-        recalcularLarguraDescricao();
-        const observador = new ResizeObserver(recalcularLarguraDescricao);
-        observador.observe(container);
-        return () => observador.disconnect();
-    }, [tarefasFiltradas, larguraCodigo]);
+    const larguraDescricao = useLarguraColunaRestante(
+        refTabela,
+        {
+            indiceColuna: INDICE_COLUNA_DESCRICAO,
+            larguraMinima: LARGURA_MINIMA_DESCRICAO,
+            margemSeguranca: MARGEM_SEGURANCA_DESCRICAO,
+            linhaMedicao: 'corpo',
+        },
+        [tarefasFiltradas, larguraCodigo],
+    );
 
     return (
         <Stack spacing={2}>
@@ -337,6 +342,9 @@ export function SprintView({ chaveSprint, onVoltar, veioDoCache = false, categor
                         Fechar
                     </BotaoComCarregamento>
                 ) : undefined}
+                <Button variant="outlined" startIcon={<EventNoteOutlinedIcon />} onClick={aoClicarPlanejar}>
+                    Planejar
+                </Button>
                 <Button variant="outlined" onClick={() => setDialogoInfoAberto(true)}>
                     Informações
                 </Button>
@@ -360,53 +368,40 @@ export function SprintView({ chaveSprint, onVoltar, veioDoCache = false, categor
                             onChange={(e) => setTermoBusca(e.target.value)}
                             size="small"
                             sx={{ minWidth: { xs: 0, sm: 200 }, flex: 1 }} />
-                        <Autocomplete
-                            multiple
-                            size="small"
-                            options={opcoesPrioridade.filter((opcao) => !filtroPrioridades.includes(opcao))}
-                            value={filtroPrioridades}
-                            onChange={(_evento, valor) => setFiltroPrioridades(valor)}
-                            sx={{ minWidth: { xs: 0, sm: 200 }, flex: 1 }}
-                            renderInput={(parametros) => <TextField {...parametros} label="Prioridade" placeholder="Todas" />} />
-                        <Autocomplete
-                            multiple
-                            size="small"
-                            options={opcoesSituacao.filter((opcao) => !filtroSituacoes.includes(opcao))}
-                            value={filtroSituacoes}
-                            onChange={(_evento, valor) => setFiltroSituacoes(valor)}
-                            sx={{ minWidth: { xs: 0, sm: 200 }, flex: 1 }}
-                            renderInput={(parametros) => <TextField {...parametros} label="Status" placeholder="Todos" />} />
+                        <FiltroMultiSelecao
+                            label="Prioridade"
+                            placeholder="Todas"
+                            opcoes={opcoesPrioridade}
+                            valor={filtroPrioridades}
+                            onChange={setFiltroPrioridades} />
+                        <FiltroMultiSelecao
+                            label="Status"
+                            placeholder="Todos"
+                            opcoes={opcoesSituacao}
+                            valor={filtroSituacoes}
+                            onChange={setFiltroSituacoes} />
                     </Stack>
                     <Stack
                         direction={{ xs: 'column', sm: 'row' }}
                         sx={{ flexWrap: { sm: 'wrap' }, gap: 1, alignItems: { xs: 'stretch', sm: 'flex-start' } }}>
-                        <Autocomplete
-                            multiple
-                            size="small"
-                            options={opcoesColaborador.filter((opcao) => !filtroColaboradores.includes(opcao))}
-                            value={filtroColaboradores}
-                            onChange={(_evento, valor) => setFiltroColaboradores(valor)}
-                            sx={{ minWidth: { xs: 0, sm: 200 }, flex: 1 }}
-                            renderInput={(parametros) => <TextField {...parametros} label="Colaborador" placeholder="Todos" />} />
-                        <Autocomplete
-                            multiple
-                            size="small"
-                            options={opcoesSituacaoGrupo.filter((opcao) => !filtroSituacaoGrupos.includes(opcao))}
-                            value={filtroSituacaoGrupos}
-                            onChange={(_evento, valor) => setFiltroSituacaoGrupos(valor)}
-                            sx={{ minWidth: { xs: 0, sm: 200 }, flex: 1 }}
-                            renderInput={(parametros) => (
-                                <TextField
-                                    {...parametros}
-                                    label="Situação (DEV/REV/QA)"
-                                    placeholder="Todas"
-                                    helperText={
-                                        filtroColaboradores.length > 0
-                                            ? 'Avalia só o grupo do(s) colaborador(es) selecionado(s) acima'
-                                            : 'Sem colaborador selecionado, avalia qualquer grupo da linha'
-                                    } />
-                            )} />
-                        <Stack direction="row" spacing={1} sx={{ alignItems: 'center', minHeight: 40, flexShrink: 0 }}>
+                        <FiltroMultiSelecao
+                            label="Colaborador"
+                            placeholder="Todos"
+                            opcoes={opcoesColaborador}
+                            valor={filtroColaboradores}
+                            onChange={setFiltroColaboradores} />
+                        <FiltroMultiSelecao
+                            label="Situação (DEV/REV/QA)"
+                            placeholder="Todas"
+                            helperText={
+                                filtroColaboradores.length > 0
+                                    ? 'Avalia só o grupo do(s) colaborador(es) selecionado(s) acima'
+                                    : 'Sem colaborador selecionado, avalia qualquer grupo da linha'
+                            }
+                            opcoes={opcoesSituacaoGrupo}
+                            valor={filtroSituacaoGrupos}
+                            onChange={setFiltroSituacaoGrupos} />
+                        <Stack direction="row" spacing={1} sx={{ alignItems: 'center', height: ALTURA_CONTROLE, flexShrink: 0 }}>
                             <FormControlLabel
                                 control={<Checkbox checked={inverterFiltros} onChange={(e) => setInverterFiltros(e.target.checked)} />}
                                 label="Inverter filtros" />
@@ -545,6 +540,15 @@ export function SprintView({ chaveSprint, onVoltar, veioDoCache = false, categor
                 carregando={fechando}
                 onConfirmar={() => void confirmarFechar()}
                 onCancelar={() => setConfirmandoFechar(false)} />
+
+            <DialogoConfirmacao
+                aberto={quadroPendente}
+                titulo="Quadro de DEV não configurado"
+                mensagem="O quadro de DEV do Jira ainda não foi configurado. Ir para Jira → Conexão para configurá-lo?"
+                textoConfirmar="Ir para Jira"
+                textoCancelar="Agora não"
+                onConfirmar={irConfigurarQuadro}
+                onCancelar={() => setQuadroPendente(false)} />
         </Stack>
     );
 }

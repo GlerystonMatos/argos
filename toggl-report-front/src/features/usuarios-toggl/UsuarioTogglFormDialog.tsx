@@ -37,6 +37,7 @@ export function UsuarioTogglFormDialog({
     const [tokenApi, setTokenApi] = useState('');
     const [salvando, setSalvando] = useState(false);
     const [validando, setValidando] = useState(false);
+    const [alterado, setAlterado] = useState(false);
     const { criar, editar, validar } = useUsuariosToggl();
     const [sigla, setSigla] = useState(usuarioEmEdicao?.sigla ?? '');
     const [cor, setCor] = useState(usuarioEmEdicao?.cor ?? COR_PADRAO_USUARIO);
@@ -52,6 +53,7 @@ export function UsuarioTogglFormDialog({
             setSigla(usuarioEmEdicao?.sigla ?? '');
             setCor(usuarioEmEdicao ? usuarioEmEdicao.cor : COR_PADRAO_USUARIO);
             setAdministrador(usuarioEmEdicao?.administrador ?? false);
+            setAlterado(false);
             setResultadoValidacao(null);
             setAvisoSemValidacao(null);
         }
@@ -63,6 +65,7 @@ export function UsuarioTogglFormDialog({
         setSigla('');
         setCor(COR_PADRAO_USUARIO);
         setAdministrador(false);
+        setAlterado(false);
         setResultadoValidacao(null);
         setAvisoSemValidacao(null);
         onFechar();
@@ -121,7 +124,15 @@ export function UsuarioTogglFormDialog({
 
     const nomeValido = nomeExibicao.trim().length > 0;
     const tokenObrigatorioAusente = !emEdicao && tokenApi.trim().length === 0;
-    const podeSalvar = nomeValido && !tokenObrigatorioAusente;
+    const siglaValida = sigla.trim().length > 0;
+    const houveAlteracao =
+        usuarioEmEdicao === null ||
+        nomeExibicao.trim() !== usuarioEmEdicao.nomeExibicao ||
+        sigla.trim() !== usuarioEmEdicao.sigla ||
+        cor !== usuarioEmEdicao.cor ||
+        administrador !== usuarioEmEdicao.administrador ||
+        tokenApi.trim() !== '';
+    const podeSalvar = nomeValido && siglaValida && !tokenObrigatorioAusente && houveAlteracao;
 
     return (
         <Dialog open={aberto} onClose={salvando ? undefined : fecharEResetar} fullWidth maxWidth="sm">
@@ -130,16 +141,24 @@ export function UsuarioTogglFormDialog({
                 <Stack spacing={2} sx={{ mt: 1 }}>
                     <UsuarioTogglFormCampos
                         nomeExibicao={nomeExibicao}
-                        onNomeExibicaoChange={setNomeExibicao}
+                        onNomeExibicaoChange={(valor) => {
+                            setNomeExibicao(valor);
+                            setAlterado(true);
+                        }}
                         tokenApi={tokenApi}
                         onTokenApiChange={(valor) => {
                             setTokenApi(valor);
+                            setAlterado(true);
                             setResultadoValidacao(null);
                         }}
                         emEdicao={emEdicao}
                         tokenMascarado={usuarioEmEdicao?.tokenMascarado}
                         sigla={sigla}
-                        onSigilaChange={setSigla}
+                        onSigilaChange={(valor) => {
+                            setSigla(valor);
+                            setAlterado(true);
+                        }}
+                        exibirErros={alterado || emEdicao}
                         cor={cor}
                         onCorChange={setCor}
                         administrador={administrador}

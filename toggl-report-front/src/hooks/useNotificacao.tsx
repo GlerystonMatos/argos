@@ -14,6 +14,7 @@ interface ContextoNotificacao {
     notificarErro: (erro: unknown, prefixo?: string) => void;
     notificarSucesso: (mensagem: string) => void;
     notificarInfo: (mensagem: string) => void;
+    notificarAviso: (mensagem: string) => void;
 }
 
 const Contexto = createContext<ContextoNotificacao | null>(null);
@@ -42,10 +43,11 @@ export function ProvedorNotificacao({ children }: { children: ReactNode }): Reac
 
     const notificarSucesso = useCallback((mensagem: string) => notificar(mensagem, 'success'), [notificar]);
     const notificarInfo = useCallback((mensagem: string) => notificar(mensagem, 'info'), [notificar]);
+    const notificarAviso = useCallback((mensagem: string) => notificar(mensagem, 'warning'), [notificar]);
 
     const valor = useMemo<ContextoNotificacao>(
-        () => ({ notificarErro, notificarSucesso, notificarInfo }),
-        [notificarErro, notificarSucesso, notificarInfo],
+        () => ({ notificarErro, notificarSucesso, notificarInfo, notificarAviso }),
+        [notificarErro, notificarSucesso, notificarInfo, notificarAviso],
     );
 
     return (

@@ -1,22 +1,31 @@
-import type { ReactNode } from 'react';
 import SaveIcon from '@mui/icons-material/Save';
+import type { ReactNode, RefObject } from 'react';
+import { ORDEM_ABAS, ROTULOS_ABAS } from './abas';
 import type { Secao } from '../../components/MenuLateral';
 import { JiraCamposPanel } from '../jira/JiraCamposPanel';
+import { useNotificacao } from '../../hooks/useNotificacao';
 import { ConfiguracaoTogglTab } from './ConfiguracaoTogglTab';
 import { CabecalhoView } from '../../components/CabecalhoView';
-import { Card, Tab, Tabs, Stack, CardContent } from '@mui/material';
 import { MapeamentoJiraTogglPanel } from './MapeamentoJiraTogglPanel';
 import { ConfiguracaoJiraCoresTab } from './ConfiguracaoJiraCoresTab';
 import type { AbaConfiguracoes, AbaConfiguracoesHandle } from './abas';
 import { ConfiguracaoJiraStatusTab } from './ConfiguracaoJiraStatusTab';
+import { Box, Card, Tab, Tabs, Stack, CardContent } from '@mui/material';
 import type { ResumoConfiguracao } from '../resumo/useResumoConfiguracao';
 import { PreRequisitosConfiguracoes } from './PreRequisitosConfiguracoes';
 import { EsqueletoCarregando } from '../../components/EsqueletoCarregando';
 import { BotaoComCarregamento } from '../../components/BotaoComCarregamento';
-import { useCallback, useImperativeHandle, useRef, useState, forwardRef } from 'react';
+
+import {
+    useRef,
+    useMemo,
+    useState,
+    forwardRef,
+    useImperativeHandle,
+} from 'react';
 
 export interface ConfiguracoesViewHandle {
-    salvarAtual: () => Promise<boolean>;
+    salvarTudo: () => Promise<boolean>;
 }
 
 interface ConfiguracoesViewProps {
@@ -26,49 +35,99 @@ interface ConfiguracoesViewProps {
     onSalvo: () => void;
 }
 
+function listarRotulos(abas: AbaConfiguracoes[]): string {
+    return abas.map((aba) => ROTULOS_ABAS[aba]).join(', ');
+}
+
 export const ConfiguracoesView = forwardRef<ConfiguracoesViewHandle, ConfiguracoesViewProps>(
     function ConfiguracoesView({ resumo, abaInicial = 'toggl', onNavegar, onSalvo }, ref): ReactNode {
         const { carregado, carregando, existeUsuarioAdministrador, jiraConfigurado } = resumo;
+        const { notificarErro, notificarInfo, notificarSucesso } = useNotificacao();
 
         const [aba, setAba] = useState<AbaConfiguracoes>(abaInicial);
-        const [sujo, setSujo] = useState(false);
+        const [visitadas, setVisitadas] = useState<ReadonlySet<AbaConfiguracoes>>(() => new Set([abaInicial]));
         const [salvando, setSalvando] = useState(false);
 
-        const sujoRef = useRef(false);
+        const sujoRef = useRef<Record<AbaConfiguracoes, boolean>>({
+            'toggl': false, 'jira-campos': false, 'jira-status': false, 'jira-cores': false, 'jira-toggl': false,
+        });
+        const validoRef = useRef<Record<AbaConfiguracoes, boolean>>({
+            'toggl': true, 'jira-campos': true, 'jira-status': true, 'jira-cores': true, 'jira-toggl': true,
+        });
         const salvandoRef = useRef(false);
-        const refAba = useRef<AbaConfiguracoesHandle>(null);
 
-        const marcarAlterado = useCallback((): void => {
-            sujoRef.current = true;
-            setSujo(true);
+        const refsAbas: Record<AbaConfiguracoes, RefObject<AbaConfiguracoesHandle | null>> = {
+            'toggl': useRef<AbaConfiguracoesHandle>(null),
+            'jira-campos': useRef<AbaConfiguracoesHandle>(null),
+            'jira-status': useRef<AbaConfiguracoesHandle>(null),
+            'jira-cores': useRef<AbaConfiguracoesHandle>(null),
+            'jira-toggl': useRef<AbaConfiguracoesHandle>(null),
+        };
+
+        // Callbacks estáveis por aba: as abas os usam em useEffect e não podem reexecutá-los a cada render.
+        const callbacksAbas = useMemo(() => {
+            const marcarAlterado = {} as Record<AbaConfiguracoes, () => void>;
+            const definirValido = {} as Record<AbaConfiguracoes, (valido: boolean) => void>;
+            for (const chave of ORDEM_ABAS) {
+                marcarAlterado[chave] = (): void => {
+                    sujoRef.current[chave] = true;
+                };
+                definirValido[chave] = (valido: boolean): void => {
+                    validoRef.current[chave] = valido;
+                };
+            }
+            return { marcarAlterado, definirValido };
         }, []);
 
-        async function salvarAtual(): Promise<boolean> {
+        function abrirAba(novaAba: AbaConfiguracoes): void {
+            setVisitadas((atual) => (atual.has(novaAba) ? atual : new Set(atual).add(novaAba)));
+            setAba(novaAba);
+        }
+
+        async function salvarTudo(avisarSemAlteracao = false): Promise<boolean> {
             if (salvandoRef.current) return false;
-            if (!sujoRef.current) return true;
+
+            const alteradas = ORDEM_ABAS.filter((chave) => sujoRef.current[chave]);
+            if (alteradas.length === 0) {
+                if (avisarSemAlteracao) notificarInfo('Nenhuma alteração para salvar.');
+                return true;
+            }
+
+            const incompletas = alteradas.filter((chave) => !validoRef.current[chave]);
+            if (incompletas.length > 0) {
+                notificarErro(new Error(`Preencha os campos obrigatórios em: ${listarRotulos(incompletas)}.`));
+                abrirAba(incompletas[0]);
+                return false;
+            }
 
             salvandoRef.current = true;
             setSalvando(true);
             try {
-                const salvo = (await refAba.current?.salvar()) ?? false;
-                if (salvo) {
-                    sujoRef.current = false;
-                    setSujo(false);
-                    onSalvo();
+                const falhas: AbaConfiguracoes[] = [];
+                for (const chave of alteradas) {
+                    const salvo = (await refsAbas[chave].current?.salvar()) ?? false;
+                    if (salvo) {
+                        sujoRef.current[chave] = false;
+                    } else {
+                        falhas.push(chave);
+                    }
                 }
-                return salvo;
+
+                if (falhas.length < alteradas.length) onSalvo();
+
+                if (falhas.length === 0) {
+                    notificarSucesso('Configurações salvas.');
+                } else {
+                    notificarErro(new Error(`Não foi possível salvar: ${listarRotulos(falhas)}.`));
+                }
+                return falhas.length === 0;
             } finally {
                 salvandoRef.current = false;
                 setSalvando(false);
             }
         }
 
-        useImperativeHandle(ref, () => ({ salvarAtual }));
-
-        async function trocarAba(novaAba: AbaConfiguracoes): Promise<void> {
-            if (novaAba === aba) return;
-            if (await salvarAtual()) setAba(novaAba);
-        }
+        useImperativeHandle(ref, () => ({ salvarTudo: () => salvarTudo() }));
 
         const liberado = existeUsuarioAdministrador && jiraConfigurado;
 
@@ -83,6 +142,23 @@ export const ConfiguracoesView = forwardRef<ConfiguracoesViewHandle, Configuraco
             );
         }
 
+        function propsAba(chave: AbaConfiguracoes): {
+            ref: RefObject<AbaConfiguracoesHandle | null>;
+            onAlterado: () => void;
+            onValidoChange: (valido: boolean) => void;
+        } {
+            return {
+                ref: refsAbas[chave],
+                onAlterado: callbacksAbas.marcarAlterado[chave],
+                onValidoChange: callbacksAbas.definirValido[chave],
+            };
+        }
+
+        function painel(chave: AbaConfiguracoes, conteudo: ReactNode): ReactNode {
+            if (!visitadas.has(chave)) return undefined;
+            return <Box sx={{ display: aba === chave ? 'block' : 'none' }}>{conteudo}</Box>;
+        }
+
         return (
             <Card variant="outlined">
                 <CardContent>
@@ -92,8 +168,7 @@ export const ConfiguracoesView = forwardRef<ConfiguracoesViewHandle, Configuraco
                                 variant="contained"
                                 startIcon={<SaveIcon />}
                                 carregando={salvando}
-                                disabled={!sujo}
-                                onClick={() => void salvarAtual()}>
+                                onClick={() => void salvarTudo(true)}>
                                 Salvar
                             </BotaoComCarregamento>
                         </CabecalhoView>
@@ -102,19 +177,15 @@ export const ConfiguracoesView = forwardRef<ConfiguracoesViewHandle, Configuraco
                             value={aba}
                             variant="scrollable"
                             scrollButtons="auto"
-                            onChange={(_, valor: AbaConfiguracoes) => void trocarAba(valor)}>
-                            <Tab label="Toggl" value="toggl" />
-                            <Tab label="Jira: Campos personalizados" value="jira-campos" />
-                            <Tab label="Jira: Status" value="jira-status" />
-                            <Tab label="Jira: Cores" value="jira-cores" />
-                            <Tab label="Jira ↔ Toggl" value="jira-toggl" />
+                            onChange={(_, valor: AbaConfiguracoes) => abrirAba(valor)}>
+                            {ORDEM_ABAS.map((chave) => <Tab key={chave} label={ROTULOS_ABAS[chave]} value={chave} />)}
                         </Tabs>
 
-                        {aba === 'toggl' ? <ConfiguracaoTogglTab ref={refAba} onAlterado={marcarAlterado} /> : undefined}
-                        {aba === 'jira-campos' ? <JiraCamposPanel ref={refAba} onAlterado={marcarAlterado} /> : undefined}
-                        {aba === 'jira-status' ? <ConfiguracaoJiraStatusTab ref={refAba} onAlterado={marcarAlterado} /> : undefined}
-                        {aba === 'jira-cores' ? <ConfiguracaoJiraCoresTab ref={refAba} onAlterado={marcarAlterado} /> : undefined}
-                        {aba === 'jira-toggl' ? <MapeamentoJiraTogglPanel ref={refAba} onAlterado={marcarAlterado} /> : undefined}
+                        {painel('toggl', <ConfiguracaoTogglTab {...propsAba('toggl')} />)}
+                        {painel('jira-campos', <JiraCamposPanel {...propsAba('jira-campos')} />)}
+                        {painel('jira-status', <ConfiguracaoJiraStatusTab {...propsAba('jira-status')} />)}
+                        {painel('jira-cores', <ConfiguracaoJiraCoresTab ref={refsAbas['jira-cores']} onAlterado={callbacksAbas.marcarAlterado['jira-cores']} />)}
+                        {painel('jira-toggl', <MapeamentoJiraTogglPanel {...propsAba('jira-toggl')} />)}
                     </Stack>
                 </CardContent>
             </Card>

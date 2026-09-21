@@ -8,6 +8,8 @@ public sealed class CaminhosDados
 
     private const string PrefixoCacheJiraSprint = "JiraSprintData_";
 
+    private const string PrefixoCacheJiraPlanejamento = "JiraPlanejamentoData_";
+
     private const int TamanhoMaximoChaveSprint = 100;
 
     public CaminhosDados(string diretorioBase)
@@ -51,9 +53,13 @@ public sealed class CaminhosDados
 
     public string JiraUsuariosCache => Caminho("JiraUsuariosCache.ini");
 
+    public string JiraQuadrosCache => Caminho("JiraQuadrosCache.ini");
+
     public string? CacheSprint(DadosSprint sprint) => CaminhoPorSprint(PrefixoCacheSprint, sprint);
 
     public string? CacheJiraSprint(DadosSprint sprint) => CaminhoPorSprint(PrefixoCacheJiraSprint, sprint);
+
+    public string? CacheJiraPlanejamento(DadosSprint sprint) => CaminhoPorSprint(PrefixoCacheJiraPlanejamento, sprint);
 
     private string Caminho(string nomeArquivo) => Path.Combine(PastaDados, nomeArquivo);
 

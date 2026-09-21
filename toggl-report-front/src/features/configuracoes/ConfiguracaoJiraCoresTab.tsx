@@ -16,7 +16,7 @@ export const ConfiguracaoJiraCoresTab = forwardRef<AbaConfiguracoesHandle, Confi
 
         async function salvarAba(): Promise<boolean> {
             const sucesso = (await refPainelCores.current?.salvar()) ?? true;
-            if (sucesso) notificarSucesso('Cores do Jira salvas.');
+            if (sucesso) notificarSucesso('Mapeamento de cores do Jira, salvo com sucesso.');
             return sucesso;
         }
 

@@ -13,6 +13,10 @@ public class ClienteApiJira
         PropertyNameCaseInsensitive = true
     };
 
+    private static readonly TimeSpan EsperaPadraoNovaTentativa = TimeSpan.FromSeconds(5);
+
+    private static readonly TimeSpan EsperaMaximaNovaTentativa = TimeSpan.FromSeconds(30);
+
     private readonly HttpClient _http;
 
     private readonly string _urlBaseSite;
@@ -184,6 +188,225 @@ public class ClienteApiJira
         {
             return ResultadoApiJira<List<string>>.Falha($"Não foi possível conectar ao Jira: {ex.Message}");
         }
+    }
+
+    public async Task<ResultadoApiJira<List<QuadroJira>>> ListarQuadrosAsync()
+    {
+        const int tamanhoPagina = 50;
+        List<QuadroJiraBruto> quadrosBrutos = new();
+        int startAt = 0;
+
+        try
+        {
+            while (true)
+            {
+                using HttpResponseMessage resposta = await _http.GetAsync($"/rest/agile/1.0/board?type=scrum&startAt={startAt}&maxResults={tamanhoPagina}");
+
+                if (resposta.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
+                    return ResultadoApiJira<List<QuadroJira>>.Falha("Credenciais inválidas (e-mail ou API Token incorretos).");
+
+                if (!resposta.IsSuccessStatusCode)
+                {
+                    string corpo = await resposta.Content.ReadAsStringAsync();
+                    return ResultadoApiJira<List<QuadroJira>>.Falha($"Erro {(int)resposta.StatusCode} ao consultar quadros do Jira: {corpo}");
+                }
+
+                string json = await resposta.Content.ReadAsStringAsync();
+                RespostaQuadrosJiraBruta? pagina = JsonSerializer.Deserialize<RespostaQuadrosJiraBruta>(json, OpcoesJson);
+
+                if (pagina?.Values is null || pagina.Values.Count == 0)
+                    break;
+
+                quadrosBrutos.AddRange(pagina.Values);
+
+                if (pagina.IsLast)
+                    break;
+
+                startAt += pagina.Values.Count;
+            }
+
+            List<QuadroJira> quadros = quadrosBrutos
+                .Where(quadro => !string.IsNullOrWhiteSpace(quadro.Name))
+                .GroupBy(quadro => quadro.Id)
+                .Select(grupo => grupo.First())
+                .Select(quadro => new QuadroJira(quadro.Id, quadro.Name!, quadro.Location?.ProjectKey))
+                .OrderBy(quadro => quadro.Nome, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            return ResultadoApiJira<List<QuadroJira>>.Ok(quadros);
+        }
+        catch (JsonException ex)
+        {
+            return ResultadoApiJira<List<QuadroJira>>.Falha($"Erro ao interpretar resposta do Jira: {ex.Message}");
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or UriFormatException)
+        {
+            return ResultadoApiJira<List<QuadroJira>>.Falha($"Não foi possível conectar ao Jira: {ex.Message}");
+        }
+    }
+
+    public async Task<ResultadoApiJira<List<ColunaQuadroJira>>> ObterColunasQuadroAsync(long quadroId)
+    {
+        ResultadoApiJira<RespostaConfiguracaoQuadroJiraBruta> resultado = await ObterJsonAsync<RespostaConfiguracaoQuadroJiraBruta>(
+            $"/rest/agile/1.0/board/{quadroId}/configuration",
+            "as colunas do quadro do Jira");
+        if (!resultado.Sucesso)
+            return ResultadoApiJira<List<ColunaQuadroJira>>.Falha(resultado.MensagemErro!);
+
+        List<ColunaQuadroJira> colunas = (resultado.Dados!.ColumnConfig?.Columns ?? new List<ColunaQuadroJiraBruta>())
+            .Where(coluna => !string.IsNullOrWhiteSpace(coluna.Name))
+            .Select(coluna => new ColunaQuadroJira(
+                coluna.Name!,
+                (coluna.Statuses ?? new List<StatusColunaQuadroJiraBruto>())
+                    .Select(status => status.Id)
+                    .Where(id => !string.IsNullOrWhiteSpace(id))
+                    .Select(id => id!)
+                    .ToList()))
+            .ToList();
+
+        return ResultadoApiJira<List<ColunaQuadroJira>>.Ok(colunas);
+    }
+
+    public async Task<ResultadoApiJira<List<SprintQuadroJira>>> ObterSprintsAtivosQuadroAsync(long quadroId)
+    {
+        const int tamanhoPagina = 50;
+        List<SprintQuadroJiraBruto> sprintsBrutos = new();
+        int startAt = 0;
+
+        while (true)
+        {
+            ResultadoApiJira<RespostaSprintsQuadroJiraBruta> resultado = await ObterJsonAsync<RespostaSprintsQuadroJiraBruta>(
+                $"/rest/agile/1.0/board/{quadroId}/sprint?state=active&startAt={startAt}&maxResults={tamanhoPagina}",
+                "os sprints ativos do quadro do Jira");
+            if (!resultado.Sucesso)
+                return ResultadoApiJira<List<SprintQuadroJira>>.Falha(resultado.MensagemErro!);
+
+            List<SprintQuadroJiraBruto>? pagina = resultado.Dados!.Values;
+            if (pagina is null || pagina.Count == 0)
+                break;
+
+            sprintsBrutos.AddRange(pagina);
+
+            if (resultado.Dados.IsLast)
+                break;
+
+            startAt += pagina.Count;
+        }
+
+        List<SprintQuadroJira> sprints = sprintsBrutos
+            .Where(sprint => !string.IsNullOrWhiteSpace(sprint.Name))
+            .GroupBy(sprint => sprint.Id)
+            .Select(grupo => grupo.First())
+            .Select(sprint => new SprintQuadroJira(sprint.Id, sprint.Name!, sprint.StartDate, sprint.EndDate))
+            .ToList();
+
+        return ResultadoApiJira<List<SprintQuadroJira>>.Ok(sprints);
+    }
+
+    public async Task<ResultadoApiJira<List<CartaoQuadroJira>>> BuscarCartoesSprintAsync(long quadroId, List<long> sprintIds, string campoAnalisadoPorId, string campoRevisadoPorId)
+    {
+        if (sprintIds.Count == 0)
+            return ResultadoApiJira<List<CartaoQuadroJira>>.Ok(new List<CartaoQuadroJira>());
+
+        const int tamanhoPagina = 200;
+
+        List<string> camposDesejados = new() { "summary", "status", "priority", "assignee", "parent" };
+        if (!string.IsNullOrWhiteSpace(campoAnalisadoPorId))
+            camposDesejados.Add(campoAnalisadoPorId);
+        if (!string.IsNullOrWhiteSpace(campoRevisadoPorId))
+            camposDesejados.Add(campoRevisadoPorId);
+
+        string jql = sprintIds.Count == 1 ? $"sprint = {sprintIds[0]}" : $"sprint in ({string.Join(",", sprintIds)})";
+        string parametrosFixos = $"jql={Uri.EscapeDataString(jql)}&fields={Uri.EscapeDataString(string.Join(",", camposDesejados))}&maxResults={tamanhoPagina}";
+
+        List<IssueBrutaJira> issuesBrutas = new();
+        int startAt = 0;
+
+        while (true)
+        {
+            ResultadoApiJira<RespostaCartoesQuadroJiraBruta> resultado = await ObterJsonAsync<RespostaCartoesQuadroJiraBruta>(
+                $"/rest/agile/1.0/board/{quadroId}/issue?{parametrosFixos}&startAt={startAt}",
+                "os cartões do quadro do Jira");
+            if (!resultado.Sucesso)
+                return ResultadoApiJira<List<CartaoQuadroJira>>.Falha(resultado.MensagemErro!);
+
+            List<IssueBrutaJira>? pagina = resultado.Dados!.Issues;
+            if (pagina is null || pagina.Count == 0)
+                break;
+
+            issuesBrutas.AddRange(pagina);
+            startAt += pagina.Count;
+
+            if (startAt >= resultado.Dados.Total)
+                break;
+        }
+
+        List<CartaoQuadroJira> cartoes = issuesBrutas
+            .GroupBy(issue => issue.Key)
+            .Select(grupo => grupo.First())
+            .Select(issue => new CartaoQuadroJira(
+                issue.Key,
+                issue.Fields.Summary ?? "",
+                issue.Fields.Status?.Id ?? "",
+                issue.Fields.Status?.Name ?? "",
+                issue.Fields.Priority?.Name,
+                issue.Fields.Parent?.Key,
+                issue.Fields.Parent?.Fields?.Summary,
+                ExtrairNomeUsuario(issue.Fields.CamposExtras, "assignee"),
+                ExtrairNomeUsuario(issue.Fields.CamposExtras, campoAnalisadoPorId),
+                ExtrairNomeUsuario(issue.Fields.CamposExtras, campoRevisadoPorId),
+                MontarUrlIssue(issue.Key)))
+            .ToList();
+
+        return ResultadoApiJira<List<CartaoQuadroJira>>.Ok(cartoes);
+    }
+
+    private async Task<ResultadoApiJira<T>> ObterJsonAsync<T>(string caminho, string descricaoRecurso) where T : class
+    {
+        try
+        {
+            using HttpResponseMessage resposta = await ObterComNovaTentativaAsync(caminho);
+
+            if (resposta.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
+                return ResultadoApiJira<T>.Falha("Credenciais inválidas (e-mail ou API Token incorretos).");
+
+            if (!resposta.IsSuccessStatusCode)
+            {
+                string corpo = await resposta.Content.ReadAsStringAsync();
+                return ResultadoApiJira<T>.Falha($"Erro {(int)resposta.StatusCode} ao consultar {descricaoRecurso}: {corpo}");
+            }
+
+            string json = await resposta.Content.ReadAsStringAsync();
+            T? dados = JsonSerializer.Deserialize<T>(json, OpcoesJson);
+
+            return dados is null
+                ? ResultadoApiJira<T>.Falha($"Resposta vazia do Jira ao consultar {descricaoRecurso}.")
+                : ResultadoApiJira<T>.Ok(dados);
+        }
+        catch (JsonException ex)
+        {
+            return ResultadoApiJira<T>.Falha($"Erro ao interpretar resposta do Jira: {ex.Message}");
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or UriFormatException)
+        {
+            return ResultadoApiJira<T>.Falha($"Não foi possível conectar ao Jira: {ex.Message}");
+        }
+    }
+
+    private async Task<HttpResponseMessage> ObterComNovaTentativaAsync(string caminho)
+    {
+        HttpResponseMessage resposta = await _http.GetAsync(caminho);
+        if (resposta.StatusCode != HttpStatusCode.TooManyRequests)
+            return resposta;
+
+        TimeSpan espera = resposta.Headers.RetryAfter?.Delta
+            ?? (resposta.Headers.RetryAfter?.Date - DateTimeOffset.UtcNow)
+            ?? EsperaPadraoNovaTentativa;
+        espera = TimeSpan.FromSeconds(Math.Clamp(espera.TotalSeconds, 1, EsperaMaximaNovaTentativa.TotalSeconds));
+
+        resposta.Dispose();
+        await Task.Delay(espera);
+        return await _http.GetAsync(caminho);
     }
 
     public async Task<ResultadoApiJira<List<IssueJira>>> BuscarIssuesAsync(List<string> chaves, string campoEstimativaDesenvolvimentoId, string? campoRevisadoPorId = null, string? campoEstimativaRevisaoId = null, string? campoEstimativaTestesId = null)

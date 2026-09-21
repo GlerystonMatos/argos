@@ -21,6 +21,8 @@ export const CORES = {
     corTagBadge: '#CD7FC2',
 } as const;
 
+export const ALTURA_CONTROLE = 40;
+
 export const tema = createTheme({
     palette: {
         mode: 'light',
@@ -61,6 +63,9 @@ export const tema = createTheme({
                 },
             },
         },
+        MuiTextField: { defaultProps: { size: 'small' } },
+        MuiSelect: { defaultProps: { size: 'small' } },
+        MuiAutocomplete: { defaultProps: { size: 'small' } },
         MuiOutlinedInput: {
             styleOverrides: {
                 root: {
@@ -71,6 +76,7 @@ export const tema = createTheme({
             },
         },
         MuiFormControl: {
+            defaultProps: { size: 'small' },
             styleOverrides: {
                 root: {
                     '&:hover .MuiInputLabel-root:not(.Mui-disabled):not(.Mui-error)': {
@@ -88,10 +94,22 @@ export const tema = createTheme({
         },
         MuiButton: {
             styleOverrides: {
+                sizeMedium: {
+                    minHeight: ALTURA_CONTROLE,
+                },
                 outlined: {
                     borderColor: CORES.accentAzul,
                     backgroundColor: 'transparent',
                     color: CORES.accentAzul,
+                },
+            },
+        },
+        MuiToggleButton: {
+            styleOverrides: {
+                sizeSmall: {
+                    height: ALTURA_CONTROLE,
+                    paddingTop: 0,
+                    paddingBottom: 0,
                 },
             },
         },
