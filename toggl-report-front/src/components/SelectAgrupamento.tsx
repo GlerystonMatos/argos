@@ -7,12 +7,14 @@ interface SelectAgrupamentoProps {
     value: Agrupamento;
     onChange: (valor: Agrupamento) => void;
     disabled?: boolean;
+    required?: boolean;
 }
 
-export function SelectAgrupamento({ value, onChange, disabled }: SelectAgrupamentoProps): ReactNode {
+export function SelectAgrupamento({ value, onChange, disabled, required }: SelectAgrupamentoProps): ReactNode {
     return (
         <TextField
             select
+            required={required}
             label="Agrupamento"
             value={value}
             onChange={(evento) => onChange(evento.target.value as Agrupamento)}

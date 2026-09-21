@@ -1,5 +1,4 @@
 import type { ReactNode } from 'react';
-import type { AbaConfiguracoesHandle } from './abas';
 import { togglObrigatorioCompleto } from './completude';
 import { listarTagsToggl } from '../../api/tagsTogglApi';
 import { useNotificacao } from '../../hooks/useNotificacao';
@@ -9,6 +8,7 @@ import type { Agrupamento, CategoriasSprint } from '../../api/tipos';
 import { Box, Alert, Stack, Divider, Typography } from '@mui/material';
 import { SelectAgrupamento } from '../../components/SelectAgrupamento';
 import { SelectListaCacheada } from '../../components/SelectListaCacheada';
+import type { AbaConfiguracoesHandle, AbaConfiguracoesProps } from './abas';
 import { useEffect, useState, forwardRef, useImperativeHandle } from 'react';
 import type { RespostaListaCacheada } from '../../components/SelectListaCacheada';
 
@@ -17,12 +17,8 @@ async function obterOpcoesTags(forcarAtualizacao: boolean): Promise<RespostaList
     return { itens: resposta.tags, veioDoCache: resposta.veioDoCache, atualizadoEm: resposta.atualizadoEm };
 }
 
-interface ConfiguracaoTogglTabProps {
-    onAlterado: () => void;
-}
-
-export const ConfiguracaoTogglTab = forwardRef<AbaConfiguracoesHandle, ConfiguracaoTogglTabProps>(
-    function ConfiguracaoTogglTab({ onAlterado }, ref): ReactNode {
+export const ConfiguracaoTogglTab = forwardRef<AbaConfiguracoesHandle, AbaConfiguracoesProps>(
+    function ConfiguracaoTogglTab({ onAlterado, onValidoChange }, ref): ReactNode {
         const { carregar, salvar, carregando } = useCategoriasSprint();
         const { notificarErro, notificarSucesso } = useNotificacao();
 
@@ -32,6 +28,7 @@ export const ConfiguracaoTogglTab = forwardRef<AbaConfiguracoesHandle, Configura
         const [rev, setRev] = useState<string[]>([]);
         const [qa, setQa] = useState<string[]>([]);
         const [corTag, setCorTag] = useState<string>('');
+        const [alterado, setAlterado] = useState(false);
 
         useEffect(() => {
             let cancelado = false;
@@ -58,7 +55,7 @@ export const ConfiguracaoTogglTab = forwardRef<AbaConfiguracoesHandle, Configura
         async function salvarAba(): Promise<boolean> {
             try {
                 await salvar({ dev, rev, qa, agrupamento, tagsDetalhadas, corTag });
-                notificarSucesso('Agrupamento e tags do Toggl salvos.');
+                notificarSucesso('Configuração de agrupamento e de tags do Toggl, salvos com sucesso.');
                 return true;
             } catch (erro) {
                 notificarErro(erro, 'Não foi possível salvar agrupamento e tags');
@@ -71,12 +68,19 @@ export const ConfiguracaoTogglTab = forwardRef<AbaConfiguracoesHandle, Configura
         function alterando<T>(definir: (valor: T) => void): (valor: T) => void {
             return (valor) => {
                 definir(valor);
-                onAlterado();
+                setAlterado(true);
+                onAlterado?.();
             };
         }
 
         const mostraTagsDetalhadas = agrupamento === 'tag' || agrupamento === 'ambos';
         const togglCompleto = togglObrigatorioCompleto({ agrupamento, tagsDetalhadas, dev, rev, qa });
+
+        useEffect(() => {
+            onValidoChange?.(togglCompleto);
+        }, [togglCompleto]);
+
+        const erroTagsDetalhadas = alterado && tagsDetalhadas.length === 0;
 
         const tagsResponsaveis = [
             { label: 'Tags DEV', valor: dev, definir: setDev },
@@ -88,7 +92,7 @@ export const ConfiguracaoTogglTab = forwardRef<AbaConfiguracoesHandle, Configura
             <Stack spacing={2}>
                 <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
                     <Box sx={{ flex: 1, minWidth: 0 }}>
-                        <SelectAgrupamento value={agrupamento} onChange={alterando(setAgrupamento)} disabled={carregando} />
+                        <SelectAgrupamento value={agrupamento} onChange={alterando(setAgrupamento)} disabled={carregando} required />
                     </Box>
                     {mostraTagsDetalhadas ? (
                         <Box sx={{ flex: 2, minWidth: 0 }}>
@@ -97,7 +101,13 @@ export const ConfiguracaoTogglTab = forwardRef<AbaConfiguracoesHandle, Configura
                                 onChange={alterando(setTagsDetalhadas)}
                                 disabled={carregando}
                                 label="Tags para detalhar por descrição"
-                                helperText="Tags nesta lista aparecem detalhadas por descrição, as demais ficam agrupadas por tag"
+                                required
+                                error={erroTagsDetalhadas}
+                                helperText={
+                                    erroTagsDetalhadas
+                                        ? 'Selecione ao menos uma tag.'
+                                        : 'Tags nesta lista aparecem detalhadas por descrição, as demais ficam agrupadas por tag'
+                                }
                                 obterOpcoes={obterOpcoesTags} />
                         </Box>
                     ) : undefined}
@@ -117,6 +127,9 @@ export const ConfiguracaoTogglTab = forwardRef<AbaConfiguracoesHandle, Configura
                                 onChange={alterando(definir)}
                                 disabled={carregando}
                                 label={label}
+                                required
+                                error={alterado && valor.length === 0}
+                                helperText={alterado && valor.length === 0 ? 'Selecione ao menos uma tag.' : undefined}
                                 obterOpcoes={obterOpcoesTags} />
                         </Box>
                     ))}
@@ -138,7 +151,7 @@ export const ConfiguracaoTogglTab = forwardRef<AbaConfiguracoesHandle, Configura
                     disabled={carregando}
                     onChange={(_, cor) => {
                         setCorTag(cor);
-                        onAlterado();
+                        onAlterado?.();
                     }} />
 
                 {!togglCompleto ? (

@@ -1,12 +1,12 @@
 import type { ReactNode } from 'react';
-import type { AbaConfiguracoesHandle } from './abas';
-import { statusResponsavelCompleto } from './completude';
 import { listarStatusJira } from '../../api/jiraListasApi';
 import { useNotificacao } from '../../hooks/useNotificacao';
 import { useStatusFinalSprint } from '../sprint/useStatusFinalSprint';
 import { Box, Alert, Stack, Divider, Typography } from '@mui/material';
 import { SelectListaCacheada } from '../../components/SelectListaCacheada';
+import type { AbaConfiguracoesHandle, AbaConfiguracoesProps } from './abas';
 import { useEffect, useState, forwardRef, useImperativeHandle } from 'react';
+import { statusFinalCompleto, statusResponsavelCompleto } from './completude';
 import { useResponsabilidadeSprint } from '../sprint/useResponsabilidadeSprint';
 import type { RespostaListaCacheada } from '../../components/SelectListaCacheada';
 
@@ -21,12 +21,8 @@ function obterOpcoesStatus(): (forcarAtualizacao: boolean) => Promise<RespostaLi
     };
 }
 
-interface ConfiguracaoJiraStatusTabProps {
-    onAlterado: () => void;
-}
-
-export const ConfiguracaoJiraStatusTab = forwardRef<AbaConfiguracoesHandle, ConfiguracaoJiraStatusTabProps>(
-    function ConfiguracaoJiraStatusTab({ onAlterado }, ref): ReactNode {
+export const ConfiguracaoJiraStatusTab = forwardRef<AbaConfiguracoesHandle, AbaConfiguracoesProps>(
+    function ConfiguracaoJiraStatusTab({ onAlterado, onValidoChange }, ref): ReactNode {
         const {
             carregar: carregarResponsabilidade,
             salvar: salvarResponsabilidade,
@@ -46,6 +42,7 @@ export const ConfiguracaoJiraStatusTab = forwardRef<AbaConfiguracoesHandle, Conf
         const [statusQa, setStatusQa] = useState<string[]>([]);
         const [statusConcluido, setStatusConcluido] = useState<string[]>([]);
         const [statusIgnorado, setStatusIgnorado] = useState<string[]>([]);
+        const [alterado, setAlterado] = useState(false);
 
         useEffect(() => {
             let cancelado = false;
@@ -102,7 +99,7 @@ export const ConfiguracaoJiraStatusTab = forwardRef<AbaConfiguracoesHandle, Conf
                 salvarStatusFinalConfigurado(),
             ]);
             const sucesso = statusOk && statusFinalOk;
-            if (sucesso) notificarSucesso('Status do Jira salvos.');
+            if (sucesso) notificarSucesso('Configuração de status do Jira, salva com sucesso.');
             return sucesso;
         }
 
@@ -111,11 +108,24 @@ export const ConfiguracaoJiraStatusTab = forwardRef<AbaConfiguracoesHandle, Conf
         function alterando<T>(definir: (valor: T) => void): (valor: T) => void {
             return (valor) => {
                 definir(valor);
-                onAlterado();
+                setAlterado(true);
+                onAlterado?.();
             };
         }
 
         const carregando = carregandoResponsabilidade || carregandoStatusFinal;
+        const responsaveisCompletos = statusResponsavelCompleto({ statusDev, statusRev, statusQa });
+        const finalCompleto = statusFinalCompleto({ statusConcluido, statusIgnorado });
+        const statusValido = responsaveisCompletos && finalCompleto;
+
+        useEffect(() => {
+            onValidoChange?.(statusValido);
+        }, [statusValido]);
+
+        function propsObrigatorio(valor: string[]): { required: true; error: boolean; helperText: string | undefined } {
+            const erro = alterado && valor.length === 0;
+            return { required: true, error: erro, helperText: erro ? 'Selecione ao menos um status.' : undefined };
+        }
 
         const statusResponsaveis = [
             { label: 'Status DEV', valor: statusDev, definir: setStatusDev },
@@ -141,6 +151,7 @@ export const ConfiguracaoJiraStatusTab = forwardRef<AbaConfiguracoesHandle, Conf
                                 onChange={alterando(definir)}
                                 disabled={carregando}
                                 label={label}
+                                {...propsObrigatorio(valor)}
                                 obterOpcoes={obterOpcoesStatus()} />
                         </Box>
                     ))}
@@ -152,7 +163,7 @@ export const ConfiguracaoJiraStatusTab = forwardRef<AbaConfiguracoesHandle, Conf
                     <Typography variant="subtitle1">Status finais (para os totalizadores do Sprint)</Typography>
                     <Typography variant="body2" color="text.secondary">
                         Define quais status do Jira contam como "Concluído" e quais são ignorados nos totalizadores do cabeçalho do
-                        Sprint. Um status marcado numa lista some das opções da outra até ser desmarcado.
+                        Sprint (as duas listas são obrigatórias). Um status marcado numa lista some das opções da outra até ser desmarcado.
                     </Typography>
                 </Stack>
 
@@ -163,6 +174,7 @@ export const ConfiguracaoJiraStatusTab = forwardRef<AbaConfiguracoesHandle, Conf
                             onChange={alterando(setStatusConcluido)}
                             disabled={carregando}
                             label="Status Concluído"
+                            {...propsObrigatorio(statusConcluido)}
                             excluir={statusIgnorado}
                             obterOpcoes={obterOpcoesStatus()} />
                     </Box>
@@ -172,14 +184,16 @@ export const ConfiguracaoJiraStatusTab = forwardRef<AbaConfiguracoesHandle, Conf
                             onChange={alterando(setStatusIgnorado)}
                             disabled={carregando}
                             label="Status Ignorado"
+                            {...propsObrigatorio(statusIgnorado)}
                             excluir={statusConcluido}
                             obterOpcoes={obterOpcoesStatus()} />
                     </Box>
                 </Stack>
 
-                {!statusResponsavelCompleto({ statusDev, statusRev, statusQa }) ? (
+                {!statusValido ? (
                     <Alert severity="info">
-                        Preencha os Status para identificar responsáveis (DEV / REV / QA) para liberar Relatório, Gant e Sprint.
+                        Preencha os Status para identificar responsáveis (DEV / REV / QA), Status Concluído e Status Ignorado
+                        para liberar Relatório, Gant e Sprint.
                     </Alert>
                 ) : undefined}
             </Stack>

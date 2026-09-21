@@ -1,9 +1,11 @@
 import type { ReactNode } from 'react';
 import ErrorIcon from '@mui/icons-material/Error';
+import type { QuadroJira } from '../../api/tipos';
 import { IconeAjuda } from '../../components/IconeAjuda';
 import { useConfiguracaoJira } from './useConfiguracaoJira';
 import { useNotificacao } from '../../hooks/useNotificacao';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import { SelectQuadroJira } from '../../components/SelectQuadroJira';
 import { useEffect, useState, forwardRef, useImperativeHandle } from 'react';
 import { BotaoComCarregamento } from '../../components/BotaoComCarregamento';
 import { Alert, Link, Stack, TextField, InputAdornment } from '@mui/material';
@@ -12,6 +14,7 @@ const URL_TOKENS_ATLASSIAN = 'https://id.atlassian.com/manage-profile/security/a
 
 interface JiraConexaoPanelProps {
     onValidoChange?: (valido: boolean) => void;
+    onSujoChange?: (sujo: boolean) => void;
 }
 
 export interface JiraConexaoPanelHandle {
@@ -19,7 +22,7 @@ export interface JiraConexaoPanelHandle {
 }
 
 export const JiraConexaoPanel = forwardRef<JiraConexaoPanelHandle, JiraConexaoPanelProps>(
-    function JiraConexaoPanel({ onValidoChange }, ref): ReactNode {
+    function JiraConexaoPanel({ onValidoChange, onSujoChange }, ref): ReactNode {
         const { carregando, carregar, salvarParcial, testarConexao } = useConfiguracaoJira();
         const { notificarErro, notificarSucesso } = useNotificacao();
 
@@ -27,6 +30,12 @@ export const JiraConexaoPanel = forwardRef<JiraConexaoPanelHandle, JiraConexaoPa
         const [email, setEmail] = useState('');
         const [apiToken, setApiToken] = useState('');
         const [tokenMascarado, setTokenMascarado] = useState('');
+        const [alterado, setAlterado] = useState(false);
+        const [salvoUrl, setSalvoUrl] = useState('');
+        const [salvoEmail, setSalvoEmail] = useState('');
+        const [quadro, setQuadro] = useState<QuadroJira | null>(null);
+        const [salvoQuadroId, setSalvoQuadroId] = useState<number | null>(null);
+        const [versaoConexao, setVersaoConexao] = useState(0);
 
         const [testando, setTestando] = useState(false);
         const [resultadoTeste, setResultadoTeste] = useState<{ sucesso: boolean; mensagem: string | null } | null>(null);
@@ -36,6 +45,10 @@ export const JiraConexaoPanel = forwardRef<JiraConexaoPanelHandle, JiraConexaoPa
                 .then((dados) => {
                     setUrlDominio(dados.urlDominio);
                     setEmail(dados.email);
+                    setSalvoUrl(dados.urlDominio.trim());
+                    setSalvoEmail(dados.email.trim());
+                    setQuadro(dados.quadroId !== null ? { id: dados.quadroId, nome: dados.quadroNome, projeto: null } : null);
+                    setSalvoQuadroId(dados.quadroId);
                     setTokenMascarado(dados.tokenMascarado);
                 })
                 .catch((erro: unknown) => notificarErro(erro, 'Não foi possível carregar a configuração do Jira'));
@@ -60,10 +73,16 @@ export const JiraConexaoPanel = forwardRef<JiraConexaoPanelHandle, JiraConexaoPa
                     urlDominio: urlDominio.trim(),
                     email: email.trim(),
                     apiToken: apiToken.trim() !== '' ? apiToken.trim() : null,
+                    quadroId: quadro?.id ?? null,
+                    quadroNome: quadro?.nome ?? null,
                 });
                 setTokenMascarado(atualizado.tokenMascarado);
+                setSalvoUrl(urlDominio.trim());
+                setSalvoEmail(email.trim());
+                setSalvoQuadroId(atualizado.quadroId);
+                setVersaoConexao((atual) => atual + 1);
                 setApiToken('');
-                notificarSucesso('Conexão com o Jira salva.');
+                notificarSucesso('Dados da conexão com o Jira salvos com sucesso.');
                 return true;
             } catch (erro) {
                 notificarErro(erro, 'Não foi possível salvar a conexão com o Jira');
@@ -73,23 +92,54 @@ export const JiraConexaoPanel = forwardRef<JiraConexaoPanelHandle, JiraConexaoPa
 
         useImperativeHandle(ref, () => ({ salvar }));
 
-        const camposObrigatoriosPreenchidos = urlDominio.trim().length > 0 && email.trim().length > 0;
-        const podeTestar = camposObrigatoriosPreenchidos && apiToken.trim().length > 0;
         const tokenJaSalvo = tokenMascarado !== '' && tokenMascarado !== '****';
+        const urlPreenchida = urlDominio.trim().length > 0;
+        const emailPreenchido = email.trim().length > 0;
+        const tokenPreenchido = apiToken.trim().length > 0;
+        const podeTestar = urlPreenchida && emailPreenchido && tokenPreenchido;
+        const quadroPreenchido = quadro !== null;
+        const conexaoValida = urlPreenchida && emailPreenchido && (tokenPreenchido || tokenJaSalvo) && quadroPreenchido;
+        const erroToken = alterado && !tokenPreenchido && !tokenJaSalvo;
 
         useEffect(() => {
-            onValidoChange?.(camposObrigatoriosPreenchidos);
-        }, [camposObrigatoriosPreenchidos]);
+            onValidoChange?.(conexaoValida);
+        }, [conexaoValida]);
+
+        const sujo = urlDominio.trim() !== salvoUrl || email.trim() !== salvoEmail || tokenPreenchido || (quadro?.id ?? null) !== salvoQuadroId;
+
+        useEffect(() => {
+            onSujoChange?.(sujo);
+        }, [sujo]);
+
+        function alterarCampo(definir: (valor: string) => void, valor: string): void {
+            definir(valor);
+            setAlterado(true);
+            setResultadoTeste(null);
+        }
+
+        function alterarQuadro(valor: QuadroJira | null): void {
+            setQuadro(valor);
+            setAlterado(true);
+        }
+
+        const linkTokens = (
+            <>
+                Gerado em{' '}
+                <Link href={URL_TOKENS_ATLASSIAN} target="_blank" rel="noopener noreferrer">
+                    id.atlassian.com/manage-profile/security/api-tokens
+                </Link>
+            </>
+        );
 
         return (
-            <Stack spacing={3}>
+            <Stack spacing={3} sx={{ mt: '0.5rem !important' }}>
                 <TextField
+                    required
                     label="URL do domínio"
                     value={urlDominio}
-                    onChange={(evento) => {
-                        setUrlDominio(evento.target.value);
-                        setResultadoTeste(null);
-                    }}
+                    onChange={(evento) => alterarCampo(setUrlDominio, evento.target.value)}
+                    error={alterado && !urlPreenchida}
+                    helperText={alterado && !urlPreenchida ? 'Informe a URL do domínio.' : undefined}
                     placeholder="empresa.atlassian.net"
                     slotProps={{
                         input: {
@@ -103,14 +153,14 @@ export const JiraConexaoPanel = forwardRef<JiraConexaoPanelHandle, JiraConexaoPa
                     disabled={carregando}
                     fullWidth />
 
-                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mt: '1rem !important' }}>
                     <TextField
+                        required
                         label="E-mail"
                         value={email}
-                        onChange={(evento) => {
-                            setEmail(evento.target.value);
-                            setResultadoTeste(null);
-                        }}
+                        onChange={(evento) => alterarCampo(setEmail, evento.target.value)}
+                        error={alterado && !emailPreenchido}
+                        helperText={alterado && !emailPreenchido ? 'Informe o e-mail.' : undefined}
                         slotProps={{
                             input: {
                                 endAdornment: (
@@ -123,22 +173,14 @@ export const JiraConexaoPanel = forwardRef<JiraConexaoPanelHandle, JiraConexaoPa
                         disabled={carregando}
                         fullWidth />
                     <TextField
+                        required={!tokenJaSalvo}
                         label="API Token"
                         type="password"
                         value={apiToken}
-                        onChange={(evento) => {
-                            setApiToken(evento.target.value);
-                            setResultadoTeste(null);
-                        }}
+                        onChange={(evento) => alterarCampo(setApiToken, evento.target.value)}
+                        error={erroToken}
                         placeholder={tokenJaSalvo ? `Atual: ${tokenMascarado} (deixe em branco para manter)` : undefined}
-                        helperText={
-                            <>
-                                Gerado em{' '}
-                                <Link href={URL_TOKENS_ATLASSIAN} target="_blank" rel="noopener noreferrer">
-                                    id.atlassian.com/manage-profile/security/api-tokens
-                                </Link>
-                            </>
-                        }
+                        helperText={erroToken ? <>Informe o API Token. {linkTokens}</> : linkTokens}
                         slotProps={{
                             input: {
                                 endAdornment: (
@@ -152,7 +194,18 @@ export const JiraConexaoPanel = forwardRef<JiraConexaoPanelHandle, JiraConexaoPa
                         fullWidth />
                 </Stack>
 
-                <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mt: '0rem !important' }}>
+                <SelectQuadroJira
+                    key={versaoConexao}
+                    label="Quadro de DEV"
+                    value={quadro}
+                    onChange={alterarQuadro}
+                    required
+                    error={alterado && !quadroPreenchido}
+                    helperText={alterado && !quadroPreenchido ? 'Selecione o quadro de DEV.' : undefined}
+                    ajuda="Quadro Scrum do Jira usado pelo Planejamento (cartões do sprint ativo). A lista usa a conexão já salva: salve a conexão antes de listar os quadros."
+                    disabled={carregando} />
+
+                <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mt: '0.8rem !important' }}>
                     <BotaoComCarregamento
                         variant="outlined"
                         carregando={testando}
@@ -171,6 +224,12 @@ export const JiraConexaoPanel = forwardRef<JiraConexaoPanelHandle, JiraConexaoPa
                         </Alert>
                     ) : undefined}
                 </Stack>
+
+                {!conexaoValida ? (
+                    <Alert severity="info">
+                        Preencha a URL do domínio, o e-mail, o API Token (obrigatório na primeira configuração) e o quadro de DEV para salvar a conexão.
+                    </Alert>
+                ) : undefined}
             </Stack>
         );
     },

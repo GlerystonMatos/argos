@@ -1,4 +1,3 @@
-import { truncar } from '../../utils/texto';
 import { Fragment, type ReactNode } from 'react';
 import type { LinhaGant } from '../../api/tipos';
 import { FONTE_MARCA } from '../../utils/tipografia';
@@ -20,6 +19,7 @@ interface GantLinhaProps {
     linha: LinhaGant;
     dias: string[];
     totalColunas: number;
+    medindo: boolean;
     primeiraDoUsuario: boolean;
     usuarioExpandido: boolean;
     onAlternarUsuario: () => void;
@@ -29,6 +29,7 @@ export function GantLinha({
     linha,
     dias,
     totalColunas,
+    medindo,
     primeiraDoUsuario,
     usuarioExpandido,
     onAlternarUsuario,
@@ -40,7 +41,10 @@ export function GantLinha({
                     onClick={onAlternarUsuario}
                     sx={{ cursor: 'pointer', bgcolor: 'action.hover' }}>
                     <TableCell colSpan={totalColunas} sx={{ py: 0 }}>
-                        <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+                        <Stack
+                            direction="row"
+                            spacing={0.5}
+                            sx={{ alignItems: 'center', ...(medindo ? { width: 0, overflow: 'hidden' } : undefined) }}>
                             {usuarioExpandido ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
                             <Typography variant="body2" sx={{ fontWeight: 600 }}>
                                 {linha.nomeExibicao}
@@ -49,12 +53,14 @@ export function GantLinha({
                     </TableCell>
                 </TableRow>
             ) : undefined}
-            {usuarioExpandido ? (
+            {usuarioExpandido || medindo ? (
                 <TableRow>
                     <TableCell sx={{ py: 0 }}>{linha.categoria}</TableCell>
-                    <TableCell sx={{ py: 0, whiteSpace: 'nowrap' }}>
+                    <TableCell sx={{ py: 0 }}>
                         <Tooltip title={linha.descricao}>
-                            <Box component="span">{truncar(linha.descricao, 50)}</Box>
+                            <Box sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {linha.descricao}
+                            </Box>
                         </Tooltip>
                     </TableCell>
                     <TableCell sx={{ py: 0 }}>{formatarDuracao(Math.round(linha.totalHoras * 3600))}</TableCell>

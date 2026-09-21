@@ -1,7 +1,10 @@
 import type { ReactNode } from 'react';
+import { ListaCoresResumo } from './ListaCoresResumo';
 import { rotularAgrupamento } from '../../utils/rotulos';
 import type { Secao } from '../../components/MenuLateral';
 import type { AbaConfiguracoes } from '../configuracoes/abas';
+import { TOTAL_CAMPOS_JIRA } from '../configuracoes/completude';
+import { ListaMapeamentoResumo } from './ListaMapeamentoResumo';
 import type { ResumoConfiguracao } from './useResumoConfiguracao';
 import { IconeStatus, BlocoResumo } from '../configuracoes/BlocoResumo';
 import { EsqueletoCarregando } from '../../components/EsqueletoCarregando';
@@ -15,8 +18,6 @@ import {
     Typography,
     CardContent,
 } from '@mui/material';
-
-const TOTAL_CAMPOS_JIRA = 4;
 
 interface ResumoViewProps {
     resumo: ResumoConfiguracao;
@@ -36,6 +37,11 @@ function BotaoConfigurar({ titulo, onClick }: BotaoConfigurarProps): ReactNode {
     );
 }
 
+function listarPendencias(pendencias: string[]): string {
+    if (pendencias.length < 2) return pendencias.join('');
+    return `${pendencias.slice(0, -1).join(', ')} e ${pendencias[pendencias.length - 1]}`;
+}
+
 export function ResumoView({ resumo, onNavegar }: ResumoViewProps): ReactNode {
     const {
         carregado,
@@ -45,41 +51,57 @@ export function ResumoView({ resumo, onNavegar }: ResumoViewProps): ReactNode {
         jiraConfigurado,
         statusFinal,
         jiraUrlDominio,
+        jiraEmail,
+        jiraQuadro,
         nomeAdministrador,
         quantidadeUsuarios,
+        coresStatus,
+        coresPrioridade,
         configuracaoCompleta,
         quantidadeCoresStatus,
         quantidadeMapeamentosJira,
         quantidadeCamposJiraDefinidos,
         quantidadeCoresPrioridade,
+        mapeamentoJira,
+        usuariosToggl,
+        usuariosTogglSemMapeamento,
+        entradasMapeamentoInvalidas,
+        mapeamentoCompleto,
+        jiraCamposCompleto,
+        statusFinalCompleto,
         statusResponsavelCompleto,
         existeUsuarioAdministrador,
     } = resumo;
 
+    const statusCompleto = statusResponsavelCompleto && statusFinalCompleto;
+
     const pendenciasObrigatorias = [
         ...(togglCompleto ? [] : ['Toggl: Configurações']),
-        ...(statusResponsavelCompleto ? [] : ['Jira: Status']),
+        ...(jiraCamposCompleto ? [] : ['Jira: Campos']),
+        ...(statusCompleto ? [] : ['Jira: Status']),
+        ...(mapeamentoCompleto ? [] : ['Jira ↔ Toggl: Mapeamento']),
     ];
 
     return (
         <Card variant="outlined">
             <CardContent>
                 <Stack spacing={2}>
-                    <Typography variant="h6">Resumo da aplicação</Typography>
+                    <Stack direction="row" spacing={1}>
+                        <Typography variant="h6" >Resumo da aplicação</Typography>
+                        {configuracaoCompleta ? (
+                            <Alert severity="success" sx={{ py: 0 }}>Relatório, Gant e Sprint estão liberados.</Alert>
+                        ) : (
+                            <Alert severity="warning" sx={{ py: 0 }}>
+                                Complete as configurações obrigatórias para liberar Relatório, Gant e Sprint.
+                                {pendenciasObrigatorias.length > 0 ? ` Pendente: ${listarPendencias(pendenciasObrigatorias)}.` : ''}
+                            </Alert>
+                        )}
+                    </Stack>
 
                     {!carregado ? (
                         <EsqueletoCarregando />
                     ) : (
                         <>
-                            {configuracaoCompleta ? (
-                                <Alert severity="success" sx={{ py: 0 }}>Relatório, Gant e Sprint estão liberados.</Alert>
-                            ) : (
-                                <Alert severity="warning" sx={{ py: 0 }}>
-                                    Complete as configurações obrigatórias para liberar Relatório, Gant e Sprint.
-                                    {pendenciasObrigatorias.length > 0 ? ` Pendente: ${pendenciasObrigatorias.join(' e ')}.` : ''}
-                                </Alert>
-                            )}
-
                             <BlocoResumo
                                 icone={<IconeStatus completo={existeUsuarioAdministrador} />}
                                 titulo="Usuários do Toggl"
@@ -112,14 +134,11 @@ export function ResumoView({ resumo, onNavegar }: ResumoViewProps): ReactNode {
                                             Cor da tag no Sprint:
                                         </Typography>
                                         <Box sx={{ width: 14, height: 14, borderRadius: 0.5, bgcolor: categorias.corTag, border: 1, borderColor: 'divider' }} />
-                                        <Typography variant="body2" color="text.secondary">
-                                            {categorias.corTag}
-                                        </Typography>
                                     </Stack>
                                 ) : undefined}
                                 {!togglCompleto ? (
                                     <Alert severity="warning" sx={{ py: 0 }}>
-                                        Faltam campos obrigatórios (Tags para identificar responsáveis (DEV / REV / QA)).
+                                        Faltam campos obrigatórios (Tags para detalhar por descrição e Tags para identificar responsáveis (DEV / REV / QA)).
                                     </Alert>
                                 ) : undefined}
                             </BlocoResumo>
@@ -129,25 +148,38 @@ export function ResumoView({ resumo, onNavegar }: ResumoViewProps): ReactNode {
                                 titulo="Jira: Conexão"
                                 acao={<BotaoConfigurar titulo="Jira: Conexão" onClick={() => onNavegar('jira')} />}>
                                 {jiraConfigurado ? (
-                                    <Typography variant="body2" color="text.secondary">
-                                        Domínio configurado: {jiraUrlDominio}
-                                    </Typography>
+                                    <>
+                                        <Typography variant="body2" color="text.secondary">
+                                            Domínio configurado: {jiraUrlDominio}
+                                        </Typography>
+                                        <Typography variant="body2" color="text.secondary">
+                                            E-mail: {jiraEmail}
+                                        </Typography>
+                                        <Typography variant="body2" color="text.secondary">
+                                            {jiraQuadro !== null ? `Quadro de DEV: ${jiraQuadro}` : 'Quadro de DEV não configurado.'}
+                                        </Typography>
+                                    </>
                                 ) : (
                                     <Alert severity="warning" sx={{ py: 0 }}>Jira não configurado.</Alert>
                                 )}
                             </BlocoResumo>
 
                             <BlocoResumo
-                                icone={<IconeStatus completo />}
-                                titulo="Jira: Campos personalizados"
-                                acao={<BotaoConfigurar titulo="Jira: Campos personalizados" onClick={() => onNavegar('configuracoes', 'jira-campos')} />}>
+                                icone={<IconeStatus completo={jiraCamposCompleto} />}
+                                titulo="Jira: Campos"
+                                acao={<BotaoConfigurar titulo="Jira: Campos" onClick={() => onNavegar('configuracoes', 'jira-campos')} />}>
                                 <Typography variant="body2" color="text.secondary">
-                                    {quantidadeCamposJiraDefinidos} de {TOTAL_CAMPOS_JIRA} campos definidos (opcional) — Estimativas de desenvolvimento, revisão e testes e "Revisado por"
+                                    {quantidadeCamposJiraDefinidos} de {TOTAL_CAMPOS_JIRA} campos definidos — Estimativas de desenvolvimento, revisão e testes, "Revisado por" e "Analisado por"
                                 </Typography>
+                                {!jiraCamposCompleto ? (
+                                    <Alert severity="warning" sx={{ py: 0 }}>
+                                        Faltam campos obrigatórios (Estimativas de desenvolvimento, revisão e testes, "Revisado por" e "Analisado por").
+                                    </Alert>
+                                ) : undefined}
                             </BlocoResumo>
 
                             <BlocoResumo
-                                icone={<IconeStatus completo={statusResponsavelCompleto} />}
+                                icone={<IconeStatus completo={statusCompleto} />}
                                 titulo="Jira: Status"
                                 acao={<BotaoConfigurar titulo="Jira: Status" onClick={() => onNavegar('configuracoes', 'jira-status')} />}>
                                 <Typography variant="body2" color="text.secondary">
@@ -159,9 +191,9 @@ export function ResumoView({ resumo, onNavegar }: ResumoViewProps): ReactNode {
                                 <Typography variant="body2" color="text.secondary">
                                     Status Ignorado: {statusFinal.statusIgnorado.length > 0 ? statusFinal.statusIgnorado.join(', ') : '(nenhum)'}
                                 </Typography>
-                                {!statusResponsavelCompleto ? (
+                                {!statusCompleto ? (
                                     <Alert severity="warning" sx={{ py: 0 }}>
-                                        Faltam campos obrigatórios (Status para identificar responsáveis (DEV / REV / QA)).
+                                        Faltam campos obrigatórios (Status para identificar responsáveis (DEV / REV / QA), Status Concluído e Status Ignorado).
                                     </Alert>
                                 ) : undefined}
                             </BlocoResumo>
@@ -170,18 +202,29 @@ export function ResumoView({ resumo, onNavegar }: ResumoViewProps): ReactNode {
                                 icone={<IconeStatus completo />}
                                 titulo="Jira: Cores"
                                 acao={<BotaoConfigurar titulo="Jira: Cores" onClick={() => onNavegar('configuracoes', 'jira-cores')} />}>
-                                <Typography variant="body2" color="text.secondary">
-                                    {quantidadeCoresStatus} status e {quantidadeCoresPrioridade} {quantidadeCoresPrioridade === 1 ? 'prioridade' : 'prioridades'} com cor mapeada (opcional)
-                                </Typography>
+                                <ListaCoresResumo quantidadeCoresStatus={quantidadeCoresStatus} quantidadeCoresPrioridade={quantidadeCoresPrioridade}
+                                    coresStatus={coresStatus} coresPrioridade={coresPrioridade} />
                             </BlocoResumo>
 
                             <BlocoResumo
-                                icone={<IconeStatus completo />}
+                                icone={<IconeStatus completo={mapeamentoCompleto} />}
                                 titulo="Jira ↔ Toggl: Mapeamento"
                                 acao={<BotaoConfigurar titulo="Jira ↔ Toggl: Mapeamento" onClick={() => onNavegar('configuracoes', 'jira-toggl')} />}>
                                 <Typography variant="body2" color="text.secondary">
-                                    {quantidadeMapeamentosJira} {quantidadeMapeamentosJira === 1 ? 'usuário do Jira mapeado' : 'usuários do Jira mapeados'} (opcional)
+                                    {quantidadeMapeamentosJira} {quantidadeMapeamentosJira === 1 ? 'usuário do Jira mapeado' : 'usuários do Jira mapeados'}
                                 </Typography>
+                                <ListaMapeamentoResumo mapeamento={mapeamentoJira} usuariosToggl={usuariosToggl} />
+                                {!mapeamentoCompleto ? (
+                                    <Alert severity="warning" sx={{ py: 0 }}>
+                                        Faltam campos obrigatórios (todo usuário do Toggl precisa estar associado a um usuário do Jira
+                                        {usuariosTogglSemMapeamento.length > 0
+                                            ? `; sem par: ${usuariosTogglSemMapeamento.map((usuario) => usuario.nomeExibicao).join(', ')}`
+                                            : ''}
+                                        {entradasMapeamentoInvalidas.length > 0
+                                            ? `; mapeamentos inválidos: ${entradasMapeamentoInvalidas.join(', ')}`
+                                            : ''}).
+                                    </Alert>
+                                ) : undefined}
                             </BlocoResumo>
                         </>
                     )}

@@ -56,6 +56,18 @@ export interface ListaJiraResponse {
     atualizadoEm: string;
 }
 
+export interface QuadroJira {
+    id: number;
+    nome: string;
+    projeto: string | null;
+}
+
+export interface QuadrosJiraResponse {
+    quadros: QuadroJira[];
+    veioDoCache: boolean;
+    atualizadoEm: string;
+}
+
 export interface CoresJira {
     coresStatus: Record<string, string>;
     coresPrioridade: Record<string, string>;
@@ -113,10 +125,14 @@ export interface ConfiguracaoJira {
     urlDominio: string;
     email: string;
     tokenMascarado: string;
+    quadroId: number | null;
+    quadroNome: string;
     campoEstimativaDesenvolvimentoId: string;
     campoEstimativaDesenvolvimentoNome: string;
     campoRevisadoPorId: string;
     campoRevisadoPorNome: string;
+    campoAnalisadoPorId: string;
+    campoAnalisadoPorNome: string;
     campoEstimativaRevisaoId: string;
     campoEstimativaRevisaoNome: string;
     campoEstimativaTestesId: string;
@@ -127,10 +143,14 @@ export interface SalvarConfiguracaoJiraRequest {
     urlDominio: string;
     email: string;
     apiToken?: string | null;
+    quadroId: number | null;
+    quadroNome: string | null;
     campoEstimativaDesenvolvimentoId: string;
     campoEstimativaDesenvolvimentoNome: string;
     campoRevisadoPorId: string;
     campoRevisadoPorNome: string;
+    campoAnalisadoPorId: string;
+    campoAnalisadoPorNome: string;
     campoEstimativaRevisaoId: string;
     campoEstimativaRevisaoNome: string;
     campoEstimativaTestesId: string;
@@ -362,4 +382,58 @@ export interface ResultadoSprint {
     cabecalho: CabecalhoSprint;
     tarefas: LinhaTarefaSprint[];
     colaboradores: LinhaColaboradorSprint[];
+}
+
+export interface ConsultarPlanejamentoRequest {
+    chaveSprint: string;
+    forcar: boolean;
+}
+
+export interface ConsultaPlanejamentoResponse {
+    veioDoCache: boolean;
+    atualizadoEm: string;
+    quadroNome: string;
+    sprintJiraNome: string | null;
+    quantidadeCartoes: number;
+}
+
+export interface PessoaPlanejamento {
+    nomeJira: string;
+    nome: string;
+    sigla: string;
+    cor: string | null;
+    mapeado: boolean;
+}
+
+export interface CartaoPlanejamento {
+    chave: string;
+    codigo: string;
+    descricao: string;
+    urlIssue: string;
+    coluna: string;
+    status: string;
+    prioridade: string | null;
+    grupoChave: string | null;
+    grupoResumo: string | null;
+    responsavel: PessoaPlanejamento | null;
+    analisadoPor: PessoaPlanejamento | null;
+    revisadoPor: PessoaPlanejamento | null;
+}
+
+export interface ColaboradorPlanejamento {
+    pessoa: PessoaPlanejamento;
+    contagens: number[];
+    total: number;
+}
+
+export interface ResultadoPlanejamento {
+    nomeQuadro: string;
+    sprintJiraNome: string | null;
+    sprintJiraInicio: string | null;
+    sprintJiraFim: string | null;
+    atualizadoEm: string;
+    colunas: string[];
+    totaisPorColuna: number[];
+    cartoes: CartaoPlanejamento[];
+    colaboradores: ColaboradorPlanejamento[];
 }

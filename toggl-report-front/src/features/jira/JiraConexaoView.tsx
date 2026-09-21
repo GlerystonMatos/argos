@@ -14,6 +14,7 @@ interface JiraConexaoViewProps {
 export function JiraConexaoView({ onSalvo }: JiraConexaoViewProps): ReactNode {
     const [salvando, setSalvando] = useState(false);
     const [conexaoValida, setConexaoValida] = useState(false);
+    const [sujo, setSujo] = useState(false);
     const refPainel = useRef<JiraConexaoPanelHandle>(null);
 
     async function salvar(): Promise<void> {
@@ -35,13 +36,13 @@ export function JiraConexaoView({ onSalvo }: JiraConexaoViewProps): ReactNode {
                             variant="contained"
                             startIcon={<SaveIcon />}
                             carregando={salvando}
-                            disabled={!conexaoValida}
+                            disabled={!sujo || !conexaoValida}
                             onClick={() => void salvar()}>
                             Salvar
                         </BotaoComCarregamento>
                     </CabecalhoView>
 
-                    <JiraConexaoPanel ref={refPainel} onValidoChange={setConexaoValida} />
+                    <JiraConexaoPanel ref={refPainel} onValidoChange={setConexaoValida} onSujoChange={setSujo} />
                 </Stack>
             </CardContent>
         </Card>

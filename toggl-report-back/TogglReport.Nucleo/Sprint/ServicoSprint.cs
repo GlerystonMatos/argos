@@ -4,13 +4,11 @@ using RelatorioToggl.Jira;
 using RelatorioToggl.Relatorios;
 using RelatorioToggl.Toggl;
 using System.Globalization;
-using System.Text.RegularExpressions;
 
 namespace RelatorioToggl.Sprint;
 
 public static class ServicoSprint
 {
-    private static readonly Regex PadraoCodigo = new(@"^(TEL - \d+)(?: - (.+))?$", RegexOptions.Compiled);
     private static readonly string[] GruposCategoria = { "dev", "rev", "qa" };
 
     public static List<string> ExtrairCodigosJira(Dictionary<string, List<RegistroTempoDto>> registrosPorUsuario)
@@ -25,9 +23,9 @@ public static class ServicoSprint
                     continue;
 
                 string normalizada = ServicoAgrupamento.NormalizarDescricaoTel((registro.Descricao ?? "").Trim());
-                Match correspondencia = PadraoCodigo.Match(normalizada);
-                if (correspondencia.Success)
-                    codigos.Add(correspondencia.Groups[1].Value.Replace(" ", ""));
+                string? chaveJira = ServicoCodigoTel.ExtrairChaveJira(normalizada);
+                if (chaveJira is not null)
+                    codigos.Add(chaveJira);
             }
         }
 
@@ -194,7 +192,7 @@ public static class ServicoSprint
             }
             else
             {
-                (codigo, descricao) = SepararCodigo(chave);
+                (codigo, descricao) = ServicoCodigoTel.Separar(chave);
             }
 
             bool tinhaCodigoParaBuscar = !agrupada && issuesPorCodigo is not null && codigo.Length > 0;
@@ -258,7 +256,7 @@ public static class ServicoSprint
         List<LinhaTarefaSprint> tarefasOrdenadas = tarefas
             .OrderBy(t => t.Agrupada)
             .ThenBy(t => t.Agrupada || !string.IsNullOrEmpty(t.Codigo) ? 0 : 1)
-            .ThenBy(t => t.Agrupada ? 0 : NumeroCodigo(t.Codigo))
+            .ThenBy(t => t.Agrupada ? 0 : ServicoCodigoTel.Numero(t.Codigo))
             .ThenBy(t => t.Agrupada ? "" : t.Codigo, StringComparer.OrdinalIgnoreCase)
             .ThenBy(t => t.Agrupada ? MenorIndiceColaborador(t) : 0)
             .ThenBy(t => t.Descricao, StringComparer.OrdinalIgnoreCase)
@@ -314,21 +312,6 @@ public static class ServicoSprint
         return detalharPorDescricao
             ? (ServicoAgrupamento.NormalizarDescricaoTel((registro.Descricao ?? "").Trim()), false)
             : (tagPrincipal, true);
-    }
-
-    private static (string Codigo, string Descricao) SepararCodigo(string chave)
-    {
-        Match correspondencia = PadraoCodigo.Match(chave);
-        if (!correspondencia.Success)
-            return ("", chave);
-
-        return (correspondencia.Groups[1].Value, correspondencia.Groups[2].Success ? correspondencia.Groups[2].Value : "");
-    }
-
-    private static int NumeroCodigo(string codigo)
-    {
-        string digitos = new(codigo.Where(char.IsDigit).ToArray());
-        return int.TryParse(digitos, out int numero) ? numero : int.MaxValue;
     }
 
     private static int ContarDiasUteis(string dataInicio, string dataFim)

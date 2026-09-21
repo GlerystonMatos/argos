@@ -1,0 +1,3 @@
+namespace RelatorioToggl.Jira;
+
+internal sealed record RespostaConfiguracaoQuadroJiraBruta(ConfiguracaoColunasQuadroJiraBruta? ColumnConfig);

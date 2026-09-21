@@ -56,6 +56,12 @@ export function SprintFormDialog({ aberto, sprintEmEdicao, onFechar, onSalvo }: 
     const datasPreenchidas = dataInicio !== '' && dataFim !== '';
     const periodoValido = datasPreenchidas && periodoEhValido(dataInicio, dataFim);
     const formValido = nome.trim() !== '' && horasValidas && periodoValido;
+    const houveAlteracao =
+        sprintEmEdicao === null ||
+        nome.trim() !== sprintEmEdicao.nome ||
+        horasNumero !== sprintEmEdicao.horasPorDia ||
+        dataInicio !== sprintEmEdicao.dataInicio ||
+        dataFim !== sprintEmEdicao.dataFim;
 
     async function salvar(): Promise<void> {
         if (!formValido) {
@@ -85,6 +91,7 @@ export function SprintFormDialog({ aberto, sprintEmEdicao, onFechar, onSalvo }: 
             <DialogContent>
                 <Stack spacing={2} sx={{ mt: 1 }}>
                     <TextField
+                        required
                         label="Nome"
                         value={nome}
                         onChange={(evento) => setNome(evento.target.value)}
@@ -93,6 +100,7 @@ export function SprintFormDialog({ aberto, sprintEmEdicao, onFechar, onSalvo }: 
                         disabled={salvando || somenteLeitura} />
 
                     <TextField
+                        required
                         label="Horas por dia"
                         type="number"
                         value={horasPorDia}
@@ -109,6 +117,7 @@ export function SprintFormDialog({ aberto, sprintEmEdicao, onFechar, onSalvo }: 
 
                     <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
                         <TextField
+                            required
                             label="Data início"
                             type="date"
                             value={dataInicio}
@@ -117,6 +126,7 @@ export function SprintFormDialog({ aberto, sprintEmEdicao, onFechar, onSalvo }: 
                             fullWidth
                             disabled={salvando || somenteLeitura} />
                         <TextField
+                            required
                             label="Data fim"
                             type="date"
                             value={dataFim}
@@ -141,7 +151,7 @@ export function SprintFormDialog({ aberto, sprintEmEdicao, onFechar, onSalvo }: 
                     <BotaoComCarregamento
                         variant="contained"
                         carregando={salvando}
-                        disabled={!formValido}
+                        disabled={!formValido || !houveAlteracao}
                         onClick={() => void salvar()}>
                         Salvar
                     </BotaoComCarregamento>

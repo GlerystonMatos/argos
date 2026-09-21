@@ -8,6 +8,10 @@ public class ConfiguracaoJira
 
     public string ApiToken { get; set; } = "";
 
+    public long? QuadroId { get; set; }
+
+    public string QuadroNome { get; set; } = "";
+
     public string CampoEstimativaDesenvolvimentoId { get; set; } = "";
 
     public string CampoEstimativaDesenvolvimentoNome { get; set; } = "";
@@ -23,4 +27,8 @@ public class ConfiguracaoJira
     public string CampoRevisadoPorId { get; set; } = "";
 
     public string CampoRevisadoPorNome { get; set; } = "";
+
+    public string CampoAnalisadoPorId { get; set; } = "";
+
+    public string CampoAnalisadoPorNome { get; set; } = "";
 }

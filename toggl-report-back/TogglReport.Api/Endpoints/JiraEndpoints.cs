@@ -34,10 +34,14 @@ public static class JiraEndpoints
             configuracao.Email = request.Email.Trim();
             if (!string.IsNullOrWhiteSpace(request.ApiToken))
                 configuracao.ApiToken = request.ApiToken.Trim();
+            configuracao.QuadroId = request.QuadroId;
+            configuracao.QuadroNome = request.QuadroId is null ? "" : (request.QuadroNome ?? "").Trim();
             configuracao.CampoEstimativaDesenvolvimentoId = request.CampoEstimativaDesenvolvimentoId;
             configuracao.CampoEstimativaDesenvolvimentoNome = request.CampoEstimativaDesenvolvimentoNome;
             configuracao.CampoRevisadoPorId = request.CampoRevisadoPorId;
             configuracao.CampoRevisadoPorNome = request.CampoRevisadoPorNome;
+            configuracao.CampoAnalisadoPorId = request.CampoAnalisadoPorId;
+            configuracao.CampoAnalisadoPorNome = request.CampoAnalisadoPorNome;
             configuracao.CampoEstimativaRevisaoId = request.CampoEstimativaRevisaoId;
             configuracao.CampoEstimativaRevisaoNome = request.CampoEstimativaRevisaoNome;
             configuracao.CampoEstimativaTestesId = request.CampoEstimativaTestesId;
@@ -51,7 +55,7 @@ public static class JiraEndpoints
 
             return Results.Ok(ParaDto(configuracao));
         })
-        .WithSummary("Salva/atualiza a configuração do Jira (URL, e-mail, API Token e campos de estimativa de desenvolvimento, revisão, testes e revisado por)");
+        .WithSummary("Salva/atualiza a configuração do Jira (URL, e-mail, API Token, quadro de DEV e campos de estimativa de desenvolvimento, revisão, testes, revisado por e analisado por)");
 
         grupo.MapPost("/testar-conexao", async (TestarConexaoJiraRequest request) =>
         {
@@ -220,6 +224,40 @@ public static class JiraEndpoints
         })
         .WithSummary("Lista os usuários reais do Jira (GET /rest/api/3/users/search, contas Atlassian ativas), cacheados até atualização manual");
 
+        grupo.MapGet("/quadros", async (bool forcarAtualizacao) =>
+        {
+            if (!forcarAtualizacao)
+            {
+                CacheQuadrosJira? cacheExistente = CarregadorCacheQuadrosJiraIni.Carregar(caminhos.JiraQuadrosCache);
+                if (cacheExistente is not null)
+                    return Results.Ok(new QuadrosJiraResponse(ParaDto(cacheExistente.Quadros), true, cacheExistente.AtualizadoEm));
+            }
+
+            ConfiguracaoJira configuracaoSalva = CarregadorConfiguracaoJiraIni.Carregar(caminhos);
+            if (string.IsNullOrWhiteSpace(configuracaoSalva.ApiToken))
+                return Results.BadRequest("Salve a configuração do Jira primeiro (POST /api/jira/configuracao).");
+
+            ClienteApiJira? cliente = CriarCliente(configuracaoSalva.UrlDominio, configuracaoSalva.Email, configuracaoSalva.ApiToken, out string? erroUrl);
+            if (cliente is null)
+                return Results.BadRequest(erroUrl);
+
+            ResultadoApiJira<List<QuadroJira>> resultado = await cliente.ListarQuadrosAsync();
+            if (!resultado.Sucesso)
+                return Results.Problem(resultado.MensagemErro, statusCode: StatusCodes.Status502BadGateway);
+
+            string atualizadoEm = DateTime.UtcNow.ToString("O");
+            CacheQuadrosJira cache = new() { Quadros = resultado.Dados!, AtualizadoEm = atualizadoEm };
+
+            IResult? erroPersistencia = TratamentoIo.Executar(
+                () => CarregadorCacheQuadrosJiraIni.Salvar(caminhos.JiraQuadrosCache, cache),
+                "Não foi possível salvar o cache de quadros do Jira.");
+            if (erroPersistencia is not null)
+                return erroPersistencia;
+
+            return Results.Ok(new QuadrosJiraResponse(ParaDto(cache.Quadros), false, atualizadoEm));
+        })
+        .WithSummary("Lista os quadros Scrum reais do Jira (GET /rest/agile/1.0/board?type=scrum), cacheados até atualização manual");
+
         grupo.MapGet("/usuarios-mapeamento", () =>
         {
             ConfiguracaoMapeamentoJiraToggl configuracao = CarregadorConfiguracaoMapeamentoJiraTogglIni.Carregar(caminhos.JiraTogglMapeamento);
@@ -295,6 +333,9 @@ public static class JiraEndpoints
             par => new EntradaMapeamentoJiraTogglDto(par.Value.ChaveToggl, par.Value.Sigla, par.Value.Cor),
             StringComparer.OrdinalIgnoreCase);
 
+    private static List<QuadroJiraDto> ParaDto(List<QuadroJira> quadros) =>
+        quadros.Select(quadro => new QuadroJiraDto(quadro.Id, quadro.Nome, quadro.Projeto)).ToList();
+
     private static ClienteApiJira? CriarCliente(string urlDominio, string email, string apiToken, out string? erro)
     {
         try
@@ -313,10 +354,14 @@ public static class JiraEndpoints
         configuracao.UrlDominio,
         configuracao.Email,
         ServicoUsuariosToggl.MascararToken(configuracao.ApiToken),
+        configuracao.QuadroId,
+        configuracao.QuadroNome,
         configuracao.CampoEstimativaDesenvolvimentoId,
         configuracao.CampoEstimativaDesenvolvimentoNome,
         configuracao.CampoRevisadoPorId,
         configuracao.CampoRevisadoPorNome,
+        configuracao.CampoAnalisadoPorId,
+        configuracao.CampoAnalisadoPorNome,
         configuracao.CampoEstimativaRevisaoId,
         configuracao.CampoEstimativaRevisaoNome,
         configuracao.CampoEstimativaTestesId,

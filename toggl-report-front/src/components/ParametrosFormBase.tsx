@@ -110,7 +110,7 @@ export function ParametrosFormBase({
         try {
             try {
                 await salvarParametros({ agrupamento, tags, dataInicio, dataFim });
-                notificarSucesso('Parâmetros salvos.');
+                notificarSucesso('Parâmetros salvos com sucesso.');
             } catch (erro) {
                 notificarErro(erro, 'Não foi possível salvar os parâmetros');
                 return;
@@ -160,6 +160,7 @@ export function ParametrosFormBase({
 
                     <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
                         <TextField
+                            required
                             label="Data início"
                             type="date"
                             value={dataInicio}
@@ -168,6 +169,7 @@ export function ParametrosFormBase({
                             slotProps={{ inputLabel: { shrink: true } }}
                             fullWidth />
                         <TextField
+                            required
                             label="Data fim"
                             type="date"
                             value={dataFim}

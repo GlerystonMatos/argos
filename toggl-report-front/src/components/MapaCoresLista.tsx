@@ -1,3 +1,4 @@
+import { CORES } from '../theme';
 import type { ReactNode } from 'react';
 import { Box, Stack, TextField, Tooltip, Typography } from '@mui/material';
 
@@ -9,7 +10,7 @@ interface MapaCoresListaProps {
     disabled?: boolean;
 }
 
-const COR_PADRAO = '#9E9E9E';
+const COR_PADRAO: string = CORES.corIndisponivel;
 
 export function MapaCoresLista({ titulo, nomes, cores, onChange, disabled }: MapaCoresListaProps): ReactNode {
     if (nomes.length === 0) {

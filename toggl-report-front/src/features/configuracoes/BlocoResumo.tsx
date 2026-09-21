@@ -21,7 +21,7 @@ interface BlocoResumoProps {
 
 export function BlocoResumo({ icone, titulo, acao, children }: BlocoResumoProps): ReactNode {
     return (
-        <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start' }}>
+        <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start', mt: '0.5rem !important' }}>
             <Stack sx={{ pt: '2px' }}>{icone}</Stack>
             <Stack spacing={0.5} sx={{ flex: 1, minWidth: 0 }}>
                 <Typography variant="subtitle2">{titulo}</Typography>

@@ -1,6 +1,6 @@
 # toggl-report  <img alt="caronte" height="20" src="https://github.com/GlerystonMatos/toggl-report/blob/main/toggl-report.png">
 
-Conjunto de aplicações que geram relatórios de tempo trabalhado a partir da **API v9 do Toggl Track**, agrupando por descrição e/ou tag, por usuário, em um período informado — incluindo uma visualização em **Gráfico de Gant** por usuário/dia e uma visão de **Sprint** (capacidade por colaborador + acompanhamento de tarefas), ambas só na versão web.
+Conjunto de aplicações que geram relatórios de tempo trabalhado a partir da **API v9 do Toggl Track**, agrupando por descrição e/ou tag, por usuário, em um período informado — incluindo uma visualização em **Gráfico de Gant** por usuário/dia e uma visão de **Sprint** (capacidade por colaborador + acompanhamento de tarefas, com um **Planejamento** dos cartões do quadro de DEV do Jira), ambas só na versão web.
 
 Este repositório reúne três projetos independentes:
 

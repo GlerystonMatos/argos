@@ -30,6 +30,7 @@ interface UsuarioTogglFormCamposProps {
     validando: boolean;
     resultadoValidacao: boolean | null;
     onValidarToken: () => void;
+    exibirErros: boolean;
 }
 
 export function UsuarioTogglFormCampos({
@@ -49,21 +50,32 @@ export function UsuarioTogglFormCampos({
     validando,
     resultadoValidacao,
     onValidarToken,
+    exibirErros,
 }: UsuarioTogglFormCamposProps): ReactNode {
+    const erroNome = exibirErros && nomeExibicao.trim() === '';
+    const erroToken = exibirErros && !emEdicao && tokenApi.trim() === '';
+    const erroSigla = exibirErros && sigla.trim() === '';
+
     return (
         <>
             <TextField
+                required
                 label="Nome de exibição"
                 value={nomeExibicao}
                 onChange={(evento) => onNomeExibicaoChange(evento.target.value)}
+                error={erroNome}
+                helperText={erroNome ? 'Informe o nome de exibição.' : undefined}
                 autoFocus
                 fullWidth
                 disabled={salvando} />
             <TextField
+                required={!emEdicao}
                 label="API Token"
                 type="password"
                 value={tokenApi}
                 onChange={(evento) => onTokenApiChange(evento.target.value)}
+                error={erroToken}
+                helperText={erroToken ? 'Informe o API Token.' : undefined}
                 placeholder={emEdicao ? `Atual: ${tokenMascarado} (deixe em branco para manter)` : undefined}
                 slotProps={{
                     input: {
@@ -79,10 +91,12 @@ export function UsuarioTogglFormCampos({
 
             <Stack direction="row" spacing={2}>
                 <TextField
+                    required
                     label="Sigla"
                     value={sigla}
                     onChange={(evento) => onSigilaChange(evento.target.value)}
-                    helperText="Ex.: JS, MRC — usada nas células do Gant"
+                    error={erroSigla}
+                    helperText={erroSigla ? 'Informe a sigla.' : 'Ex.: JS, MRC — usada nas células do Gant'}
                     fullWidth
                     disabled={salvando} />
                 <TextField
@@ -100,7 +114,6 @@ export function UsuarioTogglFormCampos({
 
             <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                 <BotaoComCarregamento
-                    size="small"
                     variant="outlined"
                     carregando={validando}
                     disabled={!tokenApi.trim() || salvando}

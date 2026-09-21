@@ -14,6 +14,8 @@ public static class CarregadorConfiguracaoJiraIni
 
     private const string CampoRevisadoPor = "RevisadoPor";
 
+    private const string CampoAnalisadoPor = "AnalisadoPor";
+
     public static ConfiguracaoJira Carregar(CaminhosDados caminhos)
     {
         ConfiguracaoJira configuracao = new();
@@ -26,6 +28,8 @@ public static class CarregadorConfiguracaoJiraIni
                 configuracao.UrlDominio = AnalisadorIni.ObterOuPadrao(conexao, "UrlDominio", "");
                 configuracao.Email = AnalisadorIni.ObterOuPadrao(conexao, "Email", "");
                 configuracao.ApiToken = CriptografiaToken.Descriptografar(AnalisadorIni.ObterOuPadrao(conexao, "ApiToken", ""));
+                configuracao.QuadroId = long.TryParse(AnalisadorIni.ObterOuPadrao(conexao, "QuadroId", ""), out long quadroId) ? quadroId : null;
+                configuracao.QuadroNome = AnalisadorIni.ObterOuPadrao(conexao, "QuadroNome", "");
             }
         }
 
@@ -36,6 +40,7 @@ public static class CarregadorConfiguracaoJiraIni
             (configuracao.CampoEstimativaRevisaoId, configuracao.CampoEstimativaRevisaoNome) = LerCampo(campos, CampoEstimativaRevisao);
             (configuracao.CampoEstimativaTestesId, configuracao.CampoEstimativaTestesNome) = LerCampo(campos, CampoEstimativaTestes);
             (configuracao.CampoRevisadoPorId, configuracao.CampoRevisadoPorNome) = LerCampo(campos, CampoRevisadoPor);
+            (configuracao.CampoAnalisadoPorId, configuracao.CampoAnalisadoPorNome) = LerCampo(campos, CampoAnalisadoPor);
         }
 
         return configuracao;
@@ -49,7 +54,9 @@ public static class CarregadorConfiguracaoJiraIni
             {
                 ["UrlDominio"] = configuracao.UrlDominio,
                 ["Email"] = configuracao.Email,
-                ["ApiToken"] = CriptografiaToken.Criptografar(configuracao.ApiToken)
+                ["ApiToken"] = CriptografiaToken.Criptografar(configuracao.ApiToken),
+                ["QuadroId"] = configuracao.QuadroId?.ToString() ?? "",
+                ["QuadroNome"] = configuracao.QuadroNome
             }
         };
 
@@ -58,6 +65,7 @@ public static class CarregadorConfiguracaoJiraIni
         AdicionarCampo(campos, CampoEstimativaRevisao, configuracao.CampoEstimativaRevisaoId, configuracao.CampoEstimativaRevisaoNome);
         AdicionarCampo(campos, CampoEstimativaTestes, configuracao.CampoEstimativaTestesId, configuracao.CampoEstimativaTestesNome);
         AdicionarCampo(campos, CampoRevisadoPor, configuracao.CampoRevisadoPorId, configuracao.CampoRevisadoPorNome);
+        AdicionarCampo(campos, CampoAnalisadoPor, configuracao.CampoAnalisadoPorId, configuracao.CampoAnalisadoPorNome);
 
         AnalisadorIni.EscreverSecoes(caminhos.JiraConexao, conexao);
         AnalisadorIni.EscreverSecoes(caminhos.JiraCampos, campos);

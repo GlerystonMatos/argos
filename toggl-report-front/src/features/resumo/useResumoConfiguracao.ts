@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from 'react';
+import { rotularQuadroJira } from '../../utils/rotulos';
 import { useNotificacao } from '../../hooks/useNotificacao';
 import { useCoresJira } from '../configuracoes/useCoresJira';
 import { useConfiguracaoJira } from '../jira/useConfiguracaoJira';
@@ -9,22 +10,28 @@ import { useResponsabilidadeSprint } from '../sprint/useResponsabilidadeSprint';
 import { useMapeamentoJiraToggl } from '../configuracoes/useMapeamentoJiraToggl';
 
 import {
+    jiraCamposCompleto,
+    statusFinalCompleto,
     togglObrigatorioCompleto,
     statusResponsavelCompleto,
+    contarCamposJiraDefinidos,
+    avaliarMapeamentoJiraToggl,
     configuracaoObrigatoriaCompleta,
 } from '../configuracoes/completude';
 
 import type {
-    ConfiguracaoJira,
     CategoriasSprint,
     StatusFinalSprint,
     UsuarioTogglResumo,
     ResponsabilidadeSprint,
+    EntradaMapeamentoJiraToggl,
 } from '../../api/tipos';
 
 const CATEGORIAS_PADRAO: CategoriasSprint = { dev: [], rev: [], qa: [], agrupamento: 'ambos', tagsDetalhadas: [], corTag: '' };
 const RESPONSABILIDADE_PADRAO: ResponsabilidadeSprint = { statusDev: [], statusRev: [], statusQa: [] };
 const STATUS_FINAL_PADRAO: StatusFinalSprint = { statusConcluido: [], statusIgnorado: [] };
+const CORES_VAZIAS: Record<string, string> = {};
+const MAPEAMENTO_VAZIO: Record<string, EntradaMapeamentoJiraToggl> = {};
 
 export interface ResumoConfiguracao {
     carregando: boolean;
@@ -43,24 +50,25 @@ export interface ResumoConfiguracao {
 
     jiraConfigurado: boolean;
     jiraUrlDominio: string;
+    jiraEmail: string;
+    jiraQuadro: string | null;
     quantidadeCamposJiraDefinidos: number;
+    coresStatus: Record<string, string>;
+    coresPrioridade: Record<string, string>;
     quantidadeCoresStatus: number;
     quantidadeCoresPrioridade: number;
     quantidadeMapeamentosJira: number;
+    mapeamentoJira: Record<string, EntradaMapeamentoJiraToggl>;
+    usuariosToggl: UsuarioTogglResumo[];
+    usuariosTogglSemMapeamento: UsuarioTogglResumo[];
+    entradasMapeamentoInvalidas: string[];
 
     togglCompleto: boolean;
     statusResponsavelCompleto: boolean;
+    statusFinalCompleto: boolean;
+    jiraCamposCompleto: boolean;
+    mapeamentoCompleto: boolean;
     configuracaoCompleta: boolean;
-}
-
-function contarCamposJiraDefinidos(configuracao: ConfiguracaoJira | null): number {
-    if (!configuracao) return 0;
-    return [
-        configuracao.campoEstimativaDesenvolvimentoId,
-        configuracao.campoEstimativaRevisaoId,
-        configuracao.campoEstimativaTestesId,
-        configuracao.campoRevisadoPorId,
-    ].filter((id) => id.trim() !== '').length;
 }
 
 export function useResumoConfiguracao(): ResumoConfiguracao {
@@ -140,8 +148,17 @@ export function useResumoConfiguracao(): ResumoConfiguracao {
 
     const categorias = categoriasCarregadas ?? CATEGORIAS_PADRAO;
     const responsabilidade = responsabilidadeCarregada ?? RESPONSABILIDADE_PADRAO;
+    const statusFinal = statusFinalCarregado ?? STATUS_FINAL_PADRAO;
     const administrador = usuariosToggl.find((usuario) => usuario.administrador);
     const jiraUrlDominio = configuracaoJira?.urlDominio ?? '';
+    const jiraEmail = configuracaoJira?.email ?? '';
+    const jiraQuadro = configuracaoJira?.quadroId != null
+        ? rotularQuadroJira(configuracaoJira.quadroId, configuracaoJira.quadroNome)
+        : null;
+    const camposJiraCompletos = jiraCamposCompleto(configuracaoJira);
+    const mapeamento = mapeamentoJira?.mapeamento ?? MAPEAMENTO_VAZIO;
+    const avaliacaoMapeamento = avaliarMapeamentoJiraToggl(mapeamento, usuariosToggl);
+    const mapeamentoCompleto = usuariosCarregados && avaliacaoMapeamento.completo;
 
     return {
         carregando: cargasEmAndamento > 0,
@@ -156,17 +173,34 @@ export function useResumoConfiguracao(): ResumoConfiguracao {
 
         categorias,
         responsabilidade,
-        statusFinal: statusFinalCarregado ?? STATUS_FINAL_PADRAO,
+        statusFinal,
 
-        jiraConfigurado: jiraUrlDominio.trim() !== '' && (configuracaoJira?.email.trim() ?? '') !== '',
+        jiraConfigurado: jiraUrlDominio.trim() !== '' && jiraEmail.trim() !== '',
         jiraUrlDominio,
+        jiraEmail,
+        jiraQuadro,
         quantidadeCamposJiraDefinidos: contarCamposJiraDefinidos(configuracaoJira),
+        coresStatus: coresJira?.coresStatus ?? CORES_VAZIAS,
+        coresPrioridade: coresJira?.coresPrioridade ?? CORES_VAZIAS,
         quantidadeCoresStatus: coresJira ? Object.keys(coresJira.coresStatus).length : 0,
         quantidadeCoresPrioridade: coresJira ? Object.keys(coresJira.coresPrioridade).length : 0,
-        quantidadeMapeamentosJira: mapeamentoJira ? Object.keys(mapeamentoJira.mapeamento).length : 0,
+        quantidadeMapeamentosJira: Object.keys(mapeamento).length,
+        mapeamentoJira: mapeamento,
+        usuariosToggl,
+        usuariosTogglSemMapeamento: avaliacaoMapeamento.usuariosTogglSemPar,
+        entradasMapeamentoInvalidas: avaliacaoMapeamento.entradasInvalidas,
 
         togglCompleto: togglObrigatorioCompleto(categorias),
         statusResponsavelCompleto: statusResponsavelCompleto(responsabilidade),
-        configuracaoCompleta: configuracaoObrigatoriaCompleta({ ...categorias, ...responsabilidade }),
+        statusFinalCompleto: statusFinalCompleto(statusFinal),
+        jiraCamposCompleto: camposJiraCompletos,
+        mapeamentoCompleto,
+        configuracaoCompleta: configuracaoObrigatoriaCompleta({
+            ...categorias,
+            ...responsabilidade,
+            ...statusFinal,
+            camposJiraCompletos,
+            mapeamentoCompleto,
+        }),
     };
 }
