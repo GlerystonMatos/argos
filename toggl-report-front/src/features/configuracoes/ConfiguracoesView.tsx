@@ -10,6 +10,7 @@ import { MapeamentoJiraTogglPanel } from './MapeamentoJiraTogglPanel';
 import { ConfiguracaoJiraCoresTab } from './ConfiguracaoJiraCoresTab';
 import type { AbaConfiguracoes, AbaConfiguracoesHandle } from './abas';
 import { ConfiguracaoJiraStatusTab } from './ConfiguracaoJiraStatusTab';
+import { ConfiguracaoJiraQuadroTab } from './ConfiguracaoJiraQuadroTab';
 import { Box, Card, Tab, Tabs, Stack, CardContent } from '@mui/material';
 import type { ResumoConfiguracao } from '../resumo/useResumoConfiguracao';
 import { PreRequisitosConfiguracoes } from './PreRequisitosConfiguracoes';
@@ -49,10 +50,10 @@ export const ConfiguracoesView = forwardRef<ConfiguracoesViewHandle, Configuraco
         const [salvando, setSalvando] = useState(false);
 
         const sujoRef = useRef<Record<AbaConfiguracoes, boolean>>({
-            'toggl': false, 'jira-campos': false, 'jira-status': false, 'jira-cores': false, 'jira-toggl': false,
+            'toggl': false, 'jira-campos': false, 'jira-status': false, 'jira-cores': false, 'jira-quadro': false, 'jira-toggl': false,
         });
         const validoRef = useRef<Record<AbaConfiguracoes, boolean>>({
-            'toggl': true, 'jira-campos': true, 'jira-status': true, 'jira-cores': true, 'jira-toggl': true,
+            'toggl': true, 'jira-campos': true, 'jira-status': true, 'jira-cores': true, 'jira-quadro': true, 'jira-toggl': true,
         });
         const salvandoRef = useRef(false);
 
@@ -61,6 +62,7 @@ export const ConfiguracoesView = forwardRef<ConfiguracoesViewHandle, Configuraco
             'jira-campos': useRef<AbaConfiguracoesHandle>(null),
             'jira-status': useRef<AbaConfiguracoesHandle>(null),
             'jira-cores': useRef<AbaConfiguracoesHandle>(null),
+            'jira-quadro': useRef<AbaConfiguracoesHandle>(null),
             'jira-toggl': useRef<AbaConfiguracoesHandle>(null),
         };
 
@@ -185,6 +187,7 @@ export const ConfiguracoesView = forwardRef<ConfiguracoesViewHandle, Configuraco
                         {painel('jira-campos', <JiraCamposPanel {...propsAba('jira-campos')} />)}
                         {painel('jira-status', <ConfiguracaoJiraStatusTab {...propsAba('jira-status')} />)}
                         {painel('jira-cores', <ConfiguracaoJiraCoresTab ref={refsAbas['jira-cores']} onAlterado={callbacksAbas.marcarAlterado['jira-cores']} />)}
+                        {painel('jira-quadro', <ConfiguracaoJiraQuadroTab {...propsAba('jira-quadro')} />)}
                         {painel('jira-toggl', <MapeamentoJiraTogglPanel {...propsAba('jira-toggl')} />)}
                     </Stack>
                 </CardContent>

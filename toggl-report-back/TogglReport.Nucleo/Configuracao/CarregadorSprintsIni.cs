@@ -30,6 +30,11 @@ public static class CarregadorSprintsIni
                     NumberStyles.Number,
                     CultureInfo.InvariantCulture,
                     out decimal horasPorDia) ? horasPorDia : 0,
+                MargemPercentual = decimal.TryParse(
+                    AnalisadorIni.ObterOuPadrao(valores, "MargemPercentual", "30"),
+                    NumberStyles.Number,
+                    CultureInfo.InvariantCulture,
+                    out decimal margemPercentual) ? margemPercentual : 30,
                 DataInicio = AnalisadorIni.ObterOuPadrao(valores, "DataInicio", ""),
                 DataFim = AnalisadorIni.ObterOuPadrao(valores, "DataFim", ""),
                 Fechado = bool.TryParse(AnalisadorIni.ObterOuPadrao(valores, "Fechado", "False"), out bool fechado) && fechado
@@ -48,6 +53,7 @@ public static class CarregadorSprintsIni
             sb.AppendLine($"[{PrefixoSecaoSprint}{sprint.Chave}]");
             sb.AppendLine($"Nome={sprint.Nome}");
             sb.AppendLine($"HorasPorDia={sprint.HorasPorDia.ToString(CultureInfo.InvariantCulture)}");
+            sb.AppendLine($"MargemPercentual={sprint.MargemPercentual.ToString(CultureInfo.InvariantCulture)}");
             sb.AppendLine($"DataInicio={sprint.DataInicio}");
             sb.AppendLine($"DataFim={sprint.DataFim}");
             sb.AppendLine($"Fechado={sprint.Fechado}");

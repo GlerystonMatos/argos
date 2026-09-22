@@ -4,12 +4,15 @@ public static class CarregadorConfiguracaoCoresJiraIni
 {
     private const string PrefixoSecaoPrioridade = "Prioridade:";
 
+    private const string PrefixoSecaoColuna = "Coluna:";
+
     public static ConfiguracaoCoresJira Padrao() => new();
 
     public static ConfiguracaoCoresJira Carregar(CaminhosDados caminhos) => new()
     {
         CoresStatus = ArquivoStatusJiraIni.Carregar(caminhos.JiraStatus).Cores,
-        CoresPrioridade = CarregarPrioridades(caminhos.JiraPrioridades)
+        CoresPrioridade = CarregarCores(caminhos.JiraPrioridades, PrefixoSecaoPrioridade),
+        CoresColuna = CarregarCores(caminhos.JiraColunas, PrefixoSecaoColuna)
     };
 
     public static void Salvar(CaminhosDados caminhos, ConfiguracaoCoresJira configuracao)
@@ -19,10 +22,11 @@ public static class CarregadorConfiguracaoCoresJiraIni
             estado.Cores = new Dictionary<string, string>(configuracao.CoresStatus, StringComparer.OrdinalIgnoreCase);
         });
 
-        SalvarPrioridades(caminhos.JiraPrioridades, configuracao.CoresPrioridade);
+        SalvarCores(caminhos.JiraPrioridades, PrefixoSecaoPrioridade, configuracao.CoresPrioridade);
+        SalvarCores(caminhos.JiraColunas, PrefixoSecaoColuna, configuracao.CoresColuna);
     }
 
-    private static Dictionary<string, string> CarregarPrioridades(string caminho)
+    private static Dictionary<string, string> CarregarCores(string caminho, string prefixoSecao)
     {
         Dictionary<string, string> cores = new(StringComparer.OrdinalIgnoreCase);
         if (!File.Exists(caminho))
@@ -30,29 +34,29 @@ public static class CarregadorConfiguracaoCoresJiraIni
 
         foreach ((string nomeSecao, Dictionary<string, string> valores) in AnalisadorIni.Analisar(caminho))
         {
-            if (!nomeSecao.StartsWith(PrefixoSecaoPrioridade, StringComparison.OrdinalIgnoreCase))
+            if (!nomeSecao.StartsWith(prefixoSecao, StringComparison.OrdinalIgnoreCase))
                 continue;
 
-            string prioridade = nomeSecao.Substring(PrefixoSecaoPrioridade.Length).Trim();
+            string nome = nomeSecao.Substring(prefixoSecao.Length).Trim();
             string? cor = AnalisadorIni.ObterOuNulo(valores, "Cor");
-            if (prioridade.Length > 0 && cor is not null)
-                cores[prioridade] = cor;
+            if (nome.Length > 0 && cor is not null)
+                cores[nome] = cor;
         }
 
         return cores;
     }
 
-    private static void SalvarPrioridades(string caminho, Dictionary<string, string> cores)
+    private static void SalvarCores(string caminho, string prefixoSecao, Dictionary<string, string> cores)
     {
         Dictionary<string, Dictionary<string, string>> secoes = new(StringComparer.OrdinalIgnoreCase);
 
-        foreach ((string prioridade, string cor) in cores)
+        foreach ((string chave, string cor) in cores)
         {
-            string nome = prioridade.Trim();
+            string nome = chave.Trim();
             if (nome.Length == 0)
                 continue;
 
-            secoes[$"{PrefixoSecaoPrioridade}{nome}"] = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            secoes[$"{prefixoSecao}{nome}"] = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {
                 ["Cor"] = cor
             };

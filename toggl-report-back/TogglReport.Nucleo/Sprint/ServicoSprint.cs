@@ -45,7 +45,7 @@ public static class ServicoSprint
         int diasUteis = ContarDiasUteis(sprint.DataInicio, sprint.DataFim);
 
         decimal tempoTotal = sprint.HorasPorDia * diasUteis;
-        int margem = (int)Math.Floor(0.30m * tempoTotal);
+        int margem = (int)Math.Floor(sprint.MargemPercentual / 100m * tempoTotal);
         int tdPorColaborador = (int)Math.Floor(tempoTotal - margem);
         int ct = tdPorColaborador * usuariosSelecionados.Count;
 
@@ -237,7 +237,8 @@ public static class ServicoSprint
                     jiraIndisponivel,
                     issueJira?.SituacaoCategoria,
                     grupoResponsavelStatus,
-                    situacaoSemGrupoResponsavel));
+                    situacaoSemGrupoResponsavel,
+                    issueJira?.PrevisaoLiberacao));
             }
         }
 

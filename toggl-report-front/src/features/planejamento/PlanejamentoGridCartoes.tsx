@@ -5,9 +5,11 @@ import { PlanejamentoLinhaCartao } from './PlanejamentoLinhaCartao';
 import { useLarguraColunaRestante } from '../../hooks/useLarguraColunaRestante';
 
 import {
+    Box,
     Table,
     Alert,
     Stack,
+    Tooltip,
     TableRow,
     TableBody,
     TableCell,
@@ -25,17 +27,32 @@ interface PlanejamentoGridCartoesProps {
     totalCartoes?: number;
     coresStatus: Record<string, string>;
     coresPrioridade: Record<string, string>;
+    coresColuna: Record<string, string>;
+    janelaAlertaPrevisaoLiberacaoDias?: number;
+}
+
+const ABREVIACOES_PESSOA: Record<string, string> = { Responsável: 'RES', 'Analisado por': 'ANP', 'Revisado por': 'REP' };
+
+function CabecalhoAbreviado({ rotulo }: { rotulo: string }): ReactNode {
+    return (
+        <Tooltip title={rotulo}>
+            <Box component="span">{ABREVIACOES_PESSOA[rotulo]}</Box>
+        </Tooltip>
+    );
 }
 
 const SX_CABECALHO = { py: 0.25, px: 0.5, width: '1%', whiteSpace: 'nowrap', verticalAlign: 'bottom' } as const;
 const SX_CABECALHO_PESSOA = { ...SX_CABECALHO, whiteSpace: 'normal', lineHeight: 1.2 } as const;
+const SX_CABECALHO_COM_DIVISORIA = { ...SX_CABECALHO, borderLeft: 1, borderColor: 'divider' } as const;
+const SX_CABECALHO_PADDING_FIXO = { ...SX_CABECALHO, paddingLeft: '0.25rem', paddingRight: '0.25rem', borderLeft: 1, borderColor: 'divider' } as const;
+const SX_CABECALHO_PESSOA_PADDING_FIXO = { ...SX_CABECALHO_PESSOA, paddingLeft: '0.25rem', paddingRight: '0.25rem', borderLeft: 1, borderColor: 'divider' } as const;
 
 function rotuloContador(exibidos: number, total: number): string {
     const sufixo = total === 1 ? 'cartão' : 'cartões';
     return exibidos === total ? `${total} ${sufixo}` : `${exibidos} de ${total} ${sufixo}`;
 }
 
-export function PlanejamentoGridCartoes({ cartoes, totalCartoes, coresStatus, coresPrioridade }: PlanejamentoGridCartoesProps): ReactNode {
+export function PlanejamentoGridCartoes({ cartoes, totalCartoes, coresStatus, coresPrioridade, coresColuna, janelaAlertaPrevisaoLiberacaoDias = 5 }: PlanejamentoGridCartoesProps): ReactNode {
     const refTabela = useRef<HTMLTableElement>(null);
     const total = totalCartoes ?? cartoes.length;
 
@@ -66,15 +83,17 @@ export function PlanejamentoGridCartoes({ cartoes, totalCartoes, coresStatus, co
                     <Table ref={refTabela} size="small">
                         <TableHead>
                             <TableRow>
-                                <TableCell sx={SX_CABECALHO}>Coluna</TableCell>
+                                <TableCell align="center" sx={SX_CABECALHO}>Coluna</TableCell>
                                 <TableCell align="center" sx={SX_CABECALHO}>Prioridade</TableCell>
                                 <TableCell align="center" sx={SX_CABECALHO}>Status</TableCell>
                                 <TableCell align="center" sx={SX_CABECALHO}>Código</TableCell>
                                 <TableCell sx={{ py: 0.25, px: 0.8, verticalAlign: 'bottom' }}>Descrição</TableCell>
-                                <TableCell sx={SX_CABECALHO}>Grupo</TableCell>
-                                <TableCell align="center" sx={SX_CABECALHO_PESSOA}>Responsável</TableCell>
-                                <TableCell align="center" sx={SX_CABECALHO_PESSOA}>Analisado por</TableCell>
-                                <TableCell align="center" sx={SX_CABECALHO_PESSOA}>Revisado por</TableCell>
+                                <TableCell align="center" sx={SX_CABECALHO_COM_DIVISORIA}>Previsão</TableCell>
+                                <TableCell align="left" sx={SX_CABECALHO_PADDING_FIXO}>Time</TableCell>
+                                <TableCell align="left" sx={SX_CABECALHO_COM_DIVISORIA}>Épico</TableCell>
+                                <TableCell align="center" sx={SX_CABECALHO_PESSOA_PADDING_FIXO}><CabecalhoAbreviado rotulo="Responsável" /></TableCell>
+                                <TableCell align="center" sx={SX_CABECALHO_PESSOA_PADDING_FIXO}><CabecalhoAbreviado rotulo="Analisado por" /></TableCell>
+                                <TableCell align="center" sx={SX_CABECALHO_PESSOA_PADDING_FIXO}><CabecalhoAbreviado rotulo="Revisado por" /></TableCell>
                             </TableRow>
                         </TableHead>
                         <TableBody>
@@ -84,7 +103,9 @@ export function PlanejamentoGridCartoes({ cartoes, totalCartoes, coresStatus, co
                                     cartao={cartao}
                                     larguraDescricao={larguraDescricao}
                                     coresStatus={coresStatus}
-                                    coresPrioridade={coresPrioridade} />
+                                    coresPrioridade={coresPrioridade}
+                                    coresColuna={coresColuna}
+                                    janelaAlertaPrevisaoLiberacaoDias={janelaAlertaPrevisaoLiberacaoDias} />
                             ))}
                         </TableBody>
                     </Table>

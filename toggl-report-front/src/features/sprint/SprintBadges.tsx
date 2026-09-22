@@ -2,9 +2,9 @@ import type { ReactNode } from 'react';
 import { FONTE_MARCA } from '../../utils/tipografia';
 import { Box, Stack, Tooltip, Typography } from '@mui/material';
 
-export function BadgeTexto({ texto, cor, corTexto = 'text.primary', largura = '3rem' }: { texto: string; cor: string; corTexto?: string; largura?: string }): ReactNode {
+export function BadgeTexto({ texto, cor, corTexto = 'text.primary', largura = '3rem', tooltip }: { texto: string; cor: string; corTexto?: string; largura?: string; tooltip?: string }): ReactNode {
     return (
-        <Tooltip title={texto}>
+        <Tooltip title={tooltip ?? texto}>
             <Box
                 component="span"
                 sx={{

@@ -10,6 +10,8 @@ public record CartaoPlanejamentoDto(
     string? Prioridade,
     string? GrupoChave,
     string? GrupoResumo,
+    string? Time,
     PessoaPlanejamentoDto? Responsavel,
     PessoaPlanejamentoDto? AnalisadoPor,
-    PessoaPlanejamentoDto? RevisadoPor);
+    PessoaPlanejamentoDto? RevisadoPor,
+    string? PrevisaoLiberacao);

@@ -95,6 +95,20 @@ export const ARQUIVOS_INI: readonly ArquivoIni[] = [
         contemSegredo: false,
     },
     {
+        nome: 'JiraColunas.ini',
+        tipo: 'configuracao',
+        conteudo: 'Cor de cada coluna do quadro do Jira usada na badge de Coluna do Planejamento.',
+        geradoPor: 'Configurações → Jira: Cores: salvar.',
+        contemSegredo: false,
+    },
+    {
+        nome: 'JiraQuadro.ini',
+        tipo: 'configuracao',
+        conteudo: 'Colunas do quadro do Jira que não devem aparecer no Planejamento.',
+        geradoPor: 'Configurações → Jira: Quadro: salvar.',
+        contemSegredo: false,
+    },
+    {
         nome: 'JiraTogglMapeamento.ini',
         tipo: 'configuracao',
         conteudo: 'Mapeamento entre usuários do Jira e do Toggl (com sigla e cor), usado no preenchimento sugerido de DEV/REV.',
@@ -169,6 +183,13 @@ export const ARQUIVOS_INI: readonly ArquivoIni[] = [
         tipo: 'cache',
         conteudo: 'Nomes reais das prioridades do Jira e data da última atualização.',
         geradoPor: 'Configurações → Jira: Cores: ao listar ou atualizar as prioridades.',
+        contemSegredo: false,
+    },
+    {
+        nome: 'JiraColunasCache.ini',
+        tipo: 'cache',
+        conteudo: 'Nomes reais das colunas do quadro de DEV do Jira e data da última atualização.',
+        geradoPor: 'Configurações → Jira: Cores ou Jira: Quadro: ao listar ou atualizar as colunas.',
         contemSegredo: false,
     },
     {

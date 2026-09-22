@@ -116,6 +116,10 @@ function AppInterno({ onSair }: AppInternoProps): ReactNode {
 
     function navegarPara(destino: Secao, aba?: AbaConfiguracoes): void {
         setMenuMobileAberto(false);
+        if (telaGrande && menuVisivel) {
+            setMenuVisivel(false);
+            gravarMenuVisivel(false);
+        }
         void navegarComSalvamento(destino, aba);
     }
 
@@ -288,7 +292,7 @@ function AppInterno({ onSair }: AppInternoProps): ReactNode {
                                                 chaveSprint={sprintSelecionado.chave}
                                                 veioDoCache={consultaSprintConcluida.veioDoCache}
                                                 categorias={resumo.categorias}
-                                                responsabilidade={resumo.responsabilidade}
+                                                janelaAlertaPrevisaoLiberacaoDias={resumo.janelaAlertaPrevisaoLiberacaoDias}
                                                 fechado={sprintSelecionado.fechado}
                                                 onFechado={setSprintSelecionado}
                                                 onPlanejar={() => setVisaoSprint('planejamento')}
@@ -299,6 +303,7 @@ function AppInterno({ onSair }: AppInternoProps): ReactNode {
                                         {visaoSprint === 'planejamento' ? (
                                             <PlanejamentoView
                                                 sprint={sprintSelecionado}
+                                                janelaAlertaPrevisaoLiberacaoDias={resumo.janelaAlertaPrevisaoLiberacaoDias}
                                                 onVoltar={() => setVisaoSprint('acompanhamento')} />
                                         ) : undefined}
                                     </>

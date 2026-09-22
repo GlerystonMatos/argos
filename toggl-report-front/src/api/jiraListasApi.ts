@@ -9,6 +9,10 @@ export function listarPrioridadesJira(forcarAtualizacao = false): Promise<ListaJ
     return http.get<ListaJiraResponse>('/api/jira/prioridades', { forcarAtualizacao: String(forcarAtualizacao) });
 }
 
+export function listarColunasJira(forcarAtualizacao = false): Promise<ListaJiraResponse> {
+    return http.get<ListaJiraResponse>('/api/jira/colunas', { forcarAtualizacao: String(forcarAtualizacao) });
+}
+
 export function listarUsuariosJira(forcarAtualizacao = false): Promise<ListaJiraResponse> {
     return http.get<ListaJiraResponse>('/api/jira/usuarios', { forcarAtualizacao: String(forcarAtualizacao) });
 }

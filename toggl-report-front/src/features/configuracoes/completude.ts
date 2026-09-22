@@ -1,6 +1,6 @@
 import type { Agrupamento, EntradaMapeamentoJiraToggl, UsuarioTogglResumo } from '../../api/tipos';
 
-export const TOTAL_CAMPOS_JIRA = 5;
+export const TOTAL_CAMPOS_JIRA = 7;
 
 export function contarCamposJiraDefinidos(config: {
     campoEstimativaDesenvolvimentoId: string;
@@ -8,6 +8,8 @@ export function contarCamposJiraDefinidos(config: {
     campoEstimativaTestesId: string;
     campoRevisadoPorId: string;
     campoAnalisadoPorId: string;
+    campoTimeId: string;
+    campoPrevisaoLiberacaoId: string;
 } | null): number {
     if (!config) return 0;
     return [
@@ -16,6 +18,8 @@ export function contarCamposJiraDefinidos(config: {
         config.campoEstimativaTestesId,
         config.campoRevisadoPorId,
         config.campoAnalisadoPorId,
+        config.campoTimeId,
+        config.campoPrevisaoLiberacaoId,
     ].filter((id) => id.trim() !== '').length;
 }
 

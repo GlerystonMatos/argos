@@ -1,20 +1,23 @@
 import type { ReactNode } from 'react';
+import { formatarData } from '../../utils/datas';
 import { BadgeTexto } from '../sprint/SprintBadges';
 import { BadgeSigla } from '../../components/BadgeSigla';
 import { corDaSituacao, infoPrioridade } from '../sprint/calculos';
 import type { CartaoPlanejamento, PessoaPlanejamento } from '../../api/tipos';
 import { Box, Tooltip, TableRow, TableCell, Typography } from '@mui/material';
+import { corPrevisaoLiberacao, urgenciaPrevisaoLiberacao, ROTULOS_URGENCIA_PREVISAO_LIBERACAO } from '../../utils/previsaoLiberacao';
 
 const LARGURA_BADGE = '6.5rem';
-const LARGURA_MAXIMA_COLUNA = '9rem';
 const LARGURA_MAXIMA_GRUPO = '10rem';
-const SEM_COLUNA = '(sem coluna)';
+const LARGURA_MAXIMA_TIME = '8rem';
 
 interface PlanejamentoLinhaCartaoProps {
     cartao: CartaoPlanejamento;
     larguraDescricao?: number;
     coresStatus: Record<string, string>;
     coresPrioridade: Record<string, string>;
+    coresColuna: Record<string, string>;
+    janelaAlertaPrevisaoLiberacaoDias?: number;
 }
 
 const SX_TEXTO_CORTADO = {
@@ -31,9 +34,19 @@ function Vazio(): ReactNode {
     );
 }
 
+const SX_CELULA_COM_DIVISORIA = { width: '1%', px: 0.5, whiteSpace: 'nowrap', borderLeft: 1, borderColor: 'divider' } as const;
+const SX_CELULA_PADDING_FIXO = {
+    width: '1%',
+    paddingLeft: '0.25rem',
+    paddingRight: '0.25rem',
+    whiteSpace: 'nowrap',
+    borderLeft: 1,
+    borderColor: 'divider',
+} as const;
+
 function CelulaPessoa({ pessoa }: { pessoa: PessoaPlanejamento | null }): ReactNode {
     return (
-        <TableCell align="center" sx={{ width: '1%', px: 0.5, whiteSpace: 'nowrap' }}>
+        <TableCell align="center" sx={SX_CELULA_PADDING_FIXO}>
             {pessoa ? (
                 <BadgeSigla
                     sigla={pessoa.sigla}
@@ -46,24 +59,18 @@ function CelulaPessoa({ pessoa }: { pessoa: PessoaPlanejamento | null }): ReactN
     );
 }
 
-export function PlanejamentoLinhaCartao({ cartao, larguraDescricao, coresStatus, coresPrioridade }: PlanejamentoLinhaCartaoProps): ReactNode {
+export function PlanejamentoLinhaCartao({ cartao, larguraDescricao, coresStatus, coresPrioridade, coresColuna, janelaAlertaPrevisaoLiberacaoDias = 5 }: PlanejamentoLinhaCartaoProps): ReactNode {
     const prioridade = infoPrioridade(cartao.prioridade, coresPrioridade);
-    const semColuna = cartao.coluna === SEM_COLUNA;
+    const urgenciaPrevisao = urgenciaPrevisaoLiberacao(cartao.previsaoLiberacao, janelaAlertaPrevisaoLiberacaoDias);
+    const corPrevisao = corPrevisaoLiberacao(urgenciaPrevisao);
 
     return (
         <TableRow hover>
-            <TableCell sx={{ width: '1%', px: 0.5, whiteSpace: 'nowrap' }}>
-                <Tooltip title={cartao.coluna}>
-                    <Box
-                        sx={{
-                            ...SX_TEXTO_CORTADO,
-                            maxWidth: LARGURA_MAXIMA_COLUNA,
-                            fontSize: '0.8125rem',
-                            color: semColuna ? 'text.secondary' : 'text.primary',
-                        }}>
-                        {cartao.coluna}
-                    </Box>
-                </Tooltip>
+            <TableCell align="center" sx={{ width: '1%', px: 0.5, whiteSpace: 'nowrap' }}>
+                <BadgeTexto
+                    texto={cartao.coluna}
+                    cor={corDaSituacao(cartao.coluna, coresColuna)}
+                    largura={LARGURA_BADGE} />
             </TableCell>
             <TableCell align="center" sx={{ width: '1%', px: 0.5, whiteSpace: 'nowrap' }}>
                 <BadgeTexto texto={prioridade.texto} cor={prioridade.cor} largura={LARGURA_BADGE} />
@@ -101,7 +108,29 @@ export function PlanejamentoLinhaCartao({ cartao, larguraDescricao, coresStatus,
                     </Box>
                 </Tooltip>
             </TableCell>
-            <TableCell sx={{ width: '1%', px: 0.5, whiteSpace: 'nowrap' }}>
+            <TableCell align="center" sx={SX_CELULA_COM_DIVISORIA}>
+                {cartao.previsaoLiberacao ? (
+                    <Tooltip title={urgenciaPrevisao ? ROTULOS_URGENCIA_PREVISAO_LIBERACAO[urgenciaPrevisao] : 'Previsão de liberação'}>
+                        <Box component="span" sx={{ color: corPrevisao ?? 'text.primary', fontWeight: corPrevisao ? 700 : undefined, fontSize: '0.8125rem' }}>
+                            {formatarData(cartao.previsaoLiberacao)}
+                        </Box>
+                    </Tooltip>
+                ) : (
+                    <Vazio />
+                )}
+            </TableCell>
+            <TableCell align="left" sx={SX_CELULA_PADDING_FIXO}>
+                {cartao.time ? (
+                    <Tooltip title={cartao.time}>
+                        <Box sx={{ ...SX_TEXTO_CORTADO, maxWidth: LARGURA_MAXIMA_TIME, fontSize: '0.8125rem' }}>
+                            {cartao.time}
+                        </Box>
+                    </Tooltip>
+                ) : (
+                    <Vazio />
+                )}
+            </TableCell>
+            <TableCell align="left" sx={SX_CELULA_COM_DIVISORIA}>
                 {cartao.grupoResumo ? (
                     <Tooltip title={cartao.grupoChave ? `${cartao.grupoChave} — ${cartao.grupoResumo}` : cartao.grupoResumo}>
                         <Box sx={{ ...SX_TEXTO_CORTADO, maxWidth: LARGURA_MAXIMA_GRUPO, fontSize: '0.8125rem' }}>

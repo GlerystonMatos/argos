@@ -12,6 +12,7 @@ export const CORES = {
     creme: '#F8F9FA',
     corPendente: '#EA4335',
     corConcluido: '#34A853',
+    corPrazoProximo: '#F57C00',
     corPrioridadeMuitoAlta: '#B71C1C',
     corPrioridadeAlta: '#EA4335',
     corPrioridadeMedia: '#F57C00',

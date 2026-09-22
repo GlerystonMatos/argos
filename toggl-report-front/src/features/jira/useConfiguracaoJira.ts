@@ -46,6 +46,11 @@ function requestDaConfiguracaoSalva(atual: ConfiguracaoJira): SalvarConfiguracao
         campoEstimativaRevisaoNome: atual.campoEstimativaRevisaoNome,
         campoEstimativaTestesId: atual.campoEstimativaTestesId,
         campoEstimativaTestesNome: atual.campoEstimativaTestesNome,
+        campoTimeId: atual.campoTimeId,
+        campoTimeNome: atual.campoTimeNome,
+        campoPrevisaoLiberacaoId: atual.campoPrevisaoLiberacaoId,
+        campoPrevisaoLiberacaoNome: atual.campoPrevisaoLiberacaoNome,
+        janelaAlertaPrevisaoLiberacaoDias: atual.janelaAlertaPrevisaoLiberacaoDias,
     };
 }
 

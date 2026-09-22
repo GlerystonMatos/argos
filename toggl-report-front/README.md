@@ -62,18 +62,23 @@ manualmente. Só aparece uma vez por sessão.
 
 Menu lateral com 7 seções, nesta ordem: **Toggl**, **Jira**, **Configurações**, **Relatório**, **Gant**,
 **Sprint** e **Dados**. Em telas largas ele é permanente e o botão de menu do topo o esconde/exibe (a
-escolha fica salva no navegador); em telas estreitas o mesmo botão abre uma gaveta temporária. O **Resumo
+escolha fica salva no navegador); em telas estreitas o mesmo botão abre uma gaveta temporária. **Toda
+navegação recolhe o menu automaticamente** em telas largas, dando a largura toda ao conteúdo. O **Resumo
 da aplicação** é a página inicial e o destino do clique na logo (não é item do menu): mostra o status de
-7 blocos de configuração (Usuários do Toggl; Toggl: Configurações; Jira: Conexão; Jira: Campos;
-Jira: Status; Jira: Cores; Jira ↔ Toggl: Mapeamento), cada um com um botão "Configurar" que
-leva direto à seção/aba correspondente. A conexão mostra o e-mail junto ao domínio e o quadro de DEV; Cores e Mapeamento trazem
-uma lista compacta (chips de cor; siglas com tooltip "Nome Toggl (Jira: Nome Jira)" ou "Nome Jira (somente no
-Jira)"). O resumo é recarregado a cada troca de seção e após cada salvamento.
+8 blocos de configuração (Usuários do Toggl; Toggl: Configurações; Jira: Conexão; Jira: Campos;
+Jira: Status; Jira: Cores; Jira: Quadro; Jira ↔ Toggl: Mapeamento), cada um com um botão "Configurar" que
+leva direto à seção/aba correspondente, e um sinal "+/–" para expandir/colapsar seus detalhes (mais os botões
+"Expandir tudo"/"Colapsar tudo" — **todos os blocos começam colapsados**). A conexão mostra o e-mail junto ao
+domínio e o quadro de DEV; Cores traz uma lista compacta por status/prioridade/coluna (chips de cor, sem rolagem
+interna própria — flui com a rolagem da página); Quadro lista as colunas ocultas no Planejamento; Mapeamento traz
+siglas com tooltip "Nome Toggl (Jira: Nome Jira)" ou "Nome Jira (somente no Jira)". O resumo é recarregado a cada
+troca de seção e após cada salvamento (qualquer aba alterada em Configurações recarrega o resumo inteiro, não só
+a aba salva).
 
 **Gate de acesso**: Relatório, Gant e Sprint ficam desabilitados no menu até a configuração obrigatória
 estar completa — Agrupamento, Tags detalhadas (exigidas quando o agrupamento não é `descricao`), Tags
-DEV/REV/QA do Toggl, Status DEV/REV/QA **e** Concluído/Ignorado do Jira (≥1 em cada), os 5 Campos
-do Jira (inclui "Analisado por") e o Mapeamento Jira ↔ Toggl. Enquanto isso, um aviso com atalho leva a Configurações.
+DEV/REV/QA do Toggl, Status DEV/REV/QA **e** Concluído/Ignorado do Jira (≥1 em cada), os 6 Campos
+do Jira (inclui "Analisado por" e "Time") e o Mapeamento Jira ↔ Toggl. Enquanto isso, um aviso com atalho leva a Configurações.
 Cadastro de usuários, conexão com o Jira e quadro de DEV aparecem no Resumo, mas não entram nesse cálculo
 (têm validação própria; sem quadro, o botão "Planejar" do Sprint abre um diálogo com atalho para Jira → Conexão).
 
@@ -106,7 +111,7 @@ conexão** (`POST /api/jira/testar-conexao`) valida o que está na tela sem salv
 ### Seção Configurações
 
 Só abre com um usuário Administrador do Toggl cadastrado **e** a conexão com o Jira configurada (URL +
-e-mail); senão mostra esses pré-requisitos com atalhos para as seções Toggl/Jira. São 5 abas e um único
+e-mail); senão mostra esses pré-requisitos com atalhos para as seções Toggl/Jira. São 6 abas e um único
 botão **Salvar**, sempre habilitado: um clique salva **todas as abas alteradas** (não só a visível), e sair da
 seção também salva as alteradas (se falhar ou houver aba inválida, permanece nela). As abas ficam montadas
 depois da primeira visita, então trocar de aba não perde o rascunho nem salva/bloqueia nada. Antes de gravar,
@@ -123,13 +128,18 @@ sprint, voltar ao valor original desabilita o Salvar:
    de agrupamento/tags para Relatório, Gant e Sprint.
 2. **Jira: Campos** — campos customizados do Jira (buscados sob demanda, `POST
    /api/jira/campos`) usados como "Estimativa do desenvolvimento", "Estimativa da revisão", "Estimativa
-   dos testes" (o PRE de cada grupo DEV/REV/QA), "Revisado por" e "Analisado por" (só usado pelo Planejamento) — os cinco
-   são obrigatórios.
+   dos testes" (o PRE de cada grupo DEV/REV/QA), "Revisado por", "Analisado por", "Time" (identifica a
+   equipe de cada cartão; alimenta a coluna e o filtro Time do Planejamento) e "Previsão de liberação"
+   (alimenta uma coluna e o filtro Prazo no Sprint e no Planejamento, logo após Descrição, destacada em
+   vermelho quando vencida, laranja quando perto do prazo e **verde** quando no prazo — janela em dias
+   configurável ao lado do campo, padrão 5) — os sete são obrigatórios.
 3. **Jira: Status** — status que identificam cada responsável (DEV/REV/QA) e status "Concluído" e
    "Ignorado" (mutuamente exclusivos) para os totalizadores do Sprint; as cinco listas são obrigatórias.
-4. **Jira: Cores** — cor de cada status e de cada prioridade reais do Jira, usadas nas badges do Sprint
-   (opcional).
-5. **Jira ↔ Toggl** — mapeamento de cada usuário real do Jira para um usuário Toggl (ou usuário exclusivo do
+4. **Jira: Cores** — cor de cada status, prioridade e coluna reais do Jira (a de coluna, do quadro de DEV
+   configurado), usadas nas badges do Sprint e do Planejamento (opcional).
+5. **Jira: Quadro** — colunas do quadro de DEV que não devem aparecer no Planejamento (nem seus cartões, nem
+   suas contagens de colaborador); opcional, sem nada selecionado todas aparecem.
+6. **Jira ↔ Toggl** — mapeamento de cada usuário real do Jira para um usuário Toggl (ou usuário exclusivo do
    Jira, com sigla/cor próprias); alimenta o fallback DEV/REV do Sprint. Completo quando todo usuário do
    Toggl cadastrado é alvo de ao menos uma entrada e toda entrada é válida (usuário Toggl ainda cadastrado,
    ou exclusivo do Jira com sigla); entradas cujo usuário sumiu do Jira continuam listadas para correção.
@@ -155,7 +165,8 @@ por usuário), consulta e abre a visualização, com botão **Voltar** para os p
 
 ### Sprint
 
-Lista de sprints (CRUD, cada um com nome, horas/dia e período) e botão **Selecionar**, que abre na hora o
+Lista de sprints (CRUD, cada um com nome, horas/dia, **margem (%)** — obrigatória, 0 a 99,9, usada no
+cálculo de capacidade — e período) e botão **Selecionar**, que abre na hora o
 modal **"Consultar sprint"**: só o nome do sprint e o seletor **"Forçar nova consulta em: Nenhum / Toggl /
 Jira / Ambos"** (`origem` de `POST /api/sprint/consultas`; o padrão "Nenhum" usa o cache quando existe) —
 período, agrupamento, tags e status não aparecem ali. Forçar Toggl pede confirmação (limite de 30
@@ -175,9 +186,13 @@ backend (409); o frontend só espelha.
 - **Colaboradores**: tabela recolhível com nome, sigla, tempo por colaborador, Realizado, **Disponível**
   (tempo por colaborador − Realizado; verde/vermelho/neutro), Pendentes e Concluídas.
 - **Grid de tarefas**: uma linha por descrição/tag, com Prioridade, Status, Código (link para a issue do
-  Jira quando encontrada) e Descrição, mais os grupos **DEV / REV / QA** (PRE, REA, sigla de quem apontou
-  e situação Pendente/Concluído). Colaboradores que ocupam categorias diferentes da mesma descrição
-  **mesclam numa linha**; linhas de tag nunca mesclam. Ordenada pelo número do código.
+  Jira quando encontrada), Descrição e **Previsão** de liberação (data — vermelha se vencida, laranja se
+  perto do prazo, **verde** se no prazo — campo do Jira, janela configurável em Jira: Campos), mais os
+  grupos **DEV / REV / QA** (PRE, REA, sigla de quem apontou e situação Pendente/Concluído). Colaboradores
+  que ocupam categorias diferentes da mesma descrição **mesclam numa linha**; linhas de tag nunca mesclam.
+  Ordenada pelo número do código. A tela só mostra cabeçalho/colaboradores/grid depois que a consulta **e**
+  as configurações buscadas à parte (cores, status final) terminam de carregar — até lá, esqueleto de
+  carregamento.
 - **Regras de leitura**: PRE vem do campo de estimativa do Jira de cada grupo e REA do Toggl; valor
   inexistente aparece como "–", e REA fica vermelho quando passa do PRE. Prioridade/Status vêm do Jira com
   a cor configurada (sem cor, cinza; a Prioridade tem paleta por severidade); "Tag" nas linhas de tag.
@@ -191,8 +206,7 @@ backend (409); o frontend só espelha.
   / Colaborador, Situação DEV/REV/QA, "Inverter filtros" e "Limpar"; empilhados em telas estreitas), com
   seleção múltipla compacta (o campo nunca cresce: 1 chip + "+N" com tooltip; as opções selecionadas continuam na lista com o checkbox marcado); ordenação clicável em Prioridade e Status. Tudo sobre os dados já carregados, sem nova
   consulta.
-- **Informações**: modal com abas que explicam capacidade, categorias, ciclo de vida e como ler a tela.
-- **Planejar**: botão antes de "Informações" que abre o [Planejamento](#planejamento) do sprint.
+- **Planejar**: botão que abre o [Planejamento](#planejamento) do sprint.
 
 ### Planejamento
 
@@ -200,16 +214,33 @@ Só **Jira, sem Toggl**: os cartões do **sprint ativo do quadro de DEV** config
 quadro (o Jira não tem um sprint equivalente ao do app, então não há correlação — a tela mostra o nome e o período do
 sprint ativo do quadro). **Voltar** retorna ao Acompanhamento, que continua montado (filtros e ordenação preservados).
 
-- **Colaboradores** (card): Nome, Sigla, **uma coluna por coluna do quadro** com a contagem de cartões, Total e um
-  rodapé "Cartões na coluna". Um cartão conta 1 para quem é Responsável **ou** "Revisado por"; "Analisado por" não conta.
-- **Cartões** (grid): Coluna · Prioridade · Status · Código (link para a issue) · Descrição (trunca de forma
-  responsiva, com tooltip) · Grupo (o Épico do cartão) · Responsável · Analisado por · Revisado por. As pessoas são
-  `BadgeSigla` do usuário mapeado em Jira ↔ Toggl, com o nome completo no tooltip; sem mapeamento, mostram as iniciais
-  em cinza e o tooltip avisa.
-- **Filtros**: Coluna, Status e Colaborador (casa Responsável **ou** Revisado por), **Inverter filtros** e **Limpar** —
-  E entre filtros, OU dentro de cada um (mesma multi-seleção compacta do Sprint). Afetam só a grid (o card sempre mostra todos) e resetam ao trocar de sprint.
-- **Atualização**: a tela reaproveita o cache do sprint (e o busca ao abrir, se não houver); **Atualizar** sempre
-  consulta o Jira ao vivo. "Forçar nova consulta em: Jira" ou "Ambos" no modal do Sprint também atualiza o Planejamento,
+- **Colaboradores** (card): Nome, Sigla, **uma coluna por coluna do quadro** (sigla — ignora artigos/preposições
+  curtos, usa 5 letras da 1ª palavra principal e, havendo mais de uma, 4 letras da última — o meio é descartado;
+  separador "-", ou "/" quando o nome original já usa barra; ex.: "Em Desenvolvimento" → "DESEN", "Pausado/Impedido"
+  → "PAUSA/IMPE" — tooltip com o nome completo, sem quebra de linha no cabeçalho; em colisão, a 1ª ocorrência mantém
+  a sigla e as seguintes ganham 1 letra a mais até ficar única, ex. "A Revisar" → "REVIS", "Revisando" → "REVISA")
+  com a contagem de cartões, Total e um rodapé "Cartões na coluna" — os valores das colunas não usam negrito. Um
+  cartão conta 1 para quem é Responsável **ou** "Revisado por"; "Analisado por" não conta.
+- **Cartões** (grid): Coluna (badge colorida com o **nome completo**, cor configurável em Jira: Cores) · Prioridade ·
+  Status · Código (link para a issue) · Descrição (trunca de forma responsiva, com tooltip) · **Previsão** de
+  liberação (data — vermelha se vencida, laranja se perto do prazo, **verde** se no prazo — mesma regra do Sprint) ·
+  Time (texto à esquerda, campo customizado configurável em Jira: Campos — "–" quando vazio) · Épico (texto à
+  esquerda, sem badge — a API do Jira não expõe cor de épico de forma confiável) · Responsável · Analisado · Revisado
+  (as três últimas abreviadas em "RES"/"ANA"/"REV" no cabeçalho, tooltip com o nome completo). Bordas verticais
+  separam as colunas a partir de Previsão; Time/Responsável/Analisado/Revisado têm padding horizontal reduzido
+  (0,25rem).
+  As pessoas são `BadgeSigla` do usuário mapeado em Jira ↔ Toggl, com o nome completo no tooltip; sem mapeamento,
+  mostram as iniciais em cinza e o tooltip avisa. A tela só mostra card/grid depois que a consulta **e** as cores do
+  Jira (buscadas à parte) terminam de carregar — até lá, esqueleto de carregamento.
+- **Colunas ocultas**: configuráveis em Configurações → Jira: Quadro — cartões dessas colunas somem da grid, dos
+  totais por coluna e das contagens de colaborador.
+- **Filtros**: Coluna, Status, Colaborador (casa Responsável **ou** Revisado por), Time, Épico e **Prazo** (No
+  prazo/Perto do prazo/Prazo vencido — mesma categorização usada na cor da Previsão), **Inverter filtros** e
+  **Limpar** — E entre filtros, OU dentro de cada um (mesma multi-seleção compacta do Sprint). Afetam só a grid (o
+  card sempre mostra todos) e resetam ao trocar de sprint.
+- **Atualização**: a tela reaproveita o cache do sprint (e o busca ao abrir, se não houver); **Atualizar** pede
+  confirmação (`DialogoConfirmacao`, mesmo componente usado em outras confirmações do app) e, ao confirmar, consulta o
+  Jira ao vivo. "Forçar nova consulta em: Jira" ou "Ambos" no modal do Sprint também atualiza o Planejamento,
   em segundo plano (sem bloquear o Acompanhamento; falha vira aviso) — "Toggl" sozinho não força. Sprint fechado nunca
   chama o Jira: usa o cache salvo e o **Atualizar** fica desabilitado.
 
@@ -231,7 +262,7 @@ uma marca "Contém token (enc:)" nos que trazem API Token criptografado.
 
 A interface é revisada para larguras de 360 a 1200 px: a página não rola na horizontal — tabelas e grades
 (Gant, Sprint, mapeamento Jira ↔ Toggl) rolam dentro do próprio container, filtros e formulários empilham
-em telas estreitas e os diálogos largos (Informações e detalhe da linha do Sprint) ocupam a tela toda.
+em telas estreitas e o diálogo largo de detalhe da linha do Sprint ocupa a tela toda.
 
 ## Estrutura
 

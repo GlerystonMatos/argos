@@ -11,4 +11,6 @@ public sealed record CartaoQuadroJira(
     string? Responsavel,
     string? AnalisadoPor,
     string? RevisadoPor,
-    string UrlIssue);
+    string? Time,
+    string UrlIssue,
+    string? PrevisaoLiberacao = null);

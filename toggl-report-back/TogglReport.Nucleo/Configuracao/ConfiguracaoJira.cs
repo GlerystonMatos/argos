@@ -31,4 +31,14 @@ public class ConfiguracaoJira
     public string CampoAnalisadoPorId { get; set; } = "";
 
     public string CampoAnalisadoPorNome { get; set; } = "";
+
+    public string CampoTimeId { get; set; } = "";
+
+    public string CampoTimeNome { get; set; } = "";
+
+    public string CampoPrevisaoLiberacaoId { get; set; } = "";
+
+    public string CampoPrevisaoLiberacaoNome { get; set; } = "";
+
+    public int JanelaAlertaPrevisaoLiberacaoDias { get; set; } = 5;
 }

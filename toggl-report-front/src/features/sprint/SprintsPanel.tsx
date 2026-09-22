@@ -161,7 +161,7 @@ export function SprintsPanel({
                                                 {sprint.fechado ? <Chip label="Fechado" size="small" /> : undefined}
                                             </Stack>
                                         }
-                                        secondary={`${formatarPeriodo(sprint.dataInicio, sprint.dataFim)} · ${sprint.horasPorDia}h/dia`} />
+                                        secondary={`${formatarPeriodo(sprint.dataInicio, sprint.dataFim)} · ${sprint.horasPorDia}h/dia · margem ${sprint.margemPercentual}%`} />
                                 </ListItemButton>
                             </ListItem>
                         ))}

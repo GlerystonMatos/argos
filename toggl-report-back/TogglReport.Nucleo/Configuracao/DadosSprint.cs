@@ -8,6 +8,8 @@ public class DadosSprint
 
     public decimal HorasPorDia { get; set; }
 
+    public decimal MargemPercentual { get; set; }
+
     public string DataInicio { get; set; } = "";
 
     public string DataFim { get; set; } = "";

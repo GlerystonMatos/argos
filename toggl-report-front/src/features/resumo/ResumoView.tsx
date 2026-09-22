@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { ReactNode } from 'react';
 import { ListaCoresResumo } from './ListaCoresResumo';
 import { rotularAgrupamento } from '../../utils/rotulos';
@@ -18,6 +19,11 @@ import {
     Typography,
     CardContent,
 } from '@mui/material';
+
+const BLOCOS_RESUMO = [
+    'usuarios-toggl', 'toggl-config', 'jira-conexao', 'jira-campos',
+    'jira-status', 'jira-cores', 'jira-quadro', 'jira-mapeamento',
+] as const;
 
 interface ResumoViewProps {
     resumo: ResumoConfiguracao;
@@ -57,11 +63,16 @@ export function ResumoView({ resumo, onNavegar }: ResumoViewProps): ReactNode {
         quantidadeUsuarios,
         coresStatus,
         coresPrioridade,
+        coresColuna,
         configuracaoCompleta,
         quantidadeCoresStatus,
         quantidadeMapeamentosJira,
         quantidadeCamposJiraDefinidos,
+        previsaoLiberacaoConfigurada,
+        janelaAlertaPrevisaoLiberacaoDias,
         quantidadeCoresPrioridade,
+        quantidadeCoresColuna,
+        colunasOcultasPlanejamento,
         mapeamentoJira,
         usuariosToggl,
         usuariosTogglSemMapeamento,
@@ -74,6 +85,32 @@ export function ResumoView({ resumo, onNavegar }: ResumoViewProps): ReactNode {
     } = resumo;
 
     const statusCompleto = statusResponsavelCompleto && statusFinalCompleto;
+
+    const [colapsados, setColapsados] = useState<ReadonlySet<string>>(new Set(BLOCOS_RESUMO));
+
+    function expandido(chave: string): boolean {
+        return !colapsados.has(chave);
+    }
+
+    function alternar(chave: string): void {
+        setColapsados((atual) => {
+            const novo = new Set(atual);
+            if (novo.has(chave)) {
+                novo.delete(chave);
+            } else {
+                novo.add(chave);
+            }
+            return novo;
+        });
+    }
+
+    function expandirTodos(): void {
+        setColapsados(new Set());
+    }
+
+    function colapsarTodos(): void {
+        setColapsados(new Set(BLOCOS_RESUMO));
+    }
 
     const pendenciasObrigatorias = [
         ...(togglCompleto ? [] : ['Toggl: Configurações']),
@@ -102,9 +139,20 @@ export function ResumoView({ resumo, onNavegar }: ResumoViewProps): ReactNode {
                         <EsqueletoCarregando />
                     ) : (
                         <>
+                            <Stack direction="row" spacing={1} sx={{ mt: '0.25rem !important' }}>
+                                <BotaoComCarregamento size="small" variant="outlined" onClick={expandirTodos}>
+                                    Expandir tudo
+                                </BotaoComCarregamento>
+                                <BotaoComCarregamento size="small" variant="outlined" onClick={colapsarTodos}>
+                                    Colapsar tudo
+                                </BotaoComCarregamento>
+                            </Stack>
+
                             <BlocoResumo
                                 icone={<IconeStatus completo={existeUsuarioAdministrador} />}
                                 titulo="Usuários do Toggl"
+                                expandido={expandido('usuarios-toggl')}
+                                onAlternarExpandido={() => alternar('usuarios-toggl')}
                                 acao={<BotaoConfigurar titulo="Usuários do Toggl" onClick={() => onNavegar('toggl')} />}>
                                 <Typography variant="body2" color="text.secondary">
                                     {quantidadeUsuarios} {quantidadeUsuarios === 1 ? 'Usuário cadastrado' : 'Usuários cadastrados'}
@@ -118,6 +166,8 @@ export function ResumoView({ resumo, onNavegar }: ResumoViewProps): ReactNode {
                             <BlocoResumo
                                 icone={<IconeStatus completo={togglCompleto} />}
                                 titulo="Toggl: Configurações"
+                                expandido={expandido('toggl-config')}
+                                onAlternarExpandido={() => alternar('toggl-config')}
                                 acao={<BotaoConfigurar titulo="Toggl: Configurações" onClick={() => onNavegar('configuracoes', 'toggl')} />}>
                                 <Typography variant="body2" color="text.secondary">
                                     Agrupamento: {rotularAgrupamento(categorias.agrupamento)}
@@ -146,6 +196,8 @@ export function ResumoView({ resumo, onNavegar }: ResumoViewProps): ReactNode {
                             <BlocoResumo
                                 icone={<IconeStatus completo={jiraConfigurado} />}
                                 titulo="Jira: Conexão"
+                                expandido={expandido('jira-conexao')}
+                                onAlternarExpandido={() => alternar('jira-conexao')}
                                 acao={<BotaoConfigurar titulo="Jira: Conexão" onClick={() => onNavegar('jira')} />}>
                                 {jiraConfigurado ? (
                                     <>
@@ -167,13 +219,20 @@ export function ResumoView({ resumo, onNavegar }: ResumoViewProps): ReactNode {
                             <BlocoResumo
                                 icone={<IconeStatus completo={jiraCamposCompleto} />}
                                 titulo="Jira: Campos"
+                                expandido={expandido('jira-campos')}
+                                onAlternarExpandido={() => alternar('jira-campos')}
                                 acao={<BotaoConfigurar titulo="Jira: Campos" onClick={() => onNavegar('configuracoes', 'jira-campos')} />}>
                                 <Typography variant="body2" color="text.secondary">
-                                    {quantidadeCamposJiraDefinidos} de {TOTAL_CAMPOS_JIRA} campos definidos — Estimativas de desenvolvimento, revisão e testes, "Revisado por" e "Analisado por"
+                                    {quantidadeCamposJiraDefinidos} de {TOTAL_CAMPOS_JIRA} campos definidos — Estimativas de desenvolvimento, revisão e testes, "Revisado por", "Analisado por", "Time" e "Previsão de liberação"
                                 </Typography>
+                                {previsaoLiberacaoConfigurada ? (
+                                    <Typography variant="body2" color="text.secondary">
+                                        Alerta de prazo: laranja {janelaAlertaPrevisaoLiberacaoDias} dias antes do prazo, verde além disso
+                                    </Typography>
+                                ) : undefined}
                                 {!jiraCamposCompleto ? (
                                     <Alert severity="warning" sx={{ py: 0 }}>
-                                        Faltam campos obrigatórios (Estimativas de desenvolvimento, revisão e testes, "Revisado por" e "Analisado por").
+                                        Faltam campos obrigatórios (Estimativas de desenvolvimento, revisão e testes, "Revisado por", "Analisado por", "Time" e "Previsão de liberação").
                                     </Alert>
                                 ) : undefined}
                             </BlocoResumo>
@@ -181,6 +240,8 @@ export function ResumoView({ resumo, onNavegar }: ResumoViewProps): ReactNode {
                             <BlocoResumo
                                 icone={<IconeStatus completo={statusCompleto} />}
                                 titulo="Jira: Status"
+                                expandido={expandido('jira-status')}
+                                onAlternarExpandido={() => alternar('jira-status')}
                                 acao={<BotaoConfigurar titulo="Jira: Status" onClick={() => onNavegar('configuracoes', 'jira-status')} />}>
                                 <Typography variant="body2" color="text.secondary">
                                     Status para identificar responsáveis (DEV / REV / QA): {responsabilidade.statusDev.length}/{responsabilidade.statusRev.length}/{responsabilidade.statusQa.length}
@@ -201,14 +262,36 @@ export function ResumoView({ resumo, onNavegar }: ResumoViewProps): ReactNode {
                             <BlocoResumo
                                 icone={<IconeStatus completo />}
                                 titulo="Jira: Cores"
+                                expandido={expandido('jira-cores')}
+                                onAlternarExpandido={() => alternar('jira-cores')}
                                 acao={<BotaoConfigurar titulo="Jira: Cores" onClick={() => onNavegar('configuracoes', 'jira-cores')} />}>
-                                <ListaCoresResumo quantidadeCoresStatus={quantidadeCoresStatus} quantidadeCoresPrioridade={quantidadeCoresPrioridade}
-                                    coresStatus={coresStatus} coresPrioridade={coresPrioridade} />
+                                <ListaCoresResumo
+                                    quantidadeCoresStatus={quantidadeCoresStatus}
+                                    quantidadeCoresPrioridade={quantidadeCoresPrioridade}
+                                    quantidadeCoresColuna={quantidadeCoresColuna}
+                                    coresStatus={coresStatus}
+                                    coresPrioridade={coresPrioridade}
+                                    coresColuna={coresColuna} />
+                            </BlocoResumo>
+
+                            <BlocoResumo
+                                icone={<IconeStatus completo />}
+                                titulo="Jira: Quadro"
+                                expandido={expandido('jira-quadro')}
+                                onAlternarExpandido={() => alternar('jira-quadro')}
+                                acao={<BotaoConfigurar titulo="Jira: Quadro" onClick={() => onNavegar('configuracoes', 'jira-quadro')} />}>
+                                <Typography variant="body2" color="text.secondary">
+                                    {colunasOcultasPlanejamento.length === 0
+                                        ? 'Nenhuma coluna oculta no Planejamento (opcional)'
+                                        : `Colunas ocultas no Planejamento: ${colunasOcultasPlanejamento.join(', ')}`}
+                                </Typography>
                             </BlocoResumo>
 
                             <BlocoResumo
                                 icone={<IconeStatus completo={mapeamentoCompleto} />}
                                 titulo="Jira ↔ Toggl: Mapeamento"
+                                expandido={expandido('jira-mapeamento')}
+                                onAlternarExpandido={() => alternar('jira-mapeamento')}
                                 acao={<BotaoConfigurar titulo="Jira ↔ Toggl: Mapeamento" onClick={() => onNavegar('configuracoes', 'jira-toggl')} />}>
                                 <Typography variant="body2" color="text.secondary">
                                     {quantidadeMapeamentosJira} {quantidadeMapeamentosJira === 1 ? 'usuário do Jira mapeado' : 'usuários do Jira mapeados'}

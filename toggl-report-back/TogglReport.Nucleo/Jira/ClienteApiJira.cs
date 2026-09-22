@@ -303,7 +303,7 @@ public class ClienteApiJira
         return ResultadoApiJira<List<SprintQuadroJira>>.Ok(sprints);
     }
 
-    public async Task<ResultadoApiJira<List<CartaoQuadroJira>>> BuscarCartoesSprintAsync(long quadroId, List<long> sprintIds, string campoAnalisadoPorId, string campoRevisadoPorId)
+    public async Task<ResultadoApiJira<List<CartaoQuadroJira>>> BuscarCartoesSprintAsync(long quadroId, List<long> sprintIds, string campoAnalisadoPorId, string campoRevisadoPorId, string campoTimeId, string campoPrevisaoLiberacaoId = "")
     {
         if (sprintIds.Count == 0)
             return ResultadoApiJira<List<CartaoQuadroJira>>.Ok(new List<CartaoQuadroJira>());
@@ -315,6 +315,10 @@ public class ClienteApiJira
             camposDesejados.Add(campoAnalisadoPorId);
         if (!string.IsNullOrWhiteSpace(campoRevisadoPorId))
             camposDesejados.Add(campoRevisadoPorId);
+        if (!string.IsNullOrWhiteSpace(campoTimeId))
+            camposDesejados.Add(campoTimeId);
+        if (!string.IsNullOrWhiteSpace(campoPrevisaoLiberacaoId))
+            camposDesejados.Add(campoPrevisaoLiberacaoId);
 
         string jql = sprintIds.Count == 1 ? $"sprint = {sprintIds[0]}" : $"sprint in ({string.Join(",", sprintIds)})";
         string parametrosFixos = $"jql={Uri.EscapeDataString(jql)}&fields={Uri.EscapeDataString(string.Join(",", camposDesejados))}&maxResults={tamanhoPagina}";
@@ -355,7 +359,9 @@ public class ClienteApiJira
                 ExtrairNomeUsuario(issue.Fields.CamposExtras, "assignee"),
                 ExtrairNomeUsuario(issue.Fields.CamposExtras, campoAnalisadoPorId),
                 ExtrairNomeUsuario(issue.Fields.CamposExtras, campoRevisadoPorId),
-                MontarUrlIssue(issue.Key)))
+                ExtrairTextoCampo(issue.Fields.CamposExtras, campoTimeId),
+                MontarUrlIssue(issue.Key),
+                ExtrairData(issue.Fields.CamposExtras, campoPrevisaoLiberacaoId)))
             .ToList();
 
         return ResultadoApiJira<List<CartaoQuadroJira>>.Ok(cartoes);
@@ -409,7 +415,7 @@ public class ClienteApiJira
         return await _http.GetAsync(caminho);
     }
 
-    public async Task<ResultadoApiJira<List<IssueJira>>> BuscarIssuesAsync(List<string> chaves, string campoEstimativaDesenvolvimentoId, string? campoRevisadoPorId = null, string? campoEstimativaRevisaoId = null, string? campoEstimativaTestesId = null)
+    public async Task<ResultadoApiJira<List<IssueJira>>> BuscarIssuesAsync(List<string> chaves, string campoEstimativaDesenvolvimentoId, string? campoRevisadoPorId = null, string? campoEstimativaRevisaoId = null, string? campoEstimativaTestesId = null, string? campoPrevisaoLiberacaoId = null)
     {
         if (chaves.Count == 0)
             return ResultadoApiJira<List<IssueJira>>.Ok(new List<IssueJira>());
@@ -423,6 +429,8 @@ public class ClienteApiJira
             camposDesejados.Add(campoEstimativaRevisaoId);
         if (!string.IsNullOrWhiteSpace(campoEstimativaTestesId))
             camposDesejados.Add(campoEstimativaTestesId);
+        if (!string.IsNullOrWhiteSpace(campoPrevisaoLiberacaoId))
+            camposDesejados.Add(campoPrevisaoLiberacaoId);
 
         string jql = $"key in ({string.Join(",", chaves)})";
         List<IssueBrutaJira> issuesBrutas = new();
@@ -471,7 +479,8 @@ public class ClienteApiJira
                     ExtrairNomeUsuario(issue.Fields.CamposExtras, "assignee"),
                     ExtrairNomeUsuario(issue.Fields.CamposExtras, campoRevisadoPorId),
                     ExtrairEstimativaEsforco(issue.Fields.CamposExtras, campoEstimativaRevisaoId ?? ""),
-                    ExtrairEstimativaEsforco(issue.Fields.CamposExtras, campoEstimativaTestesId ?? "")))
+                    ExtrairEstimativaEsforco(issue.Fields.CamposExtras, campoEstimativaTestesId ?? ""),
+                    ExtrairData(issue.Fields.CamposExtras, campoPrevisaoLiberacaoId)))
                 .ToList();
 
             return ResultadoApiJira<List<IssueJira>>.Ok(issues);
@@ -526,6 +535,46 @@ public class ClienteApiJira
             return nome.GetString();
 
         return null;
+    }
+
+    private static string? ExtrairTextoCampo(Dictionary<string, JsonElement>? camposExtras, string? chaveCampo)
+    {
+        if (string.IsNullOrWhiteSpace(chaveCampo)
+            || camposExtras is null
+            || !camposExtras.TryGetValue(chaveCampo, out JsonElement valor)
+            || valor.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
+            return null;
+
+        if (valor.ValueKind == JsonValueKind.String)
+            return valor.GetString();
+
+        if (valor.ValueKind == JsonValueKind.Object)
+        {
+            foreach (string propriedade in new[] { "value", "name", "title", "displayName" })
+            {
+                if (valor.TryGetProperty(propriedade, out JsonElement texto) && texto.ValueKind == JsonValueKind.String)
+                    return texto.GetString();
+            }
+        }
+
+        return null;
+    }
+
+    private static string? ExtrairData(Dictionary<string, JsonElement>? camposExtras, string? chaveCampo)
+    {
+        if (string.IsNullOrWhiteSpace(chaveCampo)
+            || camposExtras is null
+            || !camposExtras.TryGetValue(chaveCampo, out JsonElement valor)
+            || valor.ValueKind != JsonValueKind.String)
+            return null;
+
+        string? bruto = valor.GetString();
+        if (string.IsNullOrWhiteSpace(bruto))
+            return null;
+
+        return DateTime.TryParse(bruto, CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime data)
+            ? data.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
+            : null;
     }
 
     private static string NormalizarDominio(string urlDominio)
