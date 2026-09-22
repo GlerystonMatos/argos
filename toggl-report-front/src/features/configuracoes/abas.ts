@@ -1,12 +1,13 @@
-export type AbaConfiguracoes = 'toggl' | 'jira-campos' | 'jira-status' | 'jira-cores' | 'jira-toggl';
+export type AbaConfiguracoes = 'toggl' | 'jira-campos' | 'jira-status' | 'jira-cores' | 'jira-quadro' | 'jira-toggl';
 
-export const ORDEM_ABAS: readonly AbaConfiguracoes[] = ['toggl', 'jira-campos', 'jira-status', 'jira-cores', 'jira-toggl'];
+export const ORDEM_ABAS: readonly AbaConfiguracoes[] = ['toggl', 'jira-campos', 'jira-status', 'jira-cores', 'jira-quadro', 'jira-toggl'];
 
 export const ROTULOS_ABAS: Record<AbaConfiguracoes, string> = {
     'toggl': 'Toggl',
     'jira-campos': 'Jira: Campos',
     'jira-status': 'Jira: Status',
     'jira-cores': 'Jira: Cores',
+    'jira-quadro': 'Jira: Quadro',
     'jira-toggl': 'Jira ↔ Toggl',
 };
 

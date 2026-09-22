@@ -30,6 +30,7 @@ export function SprintFormDialog({ aberto, sprintEmEdicao, onFechar, onSalvo }: 
 
     const [nome, setNome] = useState('');
     const [horasPorDia, setHorasPorDia] = useState('');
+    const [margemPercentual, setMargemPercentual] = useState('');
     const [dataInicio, setDataInicio] = useState('');
     const [dataFim, setDataFim] = useState('');
     const [salvando, setSalvando] = useState(false);
@@ -38,6 +39,7 @@ export function SprintFormDialog({ aberto, sprintEmEdicao, onFechar, onSalvo }: 
         if (aberto) {
             setNome(sprintEmEdicao?.nome ?? '');
             setHorasPorDia(sprintEmEdicao ? String(sprintEmEdicao.horasPorDia) : '');
+            setMargemPercentual(sprintEmEdicao ? String(sprintEmEdicao.margemPercentual) : '');
             setDataInicio(sprintEmEdicao?.dataInicio ?? '');
             setDataFim(sprintEmEdicao?.dataFim ?? '');
         }
@@ -46,6 +48,7 @@ export function SprintFormDialog({ aberto, sprintEmEdicao, onFechar, onSalvo }: 
     function fecharEResetar(): void {
         setNome('');
         setHorasPorDia('');
+        setMargemPercentual('');
         setDataInicio('');
         setDataFim('');
         onFechar();
@@ -53,28 +56,31 @@ export function SprintFormDialog({ aberto, sprintEmEdicao, onFechar, onSalvo }: 
 
     const horasNumero = Number(horasPorDia.replace(',', '.'));
     const horasValidas = horasPorDia.trim() !== '' && Number.isFinite(horasNumero) && horasNumero > 0;
+    const margemNumero = Number(margemPercentual.replace(',', '.'));
+    const margemValida = margemPercentual.trim() !== '' && Number.isFinite(margemNumero) && margemNumero >= 0 && margemNumero < 100;
     const datasPreenchidas = dataInicio !== '' && dataFim !== '';
     const periodoValido = datasPreenchidas && periodoEhValido(dataInicio, dataFim);
-    const formValido = nome.trim() !== '' && horasValidas && periodoValido;
+    const formValido = nome.trim() !== '' && horasValidas && margemValida && periodoValido;
     const houveAlteracao =
         sprintEmEdicao === null ||
         nome.trim() !== sprintEmEdicao.nome ||
         horasNumero !== sprintEmEdicao.horasPorDia ||
+        margemNumero !== sprintEmEdicao.margemPercentual ||
         dataInicio !== sprintEmEdicao.dataInicio ||
         dataFim !== sprintEmEdicao.dataFim;
 
     async function salvar(): Promise<void> {
         if (!formValido) {
-            notificarErro(new Error('Preencha nome, horas por dia (maior que zero) e um período válido.'));
+            notificarErro(new Error('Preencha nome, horas por dia (maior que zero), margem (0 a 99,9%) e um período válido.'));
             return;
         }
 
         setSalvando(true);
         try {
             if (emEdicao && sprintEmEdicao) {
-                await editar(sprintEmEdicao.chave, { nome: nome.trim(), horasPorDia: horasNumero, dataInicio, dataFim });
+                await editar(sprintEmEdicao.chave, { nome: nome.trim(), horasPorDia: horasNumero, margemPercentual: margemNumero, dataInicio, dataFim });
             } else {
-                await criar({ nome: nome.trim(), horasPorDia: horasNumero, dataInicio, dataFim });
+                await criar({ nome: nome.trim(), horasPorDia: horasNumero, margemPercentual: margemNumero, dataInicio, dataFim });
             }
             onSalvo(emEdicao ? 'Sprint atualizado com sucesso.' : 'Sprint criado com sucesso.');
             fecharEResetar();
@@ -112,6 +118,22 @@ export function SprintFormDialog({ aberto, sprintEmEdicao, onFechar, onSalvo }: 
                                 : undefined
                         }
                         slotProps={{ htmlInput: { min: 0, step: 0.5 } }}
+                        fullWidth
+                        disabled={salvando || somenteLeitura} />
+
+                    <TextField
+                        required
+                        label="Margem (%)"
+                        type="number"
+                        value={margemPercentual}
+                        onChange={(evento) => setMargemPercentual(evento.target.value)}
+                        error={margemPercentual.trim() !== '' && !margemValida}
+                        helperText={
+                            margemPercentual.trim() !== '' && !margemValida
+                                ? 'Informe um número entre 0 e 99,9 (ex.: 30).'
+                                : 'Percentual do tempo total reservado como margem (ex.: 30).'
+                        }
+                        slotProps={{ htmlInput: { min: 0, max: 99.9, step: 0.5 } }}
                         fullWidth
                         disabled={salvando || somenteLeitura} />
 

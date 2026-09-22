@@ -108,7 +108,7 @@ public static class SprintConsultasEndpoints
         try
         {
             ClienteApiJira cliente = new(configuracaoJira.UrlDominio, configuracaoJira.Email, configuracaoJira.ApiToken);
-            ResultadoApiJira<List<IssueJira>> resultado = await cliente.BuscarIssuesAsync(codigos, configuracaoJira.CampoEstimativaDesenvolvimentoId, configuracaoJira.CampoRevisadoPorId, configuracaoJira.CampoEstimativaRevisaoId, configuracaoJira.CampoEstimativaTestesId);
+            ResultadoApiJira<List<IssueJira>> resultado = await cliente.BuscarIssuesAsync(codigos, configuracaoJira.CampoEstimativaDesenvolvimentoId, configuracaoJira.CampoRevisadoPorId, configuracaoJira.CampoEstimativaRevisaoId, configuracaoJira.CampoEstimativaTestesId, configuracaoJira.CampoPrevisaoLiberacaoId);
             if (resultado.Sucesso)
                 CarregadorCacheJiraSprintIni.SalvarParaSprint(caminhoCacheJiraSprint, resultado.Dados!);
         }

@@ -1,10 +1,12 @@
 import { CORES } from '../../theme';
+import { formatarData } from '../../utils/datas';
 import { Fragment, type ReactNode } from 'react';
 import { formatarDuracao } from '../../utils/duracao';
 import type { LinhaTarefaSprint } from '../../api/tipos';
 import { BadgeSigla } from '../../components/BadgeSigla';
 import { BadgeTexto, EtiquetaFixa } from './SprintBadges';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutlineOutlined';
+import { corPrevisaoLiberacao, urgenciaPrevisaoLiberacao, ROTULOS_URGENCIA_PREVISAO_LIBERACAO } from '../../utils/previsaoLiberacao';
 
 import {
     GRUPOS,
@@ -37,6 +39,7 @@ interface SprintLinhaTarefaProps {
     coresStatus: Record<string, string>;
     coresPrioridade: Record<string, string>;
     corTag: string;
+    janelaAlertaPrevisaoLiberacaoDias?: number;
 }
 
 export function SprintLinhaTarefa({
@@ -53,6 +56,7 @@ export function SprintLinhaTarefa({
     coresStatus,
     coresPrioridade,
     corTag,
+    janelaAlertaPrevisaoLiberacaoDias = 5,
 }: SprintLinhaTarefaProps): ReactNode {
     const conteudoCodigo = linha.urlJira ? (
         <Box
@@ -73,6 +77,8 @@ export function SprintLinhaTarefa({
         formatarCodigo(linha.codigo, larguraCodigo)
     );
     const prioridade = infoPrioridade(linha.prioridade, coresPrioridade);
+    const urgenciaPrevisao = urgenciaPrevisaoLiberacao(linha.previsaoLiberacao, janelaAlertaPrevisaoLiberacaoDias);
+    const corPrevisao = corPrevisaoLiberacao(urgenciaPrevisao);
 
     return (
         <TableRow
@@ -161,6 +167,17 @@ export function SprintLinhaTarefa({
                         {linha.descricao || '(sem descrição)'}
                     </Box>
                 </Tooltip>
+            </TableCell>
+            <TableCell align="center" sx={{ width: '1%', px: 0.5, whiteSpace: 'nowrap' }}>
+                {linha.previsaoLiberacao ? (
+                    <Tooltip title={urgenciaPrevisao ? ROTULOS_URGENCIA_PREVISAO_LIBERACAO[urgenciaPrevisao] : 'Previsão de liberação'}>
+                        <Box component="span" sx={{ color: corPrevisao ?? 'text.primary', fontWeight: corPrevisao ? 700 : undefined }}>
+                            {formatarData(linha.previsaoLiberacao)}
+                        </Box>
+                    </Tooltip>
+                ) : (
+                    <EtiquetaFixa texto="–" cor="text.primary" />
+                )}
             </TableCell>
             {GRUPOS.map((grupo) => {
                 const bloco = linha[grupo.bloco];

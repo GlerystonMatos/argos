@@ -71,11 +71,21 @@ export interface QuadrosJiraResponse {
 export interface CoresJira {
     coresStatus: Record<string, string>;
     coresPrioridade: Record<string, string>;
+    coresColuna: Record<string, string>;
 }
 
 export interface AtualizarCoresJiraRequest {
     coresStatus?: Record<string, string> | null;
     coresPrioridade?: Record<string, string> | null;
+    coresColuna?: Record<string, string> | null;
+}
+
+export interface ConfiguracaoQuadroPlanejamento {
+    colunasOcultas: string[];
+}
+
+export interface AtualizarConfiguracaoQuadroPlanejamentoRequest {
+    colunasOcultas?: string[] | null;
 }
 
 export interface ValidarTokenResponse {
@@ -137,6 +147,11 @@ export interface ConfiguracaoJira {
     campoEstimativaRevisaoNome: string;
     campoEstimativaTestesId: string;
     campoEstimativaTestesNome: string;
+    campoTimeId: string;
+    campoTimeNome: string;
+    campoPrevisaoLiberacaoId: string;
+    campoPrevisaoLiberacaoNome: string;
+    janelaAlertaPrevisaoLiberacaoDias: number;
 }
 
 export interface SalvarConfiguracaoJiraRequest {
@@ -155,6 +170,11 @@ export interface SalvarConfiguracaoJiraRequest {
     campoEstimativaRevisaoNome: string;
     campoEstimativaTestesId: string;
     campoEstimativaTestesNome: string;
+    campoTimeId: string;
+    campoTimeNome: string;
+    campoPrevisaoLiberacaoId: string;
+    campoPrevisaoLiberacaoNome: string;
+    janelaAlertaPrevisaoLiberacaoDias?: number | null;
 }
 
 export interface EntradaMapeamentoJiraToggl {
@@ -250,6 +270,7 @@ export interface Sprint {
     chave: string;
     nome: string;
     horasPorDia: number;
+    margemPercentual: number;
     dataInicio: string;
     dataFim: string;
     fechado: boolean;
@@ -258,6 +279,7 @@ export interface Sprint {
 export interface CriarSprintRequest {
     nome: string;
     horasPorDia: number;
+    margemPercentual: number;
     dataInicio: string;
     dataFim: string;
 }
@@ -265,6 +287,7 @@ export interface CriarSprintRequest {
 export interface EditarSprintRequest {
     nome?: string | null;
     horasPorDia?: number | null;
+    margemPercentual?: number | null;
     dataInicio?: string | null;
     dataFim?: string | null;
 }
@@ -331,6 +354,7 @@ export interface LinhaTarefaSprint {
     situacaoCategoria: string | null;
     grupoResponsavelStatus: 'dev' | 'rev' | 'qa' | null;
     situacaoSemGrupoResponsavel: boolean;
+    previsaoLiberacao: string | null;
 }
 
 export interface ResponsabilidadeSprint {
@@ -415,6 +439,8 @@ export interface CartaoPlanejamento {
     prioridade: string | null;
     grupoChave: string | null;
     grupoResumo: string | null;
+    time: string | null;
+    previsaoLiberacao: string | null;
     responsavel: PessoaPlanejamento | null;
     analisadoPor: PessoaPlanejamento | null;
     revisadoPor: PessoaPlanejamento | null;

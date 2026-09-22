@@ -45,11 +45,17 @@ public sealed class CaminhosDados
 
     public string JiraPrioridades => Caminho("JiraPrioridades.ini");
 
+    public string JiraColunas => Caminho("JiraColunas.ini");
+
+    public string JiraQuadro => Caminho("JiraQuadro.ini");
+
     public string JiraTogglMapeamento => Caminho("JiraTogglMapeamento.ini");
 
     public string JiraStatusCache => Caminho("JiraStatusCache.ini");
 
     public string JiraPrioridadesCache => Caminho("JiraPrioridadesCache.ini");
+
+    public string JiraColunasCache => Caminho("JiraColunasCache.ini");
 
     public string JiraUsuariosCache => Caminho("JiraUsuariosCache.ini");
 

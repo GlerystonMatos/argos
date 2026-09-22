@@ -46,6 +46,12 @@ public static class JiraEndpoints
             configuracao.CampoEstimativaRevisaoNome = request.CampoEstimativaRevisaoNome;
             configuracao.CampoEstimativaTestesId = request.CampoEstimativaTestesId;
             configuracao.CampoEstimativaTestesNome = request.CampoEstimativaTestesNome;
+            configuracao.CampoTimeId = request.CampoTimeId;
+            configuracao.CampoTimeNome = request.CampoTimeNome;
+            configuracao.CampoPrevisaoLiberacaoId = request.CampoPrevisaoLiberacaoId;
+            configuracao.CampoPrevisaoLiberacaoNome = request.CampoPrevisaoLiberacaoNome;
+            if (request.JanelaAlertaPrevisaoLiberacaoDias is > 0)
+                configuracao.JanelaAlertaPrevisaoLiberacaoDias = request.JanelaAlertaPrevisaoLiberacaoDias.Value;
 
             IResult? erroPersistencia = TratamentoIo.Executar(
                 () => CarregadorConfiguracaoJiraIni.Salvar(caminhos, configuracao),
@@ -55,7 +61,7 @@ public static class JiraEndpoints
 
             return Results.Ok(ParaDto(configuracao));
         })
-        .WithSummary("Salva/atualiza a configuração do Jira (URL, e-mail, API Token, quadro de DEV e campos de estimativa de desenvolvimento, revisão, testes, revisado por e analisado por)");
+        .WithSummary("Salva/atualiza a configuração do Jira (URL, e-mail, API Token, quadro de DEV e campos de estimativa de desenvolvimento, revisão, testes, revisado por, analisado por, time e previsão de liberação)");
 
         grupo.MapPost("/testar-conexao", async (TestarConexaoJiraRequest request) =>
         {
@@ -111,12 +117,12 @@ public static class JiraEndpoints
             if (cliente is null)
                 return Results.BadRequest(erroUrl);
 
-            ResultadoApiJira<List<IssueJira>> resultado = await cliente.BuscarIssuesAsync(request.Codigos, configuracaoSalva.CampoEstimativaDesenvolvimentoId, configuracaoSalva.CampoRevisadoPorId, configuracaoSalva.CampoEstimativaRevisaoId, configuracaoSalva.CampoEstimativaTestesId);
+            ResultadoApiJira<List<IssueJira>> resultado = await cliente.BuscarIssuesAsync(request.Codigos, configuracaoSalva.CampoEstimativaDesenvolvimentoId, configuracaoSalva.CampoRevisadoPorId, configuracaoSalva.CampoEstimativaRevisaoId, configuracaoSalva.CampoEstimativaTestesId, configuracaoSalva.CampoPrevisaoLiberacaoId);
             if (!resultado.Sucesso)
                 return Results.BadRequest(resultado.MensagemErro);
 
             List<IssueJiraDto> issues = resultado.Dados!
-                .Select(issue => new IssueJiraDto(issue.Chave, issue.Prioridade, issue.Situacao, issue.EstimativaDesenvolvimentoHoras, issue.UrlIssue, issue.SituacaoCategoria, issue.Responsavel, issue.RevisadoPor, issue.EstimativaRevisaoHoras, issue.EstimativaTestesHoras))
+                .Select(issue => new IssueJiraDto(issue.Chave, issue.Prioridade, issue.Situacao, issue.EstimativaDesenvolvimentoHoras, issue.UrlIssue, issue.SituacaoCategoria, issue.Responsavel, issue.RevisadoPor, issue.EstimativaRevisaoHoras, issue.EstimativaTestesHoras, issue.PrevisaoLiberacao))
                 .ToList();
             return Results.Ok(issues);
         })
@@ -189,6 +195,45 @@ public static class JiraEndpoints
             return Results.Ok(new ListaJiraResponse(cache.Nomes, false, atualizadoEm));
         })
         .WithSummary("Lista as prioridades reais do Jira (GET /rest/api/3/priority), cacheadas até atualização manual");
+
+        grupo.MapGet("/colunas", async (bool forcarAtualizacao) =>
+        {
+            if (!forcarAtualizacao)
+            {
+                CacheListaJira? cacheExistente = CarregadorCacheListasJiraIni.Carregar(caminhos.JiraColunasCache);
+                if (cacheExistente is not null)
+                    return Results.Ok(new ListaJiraResponse(cacheExistente.Nomes, true, cacheExistente.AtualizadoEm));
+            }
+
+            ConfiguracaoJira configuracaoSalva = CarregadorConfiguracaoJiraIni.Carregar(caminhos);
+            if (string.IsNullOrWhiteSpace(configuracaoSalva.ApiToken))
+                return Results.BadRequest("Salve a configuração do Jira primeiro (POST /api/jira/configuracao).");
+
+            if (configuracaoSalva.QuadroId is null)
+                return Results.BadRequest("Selecione o quadro de DEV do Jira nas configurações.");
+
+            ClienteApiJira? cliente = CriarCliente(configuracaoSalva.UrlDominio, configuracaoSalva.Email, configuracaoSalva.ApiToken, out string? erroUrl);
+            if (cliente is null)
+                return Results.BadRequest(erroUrl);
+
+            ResultadoApiJira<List<ColunaQuadroJira>> resultado = await cliente.ObterColunasQuadroAsync(configuracaoSalva.QuadroId.Value);
+            if (!resultado.Sucesso)
+                return Results.Problem(resultado.MensagemErro, statusCode: StatusCodes.Status502BadGateway);
+
+            List<string> nomes = resultado.Dados!.Select(c => c.Nome).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+
+            string atualizadoEm = DateTime.UtcNow.ToString("O");
+            CacheListaJira cache = new() { Nomes = nomes, AtualizadoEm = atualizadoEm };
+
+            IResult? erroPersistencia = TratamentoIo.Executar(
+                () => CarregadorCacheListasJiraIni.Salvar(caminhos.JiraColunasCache, cache),
+                "Não foi possível salvar o cache de colunas do quadro do Jira.");
+            if (erroPersistencia is not null)
+                return erroPersistencia;
+
+            return Results.Ok(new ListaJiraResponse(cache.Nomes, false, atualizadoEm));
+        })
+        .WithSummary("Lista as colunas reais do quadro de DEV configurado (GET /rest/agile/1.0/board/{id}/configuration), cacheadas até atualização manual");
 
         grupo.MapGet("/usuarios", async (bool forcarAtualizacao) =>
         {
@@ -285,16 +330,17 @@ public static class JiraEndpoints
         grupo.MapGet("/cores", () =>
         {
             ConfiguracaoCoresJira configuracao = CarregadorConfiguracaoCoresJiraIni.Carregar(caminhos);
-            return Results.Ok(new CoresJiraDto(configuracao.CoresStatus, configuracao.CoresPrioridade));
+            return Results.Ok(new CoresJiraDto(configuracao.CoresStatus, configuracao.CoresPrioridade, configuracao.CoresColuna));
         })
-        .WithSummary("Obtém o mapeamento configurável de cores por status e por prioridade do Jira");
+        .WithSummary("Obtém o mapeamento configurável de cores por status, por prioridade e por coluna do Jira");
 
         grupo.MapPut("/cores", (AtualizarCoresJiraRequest request) =>
         {
             ConfiguracaoCoresJira configuracao = new()
             {
                 CoresStatus = Normalizar(request.CoresStatus),
-                CoresPrioridade = Normalizar(request.CoresPrioridade)
+                CoresPrioridade = Normalizar(request.CoresPrioridade),
+                CoresColuna = Normalizar(request.CoresColuna)
             };
 
             IResult? erroPersistencia = TratamentoIo.Executar(
@@ -303,9 +349,37 @@ public static class JiraEndpoints
             if (erroPersistencia is not null)
                 return erroPersistencia;
 
-            return Results.Ok(new CoresJiraDto(configuracao.CoresStatus, configuracao.CoresPrioridade));
+            return Results.Ok(new CoresJiraDto(configuracao.CoresStatus, configuracao.CoresPrioridade, configuracao.CoresColuna));
         })
-        .WithSummary("Atualiza o mapeamento configurável de cores por status e por prioridade do Jira");
+        .WithSummary("Atualiza o mapeamento configurável de cores por status, por prioridade e por coluna do Jira");
+
+        grupo.MapGet("/quadro", () =>
+        {
+            ConfiguracaoQuadroPlanejamento configuracao = CarregadorConfiguracaoQuadroPlanejamentoIni.Carregar(caminhos.JiraQuadro);
+            return Results.Ok(new ConfiguracaoQuadroPlanejamentoDto(configuracao.ColunasOcultas));
+        })
+        .WithSummary("Obtém as colunas do quadro configuradas para não aparecer no Planejamento");
+
+        grupo.MapPut("/quadro", (AtualizarConfiguracaoQuadroPlanejamentoRequest request) =>
+        {
+            ConfiguracaoQuadroPlanejamento configuracao = new()
+            {
+                ColunasOcultas = (request.ColunasOcultas ?? new List<string>())
+                    .Where(nome => !string.IsNullOrWhiteSpace(nome))
+                    .Select(nome => nome.Trim())
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList()
+            };
+
+            IResult? erroPersistencia = TratamentoIo.Executar(
+                () => CarregadorConfiguracaoQuadroPlanejamentoIni.Salvar(caminhos.JiraQuadro, configuracao),
+                "Não foi possível salvar a configuração do quadro do Jira.");
+            if (erroPersistencia is not null)
+                return erroPersistencia;
+
+            return Results.Ok(new ConfiguracaoQuadroPlanejamentoDto(configuracao.ColunasOcultas));
+        })
+        .WithSummary("Atualiza as colunas do quadro configuradas para não aparecer no Planejamento");
     }
 
     private static Dictionary<string, string> Normalizar(Dictionary<string, string>? mapa) =>
@@ -365,5 +439,10 @@ public static class JiraEndpoints
         configuracao.CampoEstimativaRevisaoId,
         configuracao.CampoEstimativaRevisaoNome,
         configuracao.CampoEstimativaTestesId,
-        configuracao.CampoEstimativaTestesNome);
+        configuracao.CampoEstimativaTestesNome,
+        configuracao.CampoTimeId,
+        configuracao.CampoTimeNome,
+        configuracao.CampoPrevisaoLiberacaoId,
+        configuracao.CampoPrevisaoLiberacaoNome,
+        configuracao.JanelaAlertaPrevisaoLiberacaoDias);
 }

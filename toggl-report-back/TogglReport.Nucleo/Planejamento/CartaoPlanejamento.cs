@@ -10,6 +10,8 @@ public sealed record CartaoPlanejamento(
     string? Prioridade,
     string? GrupoChave,
     string? GrupoResumo,
+    string? Time,
     PessoaPlanejamento? Responsavel,
     PessoaPlanejamento? AnalisadoPor,
-    PessoaPlanejamento? RevisadoPor);
+    PessoaPlanejamento? RevisadoPor,
+    string? PrevisaoLiberacao = null);

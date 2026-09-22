@@ -1,12 +1,15 @@
-import { useState } from 'react';
 import type { ReactNode } from 'react';
+import { useMemo, useState } from 'react';
+import { siglarColunas } from './abreviacaoColuna';
 import { BadgeSigla } from '../../components/BadgeSigla';
 import { IconeAjuda } from '../../components/IconeAjuda';
 import type { ResultadoPlanejamento } from '../../api/tipos';
 
 import {
+    Box,
     Table,
     Stack,
+    Tooltip,
     TableRow,
     TableBody,
     TableCell,
@@ -24,11 +27,9 @@ interface PlanejamentoCardColaboradoresProps {
 const SX_CABECALHO_COLUNA = {
     py: 0.5,
     px: 0.75,
-    minWidth: 72,
     fontSize: '0.75rem',
     lineHeight: 1.2,
-    whiteSpace: 'normal',
-    overflowWrap: 'anywhere',
+    whiteSpace: 'nowrap',
     verticalAlign: 'bottom',
 } as const;
 
@@ -36,6 +37,7 @@ export function PlanejamentoCardColaboradores({ resultado }: PlanejamentoCardCol
     const [expandido, setExpandido] = useState(true);
     const { colunas, totaisPorColuna, colaboradores } = resultado;
     const totalCartoes = totaisPorColuna.reduce((soma, total) => soma + total, 0);
+    const rotulosColuna = useMemo(() => siglarColunas(colunas), [colunas]);
 
     return (
         <Stack spacing={1} sx={{ mt: '0.5rem !important' }}>
@@ -60,7 +62,9 @@ export function PlanejamentoCardColaboradores({ resultado }: PlanejamentoCardCol
                                 <TableCell sx={{ py: 0.5, verticalAlign: 'bottom' }}>Sigla</TableCell>
                                 {colunas.map((coluna, indice) => (
                                     <TableCell key={`${indice}-${coluna}`} align="right" sx={SX_CABECALHO_COLUNA}>
-                                        {coluna}
+                                        <Tooltip title={coluna}>
+                                            <Box component="span">{rotulosColuna.get(coluna) ?? coluna}</Box>
+                                        </Tooltip>
                                     </TableCell>
                                 ))}
                                 <TableCell sx={{ py: 0.5, verticalAlign: 'bottom', fontWeight: 700 }} align="right">Total</TableCell>
@@ -88,14 +92,13 @@ export function PlanejamentoCardColaboradores({ resultado }: PlanejamentoCardCol
                                                 sx={{
                                                     py: 0.25,
                                                     px: 0.75,
-                                                    fontWeight: quantidade > 0 ? 600 : undefined,
                                                     color: quantidade > 0 ? 'text.primary' : 'text.disabled',
                                                 }}>
                                                 {quantidade > 0 ? quantidade : '–'}
                                             </TableCell>
                                         );
                                     })}
-                                    <TableCell sx={{ py: 0.25, fontWeight: 700 }} align="right">
+                                    <TableCell sx={{ py: 0.25 }} align="right">
                                         {total}
                                     </TableCell>
                                 </TableRow>
@@ -112,13 +115,13 @@ export function PlanejamentoCardColaboradores({ resultado }: PlanejamentoCardCol
                                     <TableCell
                                         key={`${indice}-${coluna}`}
                                         align="right"
-                                        sx={{ py: 0.5, px: 0.75, fontWeight: 700, color: 'text.primary', borderTop: 2, borderColor: 'divider' }}>
+                                        sx={{ py: 0.5, px: 0.75, color: 'text.primary', borderTop: 2, borderColor: 'divider' }}>
                                         {totaisPorColuna[indice] ?? 0}
                                     </TableCell>
                                 ))}
                                 <TableCell
                                     align="right"
-                                    sx={{ py: 0.5, fontWeight: 700, color: 'text.primary', borderTop: 2, borderColor: 'divider' }}>
+                                    sx={{ py: 0.5, color: 'text.primary', borderTop: 2, borderColor: 'divider' }}>
                                     {totalCartoes}
                                 </TableCell>
                             </TableRow>

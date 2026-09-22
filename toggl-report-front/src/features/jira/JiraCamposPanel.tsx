@@ -12,6 +12,7 @@ type ChaveCampo = 'desenvolvimento' | 'revisao' | 'testes' | 'revisadoPor' | 'an
 type SelecaoCampos = Record<ChaveCampo, CampoJira | null>;
 
 const SELECAO_VAZIA: SelecaoCampos = { desenvolvimento: null, revisao: null, testes: null, revisadoPor: null, analisadoPor: null };
+const JANELA_ALERTA_PADRAO = 5;
 
 function campoSalvo(id: string, nome: string): CampoJira | null {
     return id ? { id, nome } : null;
@@ -37,10 +38,11 @@ interface SelectCampoJiraProps {
     opcoes: CampoJira[];
     disabled: boolean;
     exibirErro: boolean;
+    obrigatorio?: boolean;
     onChange: (valor: CampoJira | null) => void;
 }
 
-function SelectCampoJira({ label, valor, opcoes, disabled, exibirErro, onChange }: SelectCampoJiraProps): ReactNode {
+function SelectCampoJira({ label, valor, opcoes, disabled, exibirErro, obrigatorio = true, onChange }: SelectCampoJiraProps): ReactNode {
     return (
         <Autocomplete
             sx={{ flexGrow: 1 }}
@@ -54,11 +56,11 @@ function SelectCampoJira({ label, valor, opcoes, disabled, exibirErro, onChange 
             renderInput={(params) => (
                 <TextField
                     {...params}
-                    required
+                    required={obrigatorio}
                     label={label}
                     placeholder="Selecione o campo customizado"
-                    error={exibirErro && valor === null}
-                    helperText={exibirErro && valor === null ? 'Selecione o campo.' : undefined} />
+                    error={obrigatorio && exibirErro && valor === null}
+                    helperText={obrigatorio && exibirErro && valor === null ? 'Selecione o campo.' : undefined} />
             )} />
     );
 }
@@ -73,6 +75,9 @@ export const JiraCamposPanel = forwardRef<JiraCamposPanelHandle, AbaConfiguracoe
         const { notificarErro, notificarSucesso } = useNotificacao();
 
         const [selecao, setSelecao] = useState<SelecaoCampos>(SELECAO_VAZIA);
+        const [campoTime, setCampoTime] = useState<CampoJira | null>(null);
+        const [campoPrevisaoLiberacao, setCampoPrevisaoLiberacao] = useState<CampoJira | null>(null);
+        const [janelaAlertaDias, setJanelaAlertaDias] = useState(JANELA_ALERTA_PADRAO);
         const [campos, setCampos] = useState<CampoJira[]>([]);
         const [buscandoCampos, setBuscandoCampos] = useState(false);
         const [conexaoSalva, setConexaoSalva] = useState<boolean | null>(null);
@@ -82,17 +87,20 @@ export const JiraCamposPanel = forwardRef<JiraCamposPanelHandle, AbaConfiguracoe
             carregar()
                 .then((dados) => {
                     setSelecao(selecaoDaConfiguracao(dados));
+                    setCampoTime(campoSalvo(dados.campoTimeId, dados.campoTimeNome));
+                    setCampoPrevisaoLiberacao(campoSalvo(dados.campoPrevisaoLiberacaoId, dados.campoPrevisaoLiberacaoNome));
+                    setJanelaAlertaDias(dados.janelaAlertaPrevisaoLiberacaoDias || JANELA_ALERTA_PADRAO);
                     setConexaoSalva(conexaoPreenchida(dados));
                 })
                 .catch((erro: unknown) => notificarErro(erro, 'Não foi possível carregar a configuração do Jira'));
         }, []);
 
         const opcoes = useMemo(() => {
-            const selecionados = Object.values(selecao).filter(
+            const selecionados = [...Object.values(selecao), campoTime, campoPrevisaoLiberacao].filter(
                 (campo): campo is CampoJira => campo !== null && !campos.some((existente) => existente.id === campo.id),
             );
             return [...campos, ...selecionados];
-        }, [campos, selecao]);
+        }, [campos, selecao, campoTime, campoPrevisaoLiberacao]);
 
         function alterarCampo(chave: ChaveCampo, valor: CampoJira | null): void {
             setSelecao((atual) => ({ ...atual, [chave]: valor }));
@@ -100,7 +108,28 @@ export const JiraCamposPanel = forwardRef<JiraCamposPanelHandle, AbaConfiguracoe
             onAlterado?.();
         }
 
-        const todosPreenchidos = Object.values(selecao).every((campo) => campo !== null);
+        function alterarCampoTime(valor: CampoJira | null): void {
+            setCampoTime(valor);
+            setAlterado(true);
+            onAlterado?.();
+        }
+
+        function alterarCampoPrevisaoLiberacao(valor: CampoJira | null): void {
+            setCampoPrevisaoLiberacao(valor);
+            setAlterado(true);
+            onAlterado?.();
+        }
+
+        function alterarJanelaAlertaDias(valor: string): void {
+            const numero = Number.parseInt(valor, 10);
+            setJanelaAlertaDias(Number.isFinite(numero) && numero > 0 ? numero : JANELA_ALERTA_PADRAO);
+            setAlterado(true);
+            onAlterado?.();
+        }
+
+        const todosPreenchidos = Object.values(selecao).every((campo) => campo !== null)
+            && campoTime !== null
+            && campoPrevisaoLiberacao !== null;
 
         useEffect(() => {
             onValidoChange?.(todosPreenchidos);
@@ -134,6 +163,11 @@ export const JiraCamposPanel = forwardRef<JiraCamposPanelHandle, AbaConfiguracoe
                     campoRevisadoPorNome: selecao.revisadoPor?.nome ?? '',
                     campoAnalisadoPorId: selecao.analisadoPor?.id ?? '',
                     campoAnalisadoPorNome: selecao.analisadoPor?.nome ?? '',
+                    campoTimeId: campoTime?.id ?? '',
+                    campoTimeNome: campoTime?.nome ?? '',
+                    campoPrevisaoLiberacaoId: campoPrevisaoLiberacao?.id ?? '',
+                    campoPrevisaoLiberacaoNome: campoPrevisaoLiberacao?.nome ?? '',
+                    janelaAlertaPrevisaoLiberacaoDias: janelaAlertaDias,
                 });
                 setConexaoSalva(conexaoPreenchida(atualizado));
                 notificarSucesso('Configuração dos campos do Jira salva com sucesso.');
@@ -152,8 +186,11 @@ export const JiraCamposPanel = forwardRef<JiraCamposPanelHandle, AbaConfiguracoe
                     Campos customizados do Jira usados pelo Sprint: cada estimativa alimenta o PRE do
                     grupo correspondente (Desenvolvimento/Revisão/Testes). <br />"Revisado por" preenche
                     automaticamente a coluna REV do Sprint quando não houver colaborador definido diretamente
-                    nesse grupo. <br />"Analisado por" alimenta o Planejamento.
-                    Todos os campos são obrigatórios.
+                    nesse grupo. <br />"Analisado por" alimenta uma coluna do Planejamento. <br />"Time" identifica
+                    a equipe responsável por cada cartão e alimenta a coluna e o filtro Time do Planejamento.
+                    <br />"Previsão de liberação" alimenta uma coluna e o filtro Prazo no Sprint e no Planejamento,
+                    destacada em vermelho quando vencida, laranja quando perto do prazo e verde quando no prazo
+                    (janela configurável ao lado, em dias).
                 </Typography>
 
                 {conexaoSalva === false ? (
@@ -201,6 +238,13 @@ export const JiraCamposPanel = forwardRef<JiraCamposPanelHandle, AbaConfiguracoe
                         disabled={carregando}
                         exibirErro={alterado}
                         onChange={(valor) => alterarCampo('analisadoPor', valor)} />
+                    <SelectCampoJira
+                        label="Time"
+                        valor={campoTime}
+                        opcoes={opcoes}
+                        disabled={carregando}
+                        exibirErro={alterado}
+                        onChange={alterarCampoTime} />
                     <BotaoComCarregamento
                         variant="outlined"
                         carregando={buscandoCampos}
@@ -208,6 +252,25 @@ export const JiraCamposPanel = forwardRef<JiraCamposPanelHandle, AbaConfiguracoe
                         onClick={() => void buscarCampos()}>
                         Buscar campos
                     </BotaoComCarregamento>
+                </Stack>
+
+                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ alignItems: { sm: 'flex-start' } }}>
+                    <SelectCampoJira
+                        label="Previsão de liberação"
+                        valor={campoPrevisaoLiberacao}
+                        opcoes={opcoes}
+                        disabled={carregando}
+                        exibirErro={alterado}
+                        onChange={alterarCampoPrevisaoLiberacao} />
+                    <TextField
+                        label="Janela de alerta (dias)"
+                        type="number"
+                        value={janelaAlertaDias}
+                        onChange={(evento) => alterarJanelaAlertaDias(evento.target.value)}
+                        disabled={carregando || campoPrevisaoLiberacao === null}
+                        helperText="Dias antes do prazo em que o destaque vira laranja (além disso, verde)"
+                        sx={{ maxWidth: { sm: 220 } }}
+                        slotProps={{ htmlInput: { min: 1 } }} />
                 </Stack>
 
                 {!todosPreenchidos ? (

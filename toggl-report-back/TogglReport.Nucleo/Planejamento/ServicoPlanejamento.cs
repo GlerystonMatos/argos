@@ -11,18 +11,28 @@ public static class ServicoPlanejamento
     public static ResultadoPlanejamento Montar(
         CachePlanejamentoJira cache,
         ConfiguracaoMapeamentoJiraToggl mapeamento,
-        List<ConfiguracaoUsuarioToggl> usuariosToggl)
+        List<ConfiguracaoUsuarioToggl> usuariosToggl,
+        List<string>? colunasOcultas = null)
     {
+        HashSet<string> nomesColunasOcultas = new(colunasOcultas ?? new List<string>(), StringComparer.OrdinalIgnoreCase);
+        List<ColunaQuadroJira> colunasVisiveis = cache.Colunas.Where(c => !nomesColunasOcultas.Contains(c.Nome)).ToList();
+        HashSet<string> statusIdsOcultos = cache.Colunas
+            .Where(c => nomesColunasOcultas.Contains(c.Nome))
+            .SelectMany(c => c.StatusIds)
+            .ToHashSet();
+
+        List<CartaoQuadroJira> cartoesVisiveis = cache.Cartoes.Where(c => !statusIdsOcultos.Contains(c.StatusId)).ToList();
+
         Dictionary<string, int> indicePorStatusId = new();
-        for (int i = 0; i < cache.Colunas.Count; i++)
+        for (int i = 0; i < colunasVisiveis.Count; i++)
         {
-            foreach (string statusId in cache.Colunas[i].StatusIds)
+            foreach (string statusId in colunasVisiveis[i].StatusIds)
                 indicePorStatusId.TryAdd(statusId, i);
         }
 
-        List<string> colunas = cache.Colunas.Select(c => c.Nome).ToList();
+        List<string> colunas = colunasVisiveis.Select(c => c.Nome).ToList();
         int indiceSemColuna = colunas.Count;
-        if (cache.Cartoes.Any(c => !indicePorStatusId.ContainsKey(c.StatusId)))
+        if (cartoesVisiveis.Any(c => !indicePorStatusId.ContainsKey(c.StatusId)))
             colunas.Add(ColunaSemColuna);
 
         Dictionary<string, PessoaPlanejamento> pessoasPorNomeJira = new(StringComparer.OrdinalIgnoreCase);
@@ -45,7 +55,7 @@ public static class ServicoPlanejamento
         Dictionary<string, int[]> contagensPorPessoa = new(StringComparer.OrdinalIgnoreCase);
         int[] totaisPorColuna = new int[colunas.Count];
 
-        foreach (CartaoQuadroJira cartao in cache.Cartoes)
+        foreach (CartaoQuadroJira cartao in cartoesVisiveis)
         {
             int indiceColuna = indicePorStatusId.GetValueOrDefault(cartao.StatusId, indiceSemColuna);
             totaisPorColuna[indiceColuna]++;
@@ -81,9 +91,11 @@ public static class ServicoPlanejamento
                 cartao.Prioridade,
                 cartao.GrupoChave,
                 cartao.GrupoResumo,
+                cartao.Time,
                 responsavel,
                 analisadoPor,
-                revisadoPor), indiceColuna));
+                revisadoPor,
+                cartao.PrevisaoLiberacao), indiceColuna));
         }
 
         List<CartaoPlanejamento> cartoesOrdenados = cartoes

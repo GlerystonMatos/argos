@@ -6,6 +6,7 @@ import { useConfiguracaoJira } from '../jira/useConfiguracaoJira';
 import { useCategoriasSprint } from '../sprint/useCategoriasSprint';
 import { useUsuariosToggl } from '../usuarios-toggl/useUsuariosToggl';
 import { useStatusFinalSprint } from '../sprint/useStatusFinalSprint';
+import { useQuadroPlanejamento } from '../configuracoes/useQuadroPlanejamento';
 import { useResponsabilidadeSprint } from '../sprint/useResponsabilidadeSprint';
 import { useMapeamentoJiraToggl } from '../configuracoes/useMapeamentoJiraToggl';
 
@@ -32,6 +33,7 @@ const RESPONSABILIDADE_PADRAO: ResponsabilidadeSprint = { statusDev: [], statusR
 const STATUS_FINAL_PADRAO: StatusFinalSprint = { statusConcluido: [], statusIgnorado: [] };
 const CORES_VAZIAS: Record<string, string> = {};
 const MAPEAMENTO_VAZIO: Record<string, EntradaMapeamentoJiraToggl> = {};
+const COLUNAS_OCULTAS_VAZIAS: string[] = [];
 
 export interface ResumoConfiguracao {
     carregando: boolean;
@@ -53,10 +55,15 @@ export interface ResumoConfiguracao {
     jiraEmail: string;
     jiraQuadro: string | null;
     quantidadeCamposJiraDefinidos: number;
+    previsaoLiberacaoConfigurada: boolean;
+    janelaAlertaPrevisaoLiberacaoDias: number;
     coresStatus: Record<string, string>;
     coresPrioridade: Record<string, string>;
+    coresColuna: Record<string, string>;
     quantidadeCoresStatus: number;
     quantidadeCoresPrioridade: number;
+    quantidadeCoresColuna: number;
+    colunasOcultasPlanejamento: string[];
     quantidadeMapeamentosJira: number;
     mapeamentoJira: Record<string, EntradaMapeamentoJiraToggl>;
     usuariosToggl: UsuarioTogglResumo[];
@@ -80,6 +87,7 @@ export function useResumoConfiguracao(): ResumoConfiguracao {
     const { dados: statusFinalCarregado, carregar: carregarStatusFinal } = useStatusFinalSprint();
     const { dados: coresJira, carregar: carregarCoresJira } = useCoresJira();
     const { dados: mapeamentoJira, carregar: carregarMapeamentoJira } = useMapeamentoJiraToggl();
+    const { dados: quadroPlanejamento, carregar: carregarQuadroPlanejamento } = useQuadroPlanejamento();
 
     const [carregado, setCarregado] = useState(false);
     const [usuariosCarregados, setUsuariosCarregados] = useState(false);
@@ -106,6 +114,7 @@ export function useResumoConfiguracao(): ResumoConfiguracao {
                 tentar(carregarStatusFinal(), 'Não foi possível carregar os status finais'),
                 tentar(carregarCoresJira(), 'Não foi possível carregar o mapeamento de cores do Jira'),
                 tentar(carregarMapeamentoJira(), 'Não foi possível carregar o mapeamento Jira ↔ Toggl'),
+                tentar(carregarQuadroPlanejamento(), 'Não foi possível carregar a configuração do quadro do Jira'),
             ]);
             if (lista !== null) setUsuariosCarregados(true);
             return lista;
@@ -122,6 +131,7 @@ export function useResumoConfiguracao(): ResumoConfiguracao {
         carregarStatusFinal,
         carregarCoresJira,
         carregarMapeamentoJira,
+        carregarQuadroPlanejamento,
     ]);
 
     const recarregar = useCallback((): Promise<UsuarioTogglResumo[] | null> => {
@@ -180,10 +190,15 @@ export function useResumoConfiguracao(): ResumoConfiguracao {
         jiraEmail,
         jiraQuadro,
         quantidadeCamposJiraDefinidos: contarCamposJiraDefinidos(configuracaoJira),
+        previsaoLiberacaoConfigurada: (configuracaoJira?.campoPrevisaoLiberacaoId ?? '').trim() !== '',
+        janelaAlertaPrevisaoLiberacaoDias: configuracaoJira?.janelaAlertaPrevisaoLiberacaoDias || 5,
         coresStatus: coresJira?.coresStatus ?? CORES_VAZIAS,
         coresPrioridade: coresJira?.coresPrioridade ?? CORES_VAZIAS,
+        coresColuna: coresJira?.coresColuna ?? CORES_VAZIAS,
         quantidadeCoresStatus: coresJira ? Object.keys(coresJira.coresStatus).length : 0,
         quantidadeCoresPrioridade: coresJira ? Object.keys(coresJira.coresPrioridade).length : 0,
+        quantidadeCoresColuna: coresJira ? Object.keys(coresJira.coresColuna).length : 0,
+        colunasOcultasPlanejamento: quadroPlanejamento?.colunasOcultas ?? COLUNAS_OCULTAS_VAZIAS,
         quantidadeMapeamentosJira: Object.keys(mapeamento).length,
         mapeamentoJira: mapeamento,
         usuariosToggl,

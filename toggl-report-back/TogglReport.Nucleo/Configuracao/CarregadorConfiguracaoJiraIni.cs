@@ -16,6 +16,12 @@ public static class CarregadorConfiguracaoJiraIni
 
     private const string CampoAnalisadoPor = "AnalisadoPor";
 
+    private const string CampoTime = "Time";
+
+    private const string CampoPrevisaoLiberacao = "PrevisaoLiberacao";
+
+    private const int JanelaAlertaPrevisaoLiberacaoPadraoDias = 5;
+
     public static ConfiguracaoJira Carregar(CaminhosDados caminhos)
     {
         ConfiguracaoJira configuracao = new();
@@ -41,6 +47,9 @@ public static class CarregadorConfiguracaoJiraIni
             (configuracao.CampoEstimativaTestesId, configuracao.CampoEstimativaTestesNome) = LerCampo(campos, CampoEstimativaTestes);
             (configuracao.CampoRevisadoPorId, configuracao.CampoRevisadoPorNome) = LerCampo(campos, CampoRevisadoPor);
             (configuracao.CampoAnalisadoPorId, configuracao.CampoAnalisadoPorNome) = LerCampo(campos, CampoAnalisadoPor);
+            (configuracao.CampoTimeId, configuracao.CampoTimeNome) = LerCampo(campos, CampoTime);
+            (configuracao.CampoPrevisaoLiberacaoId, configuracao.CampoPrevisaoLiberacaoNome) = LerCampo(campos, CampoPrevisaoLiberacao);
+            configuracao.JanelaAlertaPrevisaoLiberacaoDias = LerJanelaAlertaDias(campos);
         }
 
         return configuracao;
@@ -66,6 +75,9 @@ public static class CarregadorConfiguracaoJiraIni
         AdicionarCampo(campos, CampoEstimativaTestes, configuracao.CampoEstimativaTestesId, configuracao.CampoEstimativaTestesNome);
         AdicionarCampo(campos, CampoRevisadoPor, configuracao.CampoRevisadoPorId, configuracao.CampoRevisadoPorNome);
         AdicionarCampo(campos, CampoAnalisadoPor, configuracao.CampoAnalisadoPorId, configuracao.CampoAnalisadoPorNome);
+        AdicionarCampo(campos, CampoTime, configuracao.CampoTimeId, configuracao.CampoTimeNome);
+        AdicionarCampo(campos, CampoPrevisaoLiberacao, configuracao.CampoPrevisaoLiberacaoId, configuracao.CampoPrevisaoLiberacaoNome);
+        campos[$"{PrefixoSecaoCampo}{CampoPrevisaoLiberacao}"]["JanelaAlertaDias"] = configuracao.JanelaAlertaPrevisaoLiberacaoDias.ToString();
 
         AnalisadorIni.EscreverSecoes(caminhos.JiraConexao, conexao);
         AnalisadorIni.EscreverSecoes(caminhos.JiraCampos, campos);
@@ -77,6 +89,15 @@ public static class CarregadorConfiguracaoJiraIni
             return ("", "");
 
         return (AnalisadorIni.ObterOuPadrao(valores, "Id", ""), AnalisadorIni.ObterOuPadrao(valores, "Nome", ""));
+    }
+
+    private static int LerJanelaAlertaDias(Dictionary<string, Dictionary<string, string>> secoes)
+    {
+        if (!secoes.TryGetValue($"{PrefixoSecaoCampo}{CampoPrevisaoLiberacao}", out Dictionary<string, string>? valores))
+            return JanelaAlertaPrevisaoLiberacaoPadraoDias;
+
+        string bruto = AnalisadorIni.ObterOuPadrao(valores, "JanelaAlertaDias", "");
+        return int.TryParse(bruto, out int janela) && janela > 0 ? janela : JanelaAlertaPrevisaoLiberacaoPadraoDias;
     }
 
     private static void AdicionarCampo(Dictionary<string, Dictionary<string, string>> secoes, string campo, string id, string nome)

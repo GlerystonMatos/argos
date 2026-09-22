@@ -9,14 +9,17 @@ import { obterCoresJira } from '../../api/coresJiraApi';
 import { AvisoCache } from '../../components/AvisoCache';
 import { CabecalhoView } from '../../components/CabecalhoView';
 import { PlanejamentoGridCartoes } from './PlanejamentoGridCartoes';
+import { DialogoConfirmacao } from '../../components/DialogoConfirmacao';
 import { FiltroMultiSelecao } from '../../components/FiltroMultiSelecao';
 import { EsqueletoCarregando } from '../../components/EsqueletoCarregando';
 import { BotaoComCarregamento } from '../../components/BotaoComCarregamento';
 import { formatarDataLocal, formatarDataHoraLocal } from '../../utils/datas';
 import { PlanejamentoCardColaboradores } from './PlanejamentoCardColaboradores';
+import { ROTULOS_URGENCIA_PREVISAO_LIBERACAO, type UrgenciaPrevisaoLiberacao } from '../../utils/previsaoLiberacao';
 
 import {
     semFiltros,
+    rotuloEpico,
     podarFiltros,
     FILTROS_VAZIOS,
     calcularOpcoes,
@@ -37,31 +40,45 @@ import {
 interface PlanejamentoViewProps {
     sprint: Sprint;
     onVoltar: () => void;
+    janelaAlertaPrevisaoLiberacaoDias?: number;
 }
 
-export function PlanejamentoView({ sprint, onVoltar }: PlanejamentoViewProps): ReactNode {
+export function PlanejamentoView({ sprint, onVoltar, janelaAlertaPrevisaoLiberacaoDias = 5 }: PlanejamentoViewProps): ReactNode {
     const { resultado, carregando, atualizando, erro, veioDoCache, atualizadoEm, semCache, atualizar } = usePlanejamento(sprint.chave);
     const [coresStatus, setCoresStatus] = useState<Record<string, string>>({});
     const [coresPrioridade, setCoresPrioridade] = useState<Record<string, string>>({});
+    const [coresColuna, setCoresColuna] = useState<Record<string, string>>({});
+    const [carregandoCores, setCarregandoCores] = useState(true);
     const [filtrosAbertos, setFiltrosAbertos] = useState(false);
     const [filtros, setFiltros] = useState<FiltrosPlanejamento>(FILTROS_VAZIOS);
     const [inverterFiltros, setInverterFiltros] = useState(false);
+    const [confirmandoAtualizar, setConfirmandoAtualizar] = useState(false);
 
     useEffect(() => {
         obterCoresJira()
             .then((dados) => {
                 setCoresStatus(dados.coresStatus);
                 setCoresPrioridade(dados.coresPrioridade);
+                setCoresColuna(dados.coresColuna);
             })
-            .catch(() => { });
+            .catch(() => { })
+            .finally(() => setCarregandoCores(false));
     }, []);
+
+    // "Pronto" combina a consulta principal (Toggl-like: cache/Jira) com as cores do Jira,
+    // buscadas à parte — evita mostrar a grid/card com badges cinzas antes das cores chegarem.
+    const carregandoTudo = carregando || carregandoCores;
+    const pronto = !carregandoTudo && resultado !== null;
 
     useEffect(() => {
         setFiltros(FILTROS_VAZIOS);
         setInverterFiltros(false);
     }, [sprint.chave]);
 
-    const opcoes = useMemo(() => (resultado ? calcularOpcoes(resultado) : null), [resultado]);
+    const opcoes = useMemo(
+        () => (resultado ? calcularOpcoes(resultado, janelaAlertaPrevisaoLiberacaoDias) : null),
+        [resultado, janelaAlertaPrevisaoLiberacaoDias],
+    );
 
     useEffect(() => {
         if (opcoes) setFiltros((atual) => podarFiltros(atual, opcoes));
@@ -72,9 +89,14 @@ export function PlanejamentoView({ sprint, onVoltar }: PlanejamentoViewProps): R
         [resultado],
     );
 
+    const rotulosEpico = useMemo(
+        () => new Map((opcoes?.epicos ?? []).map((grupoChave) => [grupoChave, resultado ? rotuloEpico(resultado, grupoChave) : grupoChave])),
+        [resultado, opcoes],
+    );
+
     const cartoesFiltrados = useMemo(
-        () => filtrarCartoes(resultado?.cartoes ?? [], filtros, inverterFiltros),
-        [resultado, filtros, inverterFiltros],
+        () => filtrarCartoes(resultado?.cartoes ?? [], filtros, inverterFiltros, janelaAlertaPrevisaoLiberacaoDias),
+        [resultado, filtros, inverterFiltros, janelaAlertaPrevisaoLiberacaoDias],
     );
 
     const filtrosVazios = semFiltros(filtros) && !inverterFiltros;
@@ -98,7 +120,7 @@ export function PlanejamentoView({ sprint, onVoltar }: PlanejamentoViewProps): R
                             startIcon={<RefreshIcon />}
                             carregando={atualizando}
                             disabled={sprint.fechado || carregando}
-                            onClick={() => void atualizar()}>
+                            onClick={() => setConfirmandoAtualizar(true)}>
                             Atualizar
                         </BotaoComCarregamento>
                     </span>
@@ -132,6 +154,26 @@ export function PlanejamentoView({ sprint, onVoltar }: PlanejamentoViewProps): R
                         valor={filtros.colaboradores}
                         getRotuloOpcao={(nomeJira) => rotulosColaborador.get(nomeJira) ?? nomeJira}
                         onChange={(colaboradores) => setFiltros((atual) => ({ ...atual, colaboradores }))} />
+                    <FiltroMultiSelecao
+                        label="Time"
+                        placeholder="Todos"
+                        opcoes={opcoes.times}
+                        valor={filtros.times}
+                        onChange={(times) => setFiltros((atual) => ({ ...atual, times }))} />
+                    <FiltroMultiSelecao
+                        label="Épico"
+                        placeholder="Todos"
+                        opcoes={opcoes.epicos}
+                        valor={filtros.epicos}
+                        getRotuloOpcao={(grupoChave) => rotulosEpico.get(grupoChave) ?? grupoChave}
+                        onChange={(epicos) => setFiltros((atual) => ({ ...atual, epicos }))} />
+                    <FiltroMultiSelecao
+                        label="Prazo"
+                        placeholder="Todos"
+                        opcoes={opcoes.prazos}
+                        valor={filtros.prazos}
+                        getRotuloOpcao={(chave) => ROTULOS_URGENCIA_PREVISAO_LIBERACAO[chave as UrgenciaPrevisaoLiberacao] ?? chave}
+                        onChange={(prazos) => setFiltros((atual) => ({ ...atual, prazos }))} />
                     <Stack direction="row" spacing={1} sx={{ alignItems: 'center', height: ALTURA_CONTROLE, flexShrink: 0 }}>
                         <FormControlLabel
                             control={<Checkbox checked={inverterFiltros} onChange={(e) => setInverterFiltros(e.target.checked)} />}
@@ -149,10 +191,10 @@ export function PlanejamentoView({ sprint, onVoltar }: PlanejamentoViewProps): R
                 <Alert severity="warning">Este sprint está fechado e não tem planejamento salvo.</Alert>
             ) : undefined}
 
-            {carregando && !resultado ? <EsqueletoCarregando /> : undefined}
+            {carregandoTudo && !erro && !semCache ? <EsqueletoCarregando /> : undefined}
 
-            {resultado ? (
-                <Stack spacing={0.5}>
+            {pronto ? (
+                <Stack spacing={0.5} sx={{ mt: '0.25rem !important' }}>
                     <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                         {`Quadro ${resultado.nomeQuadro}`}
                         {resultado.sprintJiraNome ? ` · Sprint do Jira: ${resultado.sprintJiraNome}${periodoJira}` : undefined}
@@ -165,21 +207,37 @@ export function PlanejamentoView({ sprint, onVoltar }: PlanejamentoViewProps): R
                 </Stack>
             ) : undefined}
 
-            {resultado && !resultado.sprintJiraNome ? (
+            {pronto && !resultado.sprintJiraNome ? (
                 <Alert severity="warning">{`Nenhum sprint ativo no quadro ${resultado.nomeQuadro}.`}</Alert>
             ) : undefined}
 
-            {veioDoCache && resultado ? <AvisoCache /> : undefined}
+            {veioDoCache && pronto ? <AvisoCache /> : undefined}
 
-            {resultado && resultado.colaboradores.length > 0 ? <PlanejamentoCardColaboradores resultado={resultado} /> : undefined}
+            {pronto && resultado.colaboradores.length > 0 ? <PlanejamentoCardColaboradores resultado={resultado} /> : undefined}
 
-            {resultado && resultado.sprintJiraNome ? (
+            {pronto && resultado.sprintJiraNome ? (
                 <PlanejamentoGridCartoes
                     cartoes={cartoesFiltrados}
                     totalCartoes={resultado.cartoes.length}
                     coresStatus={coresStatus}
-                    coresPrioridade={coresPrioridade} />
+                    coresPrioridade={coresPrioridade}
+                    coresColuna={coresColuna}
+                    janelaAlertaPrevisaoLiberacaoDias={janelaAlertaPrevisaoLiberacaoDias} />
             ) : undefined}
+
+            <DialogoConfirmacao
+                aberto={confirmandoAtualizar}
+                titulo="Atualizar planejamento?"
+                mensagem="Isso busca os cartões de novo, em tempo real, no Jira. Deseja continuar?"
+                textoConfirmar="Atualizar"
+                textoCancelar="Cancelar"
+                focoNoCancelar
+                onConfirmar={() => {
+                    setConfirmandoAtualizar(false);
+                    void atualizar();
+                }}
+                onCancelar={() => setConfirmandoAtualizar(false)}
+            />
         </Stack>
     );
 }

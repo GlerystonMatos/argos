@@ -15,4 +15,9 @@ public record ConfiguracaoJiraDto(
     string CampoEstimativaRevisaoId,
     string CampoEstimativaRevisaoNome,
     string CampoEstimativaTestesId,
-    string CampoEstimativaTestesNome);
+    string CampoEstimativaTestesNome,
+    string CampoTimeId,
+    string CampoTimeNome,
+    string CampoPrevisaoLiberacaoId,
+    string CampoPrevisaoLiberacaoNome,
+    int JanelaAlertaPrevisaoLiberacaoDias);

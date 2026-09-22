@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Box, Chip, Stack, Tooltip, Typography } from '@mui/material';
+import { Chip, Stack, Tooltip, Typography } from '@mui/material';
 
 interface GrupoCoresProps {
     cores: Record<string, string>;
@@ -29,25 +29,36 @@ function GrupoCores({ cores }: GrupoCoresProps): ReactNode {
 interface ListaCoresResumoProps {
     quantidadeCoresStatus: number;
     quantidadeCoresPrioridade: number;
+    quantidadeCoresColuna: number;
     coresStatus: Record<string, string>;
     coresPrioridade: Record<string, string>;
+    coresColuna: Record<string, string>;
 }
 
-export function ListaCoresResumo({ quantidadeCoresStatus, quantidadeCoresPrioridade, coresStatus, coresPrioridade }: ListaCoresResumoProps): ReactNode {
-    if (Object.keys(coresStatus).length === 0 && Object.keys(coresPrioridade).length === 0) return null;
+export function ListaCoresResumo({
+    quantidadeCoresStatus,
+    quantidadeCoresPrioridade,
+    quantidadeCoresColuna,
+    coresStatus,
+    coresPrioridade,
+    coresColuna,
+}: ListaCoresResumoProps): ReactNode {
+    if (Object.keys(coresStatus).length === 0 && Object.keys(coresPrioridade).length === 0 && Object.keys(coresColuna).length === 0) return null;
 
     return (
-        <Box sx={{ maxHeight: 200, overflowY: 'auto', overflowX: 'hidden' }}>
-            <Stack spacing={1}>
-                <Typography variant="body2" color="text.secondary">
-                    {quantidadeCoresStatus} status com cor mapeada (opcional)
-                </Typography>
-                <GrupoCores cores={coresStatus} />
-                <Typography variant="body2" color="text.secondary">
-                    {quantidadeCoresPrioridade} {quantidadeCoresPrioridade === 1 ? 'prioridade' : 'prioridades'} com cor mapeada (opcional)
-                </Typography>
-                <GrupoCores cores={coresPrioridade} />
-            </Stack>
-        </Box>
+        <Stack spacing={1}>
+            <Typography variant="body2" color="text.secondary">
+                {quantidadeCoresStatus} status com cor mapeada (opcional)
+            </Typography>
+            <GrupoCores cores={coresStatus} />
+            <Typography variant="body2" color="text.secondary">
+                {quantidadeCoresPrioridade} {quantidadeCoresPrioridade === 1 ? 'prioridade' : 'prioridades'} com cor mapeada (opcional)
+            </Typography>
+            <GrupoCores cores={coresPrioridade} />
+            <Typography variant="body2" color="text.secondary">
+                {quantidadeCoresColuna} {quantidadeCoresColuna === 1 ? 'coluna do quadro' : 'colunas do quadro'} com cor mapeada (opcional)
+            </Typography>
+            <GrupoCores cores={coresColuna} />
+        </Stack>
     );
 }

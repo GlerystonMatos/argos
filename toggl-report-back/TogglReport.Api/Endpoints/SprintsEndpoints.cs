@@ -13,7 +13,7 @@ public static class SprintsEndpoints
         {
             List<DadosSprint> sprints = CarregadorSprintsIni.Carregar(caminhos.Sprints);
             List<SprintDto> resposta = sprints
-                .Select(s => new SprintDto(s.Chave, s.Nome, s.HorasPorDia, s.DataInicio, s.DataFim, s.Fechado))
+                .Select(s => new SprintDto(s.Chave, s.Nome, s.HorasPorDia, s.MargemPercentual, s.DataInicio, s.DataFim, s.Fechado))
                 .ToList();
             return Results.Ok(resposta);
         })
@@ -30,6 +30,9 @@ public static class SprintsEndpoints
             if (request.HorasPorDia <= 0)
                 return Results.BadRequest("As horas por dia devem ser maiores que zero.");
 
+            if (request.MargemPercentual < 0 || request.MargemPercentual >= 100)
+                return Results.BadRequest("A margem deve ser maior ou igual a 0 e menor que 100.");
+
             List<DadosSprint> sprints = CarregadorSprintsIni.Carregar(caminhos.Sprints);
 
             if (ServicoSprints.NomeEmUso(sprints, request.Nome, ignorar: null))
@@ -41,6 +44,7 @@ public static class SprintsEndpoints
                 Chave = chave,
                 Nome = request.Nome,
                 HorasPorDia = request.HorasPorDia,
+                MargemPercentual = request.MargemPercentual,
                 DataInicio = inicio.ToString("yyyy-MM-dd"),
                 DataFim = fim.ToString("yyyy-MM-dd")
             };
@@ -53,7 +57,7 @@ public static class SprintsEndpoints
                 return erroPersistencia;
 
             return Results.Created($"/api/sprints/{chave}",
-                new SprintDto(sprint.Chave, sprint.Nome, sprint.HorasPorDia, sprint.DataInicio, sprint.DataFim, sprint.Fechado));
+                new SprintDto(sprint.Chave, sprint.Nome, sprint.HorasPorDia, sprint.MargemPercentual, sprint.DataInicio, sprint.DataFim, sprint.Fechado));
         })
         .WithSummary("Cadastra um sprint");
 
@@ -69,6 +73,7 @@ public static class SprintsEndpoints
 
             string nome = string.IsNullOrWhiteSpace(request.Nome) ? sprint.Nome : request.Nome;
             decimal horasPorDia = request.HorasPorDia ?? sprint.HorasPorDia;
+            decimal margemPercentual = request.MargemPercentual ?? sprint.MargemPercentual;
             string dataInicioTexto = string.IsNullOrWhiteSpace(request.DataInicio) ? sprint.DataInicio : request.DataInicio;
             string dataFimTexto = string.IsNullOrWhiteSpace(request.DataFim) ? sprint.DataFim : request.DataFim;
 
@@ -78,11 +83,15 @@ public static class SprintsEndpoints
             if (horasPorDia <= 0)
                 return Results.BadRequest("As horas por dia devem ser maiores que zero.");
 
+            if (margemPercentual < 0 || margemPercentual >= 100)
+                return Results.BadRequest("A margem deve ser maior ou igual a 0 e menor que 100.");
+
             if (ServicoSprints.NomeEmUso(sprints, nome, ignorar: sprint))
                 return Results.Conflict($"Já existe um sprint chamado '{nome}'.");
 
             sprint.Nome = nome;
             sprint.HorasPorDia = horasPorDia;
+            sprint.MargemPercentual = margemPercentual;
             sprint.DataInicio = inicio.ToString("yyyy-MM-dd");
             sprint.DataFim = fim.ToString("yyyy-MM-dd");
 
@@ -92,7 +101,7 @@ public static class SprintsEndpoints
             if (erroPersistencia is not null)
                 return erroPersistencia;
 
-            return Results.Ok(new SprintDto(sprint.Chave, sprint.Nome, sprint.HorasPorDia, sprint.DataInicio, sprint.DataFim, sprint.Fechado));
+            return Results.Ok(new SprintDto(sprint.Chave, sprint.Nome, sprint.HorasPorDia, sprint.MargemPercentual, sprint.DataInicio, sprint.DataFim, sprint.Fechado));
         })
         .WithSummary("Edita um sprint (campos nulos ou omitidos não são alterados)");
 
@@ -111,7 +120,7 @@ public static class SprintsEndpoints
             if (erroPersistencia is not null)
                 return erroPersistencia;
 
-            return Results.Ok(new SprintDto(sprint.Chave, sprint.Nome, sprint.HorasPorDia, sprint.DataInicio, sprint.DataFim, sprint.Fechado));
+            return Results.Ok(new SprintDto(sprint.Chave, sprint.Nome, sprint.HorasPorDia, sprint.MargemPercentual, sprint.DataInicio, sprint.DataFim, sprint.Fechado));
         })
         .WithSummary("Fecha o sprint: trava a edição e faz a consulta sempre usar o cache já salvo (Toggl e Jira)");
 
@@ -130,7 +139,7 @@ public static class SprintsEndpoints
             if (erroPersistencia is not null)
                 return erroPersistencia;
 
-            return Results.Ok(new SprintDto(sprint.Chave, sprint.Nome, sprint.HorasPorDia, sprint.DataInicio, sprint.DataFim, sprint.Fechado));
+            return Results.Ok(new SprintDto(sprint.Chave, sprint.Nome, sprint.HorasPorDia, sprint.MargemPercentual, sprint.DataInicio, sprint.DataFim, sprint.Fechado));
         })
         .WithSummary("Reabre o sprint: libera a edição e volta a permitir consulta real à API");
 

@@ -31,8 +31,9 @@ public static class SprintPlanejamentoEndpoints
 
             ConfiguracaoMapeamentoJiraToggl mapeamento = CarregadorConfiguracaoMapeamentoJiraTogglIni.Carregar(caminhos.JiraTogglMapeamento);
             List<ConfiguracaoUsuarioToggl> usuariosToggl = CarregadorUsuariosTogglIni.Carregar(caminhos.Usuarios);
+            ConfiguracaoQuadroPlanejamento configuracaoQuadro = CarregadorConfiguracaoQuadroPlanejamentoIni.Carregar(caminhos.JiraQuadro);
 
-            ResultadoPlanejamento resultado = ServicoPlanejamento.Montar(cache, mapeamento, usuariosToggl);
+            ResultadoPlanejamento resultado = ServicoPlanejamento.Montar(cache, mapeamento, usuariosToggl, configuracaoQuadro.ColunasOcultas);
             return Results.Ok(ParaDto(resultado));
         })
         .WithSummary("Devolve o planejamento do sprint (cartões do quadro de DEV por coluna, colaboradores e contagens) montado a partir do cache do Jira; nunca chama o Jira. 409 sem cache.");
@@ -95,7 +96,9 @@ public static class SprintPlanejamentoEndpoints
                 quadroId,
                 sprintsAtivos.Select(s => s.Id).ToList(),
                 configuracao.CampoAnalisadoPorId,
-                configuracao.CampoRevisadoPorId);
+                configuracao.CampoRevisadoPorId,
+                configuracao.CampoTimeId,
+                configuracao.CampoPrevisaoLiberacaoId);
             if (!resultadoCartoes.Sucesso)
                 return Results.Problem(resultadoCartoes.MensagemErro, statusCode: StatusCodes.Status502BadGateway);
 
@@ -157,9 +160,11 @@ public static class SprintPlanejamentoEndpoints
         cartao.Prioridade,
         cartao.GrupoChave,
         cartao.GrupoResumo,
+        cartao.Time,
         ParaDto(cartao.Responsavel),
         ParaDto(cartao.AnalisadoPor),
-        ParaDto(cartao.RevisadoPor));
+        ParaDto(cartao.RevisadoPor),
+        cartao.PrevisaoLiberacao);
 
     private static PessoaPlanejamentoDto? ParaDto(PessoaPlanejamento? pessoa) =>
         pessoa is null ? null : new PessoaPlanejamentoDto(pessoa.NomeJira, pessoa.Nome, pessoa.Sigla, pessoa.Cor, pessoa.Mapeado);
