@@ -1,18 +1,21 @@
 # CLAUDE.md
 
-Memória de contexto do repositório **toggl-report**. Histórico fica no `git log`; aqui só
+Memória de contexto do repositório **argos**. Histórico fica no `git log`; aqui só
 o que **não** é derivável do código: arquitetura, regras de domínio não óbvias e decisões
 que não devem ser revertidas sem motivo.
 
-O repositório reúne **dois projetos independentes**:
+**Nome: "Argos"** (Argos Panoptes + o cão de Odisseu; texto no `SobreDialog`), grafia
+**única** em tudo — marca, pastas `argos-*`, `Argos.*`, pacote npm, recursos de infra; nunca
+"Argus". Ex-`toggl-report`: sem compatibilidade com o nome antigo; o ambiente GCP antigo é
+destruído, não migrado (`argos-infra/README.md`, "Destruir o ambiente antigo").
 
-- **`toggl-report-back/`** — solução **C# / .NET 10** (`TogglReport.slnx`) com dois
-  projetos: **`TogglReport.Nucleo`** (biblioteca de classes, toda a lógica de negócio e
-  acesso a INI, zero `PackageReference`) e **`TogglReport.Api`** (Web API Minimal APIs,
-  `Microsoft.NET.Sdk.Web`, referencia o núcleo, autenticação HTTP Basic opcional). Um
-  projeto console (`TogglReport.Console`) foi **removido por completo** — não recriar
-  sem pedido explícito.
-- **`toggl-report-front/`** — React 19 + TypeScript + MUI (Vite) que consome a Web API.
+O repositório reúne **três projetos independentes**:
+
+- **`argos-back/`** — **.NET 10** (`Argos.slnx`): **`Argos.Nucleo`** (lógica de negócio e
+  INI, zero `PackageReference`) e **`Argos.Api`** (Minimal APIs, HTTP Basic opcional). O
+  projeto console foi **removido por completo** — não recriar sem pedido explícito.
+- **`argos-front/`** — React 19 + TypeScript + MUI (Vite) que consome a Web API.
+- **`argos-infra/`** — Terraform (`app` + `finops`/killswitch) + Cloud Build no GCP.
 
 Aplicação: relatórios de tempo trabalhado da **API v9 do Toggl Track**, em três
 visualizações independentes — **Relatório**, **Gant** e **Sprint** — cada uma com parâmetros
@@ -21,10 +24,10 @@ agrupamento/tags e o serviço de consulta (cache-first + rate limit). O Sprint t
 módulo **Planejamento** (só Jira, sem Toggl).
 
 **Tudo em pt-BR**: interface, mensagens, identificadores, pastas, namespaces
-(`RelatorioToggl`/`.Api`/`.Sprints`/`.Planejamento`). Em inglês só o
+(`Argos.Nucleo.<Pasta>`, `Argos.Api.<Pasta>`). Em inglês só o
 inevitável (`Program`, `Main`, `Task`/`async`, `[JsonPropertyName]` com nomes da API do
 Toggl) e siglas (`Dto`, `Api`, `Ini`, `Http`, `Toggl`). **Sem comentários** em
-`TogglReport.Nucleo` (nomes claros no lugar de comentário; regras de domínio não óbvias
+`Argos.Nucleo` (nomes claros no lugar de comentário; regras de domínio não óbvias
 ficam aqui, não inline). O frontend usa comentários com moderação.
 
 ---
@@ -44,20 +47,18 @@ ficam aqui, não inline). O frontend usa comentários com moderação.
   processado). Também é reserva quando o rate limit (§2) é atingido. `ServicoConsulta`
   (núcleo) centraliza a decisão para as 3 visualizações — cada consumidor só decide
   **quando** chamar (`forcarConsultaApi`).
-- **Sem exportação para CSV**; **poucas dependências** (núcleo sem `PackageReference`; API
-  só com Swashbuckle).
+- **Sem exportação para CSV**; API só com Swashbuckle de dependência.
 
 ---
 
-## 2. `TogglReport.Nucleo`
+## 2. `Argos.Nucleo`
 
 ```
 Configuracao/    modelos + carregadores/salvadores de todos os .ini, criptografia de token,
                  parser INI compartilhado (AnalisadorIni), helpers (ServicoChaves, DiasUteis,
                  Agrupamento.EhValido), CaminhosDados (instância: um caminho por arquivo)
 Gant/            CelulaGant / LinhaGant / ResultadoGant / ServicoGant.Montar
-Sprint/          (namespace RelatorioToggl.Sprints, plural — evita colidir com
-                 Configuracao.Sprint) CabecalhoSprint / BlocoCategoriaSprint /
+Sprint/          CabecalhoSprint / BlocoCategoriaSprint /
                  LinhaTarefaSprint / LinhaColaboradorSprint / ResultadoSprint / ServicoSprint
 Toggl/           ClienteApiToggl (HTTP Basic, api.track.toggl.com/api/v9), RegistroTempoDto,
                  ResultadoApiToggl (Ok/Falha, sem exceptions), LimitadorRequisicoes
@@ -70,7 +71,7 @@ Jira/            ClienteApiJira (HTTP Basic email:apiToken, normaliza a URL do d
                  CampoJira, ResultadoApiJira (Ok/Falha, mesmo padrão do Toggl); Agile:
                  QuadroJira/ColunaQuadroJira/SprintQuadroJira/CartaoQuadroJira,
                  CachePlanejamentoJira, CacheQuadrosJira
-Planejamento/    (namespace RelatorioToggl.Planejamento) ServicoPlanejamento.Montar,
+Planejamento/    ServicoPlanejamento.Montar,
                  ResultadoPlanejamento / CartaoPlanejamento / ColaboradorPlanejamento / PessoaPlanejamento
 ```
 
@@ -89,7 +90,7 @@ de `.ini` = trocar a constante em `CaminhosDados` e ajustar/renomear o arquivo r
 | `JiraCampos.ini` | `[Campo:EstimativaDesenvolvimento\|EstimativaRevisao\|EstimativaTestes\|RevisadoPor\|AnalisadoPor\|Time]` `Id`/`Nome` |
 | `JiraStatus.ini` | `[Status:<nome>]` `Cor`/`Responsaveis`/`Final` (Concluido\|Ignorado) |
 | `JiraPrioridades.ini` | `[Prioridade:<nome>]` `Cor` |
-| `JiraColunas.ini` | `[Coluna:<nome>]` `Cor` (badge de Coluna do Planejamento, mesmo mecanismo de Status/Prioridade) |
+| `JiraColunas.ini`, `JiraTimes.ini`, `JiraEpicos.ini` | `[Coluna:<nome>]`/`[Time:<nome>]`/`[Epico:<chave>]` `Cor` (badges do Planejamento) |
 | `JiraQuadro.ini` | `[Geral]` `ColunasOcultas` (JSON; colunas do quadro que não aparecem no Planejamento) |
 | `JiraTogglMapeamento.ini` | `[Usuario:<displayName Jira>]` `ChaveToggl`/`Sigla`/`Cor` |
 | `Sprints.ini` | `[Sprint:<chave>]` Nome/HorasPorDia/MargemPercentual/DataInicio/DataFim/`Fechado` (default `False`) |
@@ -192,9 +193,8 @@ Linhas de tag nunca contam.
   `<a>`: não herda de `TableCell`).
 - **Tachado (checkbox)** em `localStorage` (`sprint-tachados-<chaveSprint>`); reset só em
   **nova consulta real à API** (`veioDoCache === false`), nunca ao carregar do cache.
-- **Descrição da grid trunca de forma responsiva** (`useLarguraColunaRestante`, Sprint e
-  Planejamento; Gant: hook próprio, §4); tooltip e `SprintDialogDetalheLinha` (duplo clique)
-  com o texto completo.
+- **Descrição trunca de forma responsiva** (`useLarguraColunaRestante`); texto completo no
+  tooltip e no duplo clique (`SprintDialogDetalheLinha`).
 - **Prioridade/Situação/PRE vêm do Jira** — sem integração ou issue não encontrada,
   Prioridade e Situação = "Nenhuma" (cinza) e PRE = "–"; nunca editáveis nem persistidos.
 - **"Previsão" (Previsão de liberação)**: coluna logo após Descrição, mesma fonte
@@ -204,18 +204,14 @@ Linhas de tag nunca contam.
 
 **Integração Jira (opcional, por sprint)**: `POST /api/sprint/consultas` extrai os códigos
 TEL de **todos** os registros crus do Toggl recém-buscados (independe do `Agrupamento`),
-busca em lote (`key in (...)`) via `ClienteApiJira.BuscarIssuesAsync` e grava em
-`JiraSprintData_<chave>.ini`. Só roda com o Jira configurado; falha do Jira nunca quebra a
-consulta do Toggl. `ServicoSprint.Montar` aplica o resultado só a linhas de descrição:
-`Prioridade`/`Situacao` e `PreHoras` de **cada** bloco DEV/REV/QA a partir de um campo
-customizado próprio por grupo (`CampoEstimativaDesenvolvimentoId`/`Revisao`/`Testes`; sem o
-campo, `PreHoras` = 0). "Estimativa original" (`timeoriginalestimate`) foi **removida por
-completo** — não recriar. `IssueJira.UrlIssue` vira link no Código da grid.
-- **`GET /rest/api/3/search` foi descontinuado pelo Jira** (410 Gone) — usar sempre
-  `POST /rest/api/3/search/jql`, que **pagina em até 100 issues** (`nextPageToken`/`isLast`,
-  confirmados só ao vivo). `maxResults = chaves.Count` numa chamada só já perdeu issues em
-  silêncio (129 códigos, 100 voltavam): `BuscarIssuesAsync` faz loop até `isLast == true` ou
-  `nextPageToken` vazio, `maxResults` fixo em 100.
+busca em lote (`key in (...)`) e grava em `JiraSprintData_<chave>.ini`; falha do Jira nunca
+quebra a consulta do Toggl. `ServicoSprint.Montar` aplica só a linhas de descrição:
+`Prioridade`/`Situacao` e `PreHoras` de cada bloco DEV/REV/QA (campo customizado próprio por
+grupo; sem o campo, 0). "Estimativa original" (`timeoriginalestimate`) foi **removida por
+completo** — não recriar. `IssueJira.UrlIssue` vira link no Código.
+- **`GET /rest/api/3/search` foi descontinuado** (410) — usar `POST /rest/api/3/search/jql`,
+  que **pagina em até 100** (`nextPageToken`/`isLast`): `BuscarIssuesAsync` faz loop com
+  `maxResults` 100 (uma chamada só já perdeu issues em silêncio: 129 códigos, 100 voltavam).
 - **`Responsavel`/`RevisadoPor`**: `Responsavel` vem do campo nativo `assignee`;
   `RevisadoPor` de um campo customizado configurável (`CampoRevisadoPorId`/`Nome`, próprio
   de cada instância Jira). Ambos: só o `displayName` do "user picker".
@@ -233,27 +229,23 @@ completo** — não recriar. `IssueJira.UrlIssue` vira link no Código da grid.
 - **`BlocoCategoriaSprint.NomeExibicao` (não `ReaSegundos`) decide "tem colaborador" no
   frontend** (`SprintLinhaTarefa.tsx`, `temColaborador`): o fallback seta `NomeExibicao`
   com `ReaSegundos = 0` (já foi bug real). Em **PRE**/**REA**, `0` mostra `"–"`; qualquer
-  valor real, mesmo que arredonde para `00h`, mostra a hora. REA fica vermelho
+  valor real, mesmo que arredonde para `00h`, mostra a hora. PRE/REA em `accentAzul`; REA fica vermelho
   (`corPendente`) quando ultrapassa o PRE do bloco (só com PRE real; REV/QA nunca têm PRE).
 
 **Consulta do Sprint — o que forçar** (`origem: "nenhum"|"toggl"|"jira"|"ambos"`, default
-`"nenhum"`): controla o que é **forçado** a atualizar, não "de onde vêm os dados".
-`forcarToggl = origem in ("toggl","ambos")`, `forcarJira = origem in ("jira","ambos")`.
-Toggl: com `forcarToggl` sempre busca de novo; sem, cache-first normal (busca só sem cache
-válido — pode ocorrer com `origem = "nenhum"`). Jira: atualiza sempre que `forcarJira`,
-**ou** sempre que o Toggl tiver feito consulta real — nunca só por reaproveitar cache do
-Toggl. Sem bloqueio/409 para "só Jira sem cache do Toggl": o Toggl busca por falta de
-cache. Só o Sprint tem o seletor; Relatório/Gant têm o checkbox simples de forçar.
+`"nenhum"`): controla o que é **forçado**, não "de onde vêm os dados". Toggl: forçado
+(`toggl`/`ambos`) sempre busca; senão cache-first (busca sem cache válido, mesmo com
+`"nenhum"`). Jira: atualiza se forçado (`jira`/`ambos`) **ou** se o Toggl fez consulta real —
+nunca só por reaproveitar cache. Sem 409 para "só Jira sem cache do Toggl". Só o Sprint tem
+o seletor; Relatório/Gant têm o checkbox simples.
 
-**Listagem do Sprint — filtros** (`SprintView.tsx`): "Status" = texto bruto do status do
-Jira; "Situação" (DEV/REV/QA) = Pendente/Concluído por bloco — outro conceito. Filtros de
-seleção (`FiltroMultiSelecao`, §4): Prioridade, Status, Colaborador e Situação
-(`situacaoGrupo` em `calculos.ts`, mesma classificação da coluna "Situação"; tag = "Tag").
-**Situação + Colaborador**: sem colaborador, a linha atende se **qualquer** grupo com
-colaborador bater; com colaborador(es), só o(s) grupo(s) **deles** — bloco combinado
-dedicado (dois `if` encadeados dariam falso positivo com "Inverter filtros"). "Inverter
-filtros" faz os 4 filtros **excluírem** (a busca por texto nunca é afetada). "Limpar" e
-"Limpar ordenação" (Prioridade por severidade, Status alfabético) são independentes.
+**Listagem do Sprint — filtros** (`SprintView.tsx`): "Status" = texto bruto do Jira;
+"Situação" (DEV/REV/QA) = Pendente/Concluído por bloco (`situacaoGrupo`; tag = "Tag").
+Filtros Prioridade, Status, Colaborador e Situação. **Situação + Colaborador**: sem
+colaborador, basta **qualquer** grupo bater; com colaborador(es), só os grupos **deles** —
+bloco combinado dedicado (dois `if` dariam falso positivo com "Inverter filtros", que faz os
+4 filtros **excluírem**; a busca por texto nunca inverte). "Limpar" e "Limpar ordenação"
+são independentes.
 
 **Prioridade/Situação — cores**: a busca de issues do Jira não expõe cor; vem de
 **mapeamento por nome exato** (`GET/PUT /api/jira/cores` → `Cor` em `JiraStatus.ini`/
@@ -277,97 +269,48 @@ configurada, ou tarefa não achada, todo grupo com colaborador "Pendente".
 
 Botão "Planejar" do Sprint: cartões por **coluna do quadro Scrum de DEV** do Jira, com
 contagem por colaborador.
-- **Escopo = cartões do SPRINT ATIVO do quadro** (`GET /rest/agile/1.0/board/{id}/sprint?state=active`
-  → `jql=sprint in (ids)`); nunca o quadro inteiro. O Jira **não tem sprint
-  equivalente ao do app** (o time agrupa por épicos com período no título): **sem
-  correlação** — mostra o sprint ativo do quadro e seu nome; o cache por sprint do app só
-  preserva o "retrato". `maxResults=200` até `startAt >= total`; 429 com 1 retry
-  (`Retry-After`), só nos métodos novos do `ClienteApiJira`.
-- **Time** = campo customizado configurável (`[Campo:Time]`, mesmo mecanismo de
-  descoberta/seleção dos demais — sem hardcode de field id; **obrigatório** no frontend,
-  ver "Configuração" abaixo). Coluna da grid imediatamente antes de Épico.
-  `ClienteApiJira.ExtrairTextoCampo` (distinto de `ExtrairNomeUsuario`, só para user
-  pickers) tenta string direta ou objeto com `value`/`name`/`title`/`displayName` — o
-  shape real do campo "Time" varia por instância Jira (select, campo de equipe do
-  Advanced Roadmaps etc.) e não foi validado ao vivo; sem bater com nenhum desses
-  formatos, ou sem o campo configurado, mostra só o placeholder vazio, nunca quebra a
-  consulta.
-- **Previsão de liberação** = campo customizado **obrigatório** (`[Campo:PrevisaoLiberacao]`,
-  mesmo mecanismo dos demais), data extraída via `ClienteApiJira.ExtrairData`
-  (`DateTime.TryParse` sobre string do Jira, normaliza para `yyyy-MM-dd`; formatos não
-  parseáveis viram `null`, nunca quebram a consulta). Coluna da grid logo após Descrição,
-  igual na listagem do Sprint (`IssueJira.PrevisaoLiberacao`/`LinhaTarefaSprint.
-  PrevisaoLiberacao`, mesma fonte de dado, buscas independentes). **Destaque de cor**
-  — única fonte em `utils/previsaoLiberacao.ts` (`urgenciaPrevisaoLiberacao`/
-  `corPrevisaoLiberacao`/`ROTULOS_URGENCIA_PREVISAO_LIBERACAO`), usada pela cor da célula
-  **e** pelo filtro de Prazo do Planejamento (nunca duplicada): sem data = sem categoria;
-  data ≤ hoje (vencida ou vence hoje) = "vencida", vermelho (`CORES.corPendente`); hoje <
-  data ≤ hoje + janela = "proxima", laranja (`CORES.corPrazoProximo`); além da janela =
-  "noPrazo", **verde** (`CORES.corConcluido` — estado que faltava numa rodada anterior,
-  fazia a data distante nunca destacar). Janela em dias, configurável por instância
-  (`JanelaAlertaPrevisaoLiberacaoDias`, padrão 5, mesma seção do campo em
-  `JiraCampos.ini`), editada ao lado do campo em Jira: Campos personalizados.
-- **Grupo = `fields.parent`** (sempre Épico; o campo Agile `epic` vem vazio — não usar);
-  sem pai → vazio. Na grid é a coluna "Épico" (rótulo só do frontend; `CartaoPlanejamento.
-  GrupoChave`/`GrupoResumo` no backend não mudaram de nome) — texto centralizado, **sem
-  badge/cor**: a API do Jira não expõe cor de épico de forma confiável (só via chamada
-  extra por épico à API Agile, sem hex garantido) — decidido com o usuário não buscar.
-  **Coluna** = `status.id` ∈ `columnConfig.columns[].statuses[].id`
-  (`GET /board/{id}/configuration`); fora de todas → "(sem coluna)" no fim. Quadros: só
-  Scrum (`GET /board?type=scrum`, paginado por `isLast`). Na grid do Planejamento é badge
-  colorida com o **nome completo** (mesmo mecanismo de cor de Status/Prioridade —
-  `CoresColuna` em `JiraColunas.ini`, nomes reais via `GET /api/jira/colunas`, escopados ao
-  quadro configurado) — sem abreviação nem popover nessa célula (decidido com o usuário:
-  já é badge, popover seria redundante). **Só o cabeçalho de coluna do card
-  "Colaboradores"** usa uma sigla — `siglarColunas`
-  (`features/planejamento/abreviacaoColuna.ts`, reescrita 4x nesse sentido, ver histórico):
-  filtra artigos/preposições curtos (de/da/do/em/para/a/o...), depois **5 letras da 1ª
-  palavra principal**; havendo mais de uma, **4 letras da última** — o que fica entre elas
-  é descartado (ex.: "Em Desenvolvimento" → "DESEN"; "Pronto Para Produção" → "PRONT-PROD").
-  Separador "-", ou "/" quando o nome original já usa barra (ex.: "Pausado/Impedido" →
-  "PAUSA/IMPE"). **Resolução de colisão**: 1ª ocorrência mantém a sigla-base, as seguintes
-  ganham 1 letra a mais por vez até ficar única (ex.: "A Revisar" → "REVIS", "Revisando" →
-  "REVISA"). Roda em runtime sobre `resultado.colunas`, nunca hardcoded; cabeçalho sem
-  quebra de linha (`whiteSpace: nowrap`, siglas curtas e previsíveis). Responsável/
-  Analisado/Revisado seguem abreviados RES/ANA/REV na grid de cartões
-  (`PlanejamentoGridCartoes`, mapa fixo, inalterado), mesmo `Tooltip` do cabeçalho PRE/REA
-  do Sprint.
-- **Colunas ocultas** (`GET/PUT /api/jira/quadro` → `JiraQuadro.ini`, `ColunasOcultas`):
-  configurável em Configurações → Jira: Quadro. `ServicoPlanejamento.Montar` **exclui por
-  completo** os cartões dessas colunas (grid, `totaisPorColuna` e contagens por
-  colaborador) — não reclassifica para "(sem coluna)", que é um conceito diferente
-  (status fora de qualquer coluna configurada no Jira).
-- **Contagem**: 1 por cartão se a pessoa é Responsável OU Revisado por; "Analisado por"
-  não conta nem cria colaborador. Pessoa = mapeamento Jira↔Toggl contra **todos** os
-  usuários do Toggl cadastrados (não só os selecionados — sem consulta de Toggl);
-  exclusivo do Jira usa Sigla/Cor da entrada; sem mapeamento (ou `ChaveToggl` órfão) →
-  sigla = iniciais (até 3), cor nula, `mapeado=false`. Chave de filtro = `displayName`.
-- **Código/Descrição** (`ServicoCodigoTel`, extraído de `ServicoSprint`; Sprint inalterado):
-  `Codigo` = chave normalizada ("TEL - 1431"); `Descricao` = resumo sem o prefixo quando o
-  número bate com o da chave, senão cru; chave não-TEL → chave + resumo.
-- **Cache `JiraPlanejamentoData_<chave>.ini`** (dado **cru**: `QuadroId`, `QuadroNome`,
-  `SprintJira`, `Colunas`, `Cartoes`, `AtualizadoEm`; coluna/contagens/siglas em runtime).
-  Reutiliza, exceto: (a) "Atualizar" da tela (ao vivo); (b) "Forçar nova consulta em:
-  Jira/Ambos" — **2º `POST` em segundo plano**, sem bloquear o Acompanhamento (falha = aviso;
-  sem quadro = pula; "Toggl" sozinho NÃO força; `atualizacoesPlanejamento.ts` guarda as
-  promessas por sprint para "Planejar" não mostrar dado antigo); (c) sem cache válido
-  (ausente, `QuadroId` diferente do configurado ou `SprintJira` nulo). **Sprint fechado nunca
-  chama o Jira** (ignora `forcar`; cache ou 409). Falha do Jira → 502 e o cache anterior
-  fica. `GET` sem cache = 409; ao abrir sem cache o hook faz `POST` cache-first.
-- **Configuração**: `QuadroId`/`QuadroNome` em `JiraConexao.ini`, editados em Jira (Conexão)
-  (`SelectQuadroJira`; fallback de digitar o ID; na 1ª configuração só lista com a conexão
-  já salva); obrigatório no formulário da Conexão, **não** no gate global. **"Analisado
-  por"** (`[Campo:AnalisadoPor]`, user picker), **"Time"** (`[Campo:Time]`, identifica a
-  equipe do cartão) e **"Previsão de liberação"** (`[Campo:PrevisaoLiberacao]`) são o **5º,
-  6º e 7º campos obrigatórios** de Campos (gate + Resumo "N de 7"): instalações já
-  configuradas ficam bloqueadas até preenchê-los. Obrigatoriedade só do frontend — o gate
-  funcional do backend (`SprintPlanejamentoEndpoints.ValidarConfiguracao`) segue exigindo só
-  Analisado/Revisado por; Time e Previsão de liberação continuam opcionais na consulta em si
-  (só o extrai se o campo estiver configurado, sem bloquear nada).
+- **Escopo = cartões do SPRINT ATIVO do quadro** (`board/{id}/sprint?state=active` →
+  `jql=sprint in (ids)`), nunca o quadro inteiro. **Sem correlação** com o sprint do app (o
+  Jira agrupa por épicos); o cache por sprint do app só preserva o "retrato".
+  `maxResults=200` até `startAt >= total`; 429 com 1 retry (`Retry-After`).
+- **Campos customizados** (mesmo mecanismo de descoberta/seleção, sem field id hardcoded):
+  **Time** (`ExtrairTextoCampo`: string ou objeto `value`/`name`/`title`/`displayName` —
+  shape varia por instância, não validado ao vivo; sem bater → vazio, nunca quebra) e
+  **Previsão de liberação** (`ExtrairData`: `TryParse` → `yyyy-MM-dd`, senão `null`), esta
+  também na listagem do Sprint. **Cor da Previsão** — fonte única `utils/previsaoLiberacao.ts`
+  (célula **e** filtro Prazo): sem data = nada; ≤ hoje = vermelho (`corPendente`); até hoje +
+  janela = laranja (`corPrazoProximo`); além = **verde** (`corConcluido`). Janela
+  `JanelaAlertaPrevisaoLiberacaoDias` (padrão 5) em `JiraCampos.ini`.
+- **Épico = `fields.parent`** (o campo Agile `epic` vem vazio — não usar); no backend
+  `GrupoChave`/`GrupoResumo`. Badge com cor **configurada no app** por **chave** do épico
+  (o título muda com o período).
+- **Coluna** = `status.id` ∈ `columnConfig.columns[].statuses[].id`; fora de todas →
+  "(sem coluna)" no fim. Na grid: badge com **nome completo** (cor em `JiraColunas.ini`), sem
+  abreviar nem popover. **Só o cabeçalho do card "Colaboradores"** usa sigla
+  (`siglarColunas`, `abreviacaoColuna.ts`, reescrita 4x): remove artigos/preposições curtos,
+  **5 letras da 1ª palavra** + (havendo mais) **4 da última**, meio descartado; separador "-"
+  ou "/" se o nome tiver barra ("Pronto Para Produção" → "PRONT-PROD", "Pausado/Impedido" →
+  "PAUSA/IMPE"); colisão: as seguintes ganham 1 letra por vez ("REVIS" → "REVISA"). Em
+  runtime, `nowrap`. ANP/RES/REP na grid de cartões = mapa fixo com `Tooltip`.
+- **Colunas ocultas** (`JiraQuadro.ini`): `ServicoPlanejamento.Montar` **exclui por
+  completo** esses cartões (grid, totais, contagens) — não é "(sem coluna)".
+- **Contagem**: 1 por cartão se a pessoa é Responsável OU Revisado por ("Analisado por" não
+  conta). Pessoa = mapeamento Jira↔Toggl contra **todos** os usuários do Toggl; exclusivo do
+  Jira usa Sigla/Cor da entrada; sem mapeamento → iniciais (até 3), `mapeado=false`. Chave
+  de filtro = `displayName`. Código/Descrição via `ServicoCodigoTel`.
+- **Cache `JiraPlanejamentoData_<chave>.ini`** (dado **cru**). Reutiliza, exceto: "Atualizar"
+  da tela; "Forçar nova consulta em: Jira/Ambos" (**2º `POST` em segundo plano**, falha =
+  aviso, "Toggl" sozinho não força; `atualizacoesPlanejamento.ts` guarda as promessas por
+  sprint); sem cache válido (ausente, `QuadroId` diferente ou `SprintJira` nulo). **Sprint
+  fechado nunca chama o Jira**. Falha do Jira → 502, cache anterior fica; `GET` sem cache = 409.
+- **Configuração**: quadro em Jira (Conexão), obrigatório no formulário, **não** no gate
+  global. Analisado por, Time e Previsão de liberação são o 5º–7º campos obrigatórios
+  (gate "N de 7") **só no frontend** — o backend (`ValidarConfiguracao`) exige só
+  Analisado/Revisado por.
 
 ---
 
-## 3. `TogglReport.Api`
+## 3. `Argos.Api`
 
 Minimal APIs (não Controllers), CORS `AllowAny` (uso local), `JsonStringEnumConverter`
 global, Swagger em `/swagger`. Sobe em `http://localhost:5180`; `dados/` ao lado do executável.
@@ -393,8 +336,8 @@ global, Swagger em `/swagger`. Sobe em `http://localhost:5180`; `dados/` ao lado
 | `GET` | `/api/sprint?chaveSprint=` | 409 sem cache p/ o período do sprint |
 | `GET/PUT` | `/api/jira/configuracao` | conexão + `quadroId`/`quadroNome` + campos (inclui `campoAnalisadoPor*`/`campoTime*`) (`JiraConexao.ini`/`JiraCampos.ini`); token sempre mascarado; `PUT` substitui tudo |
 | `POST` | `/api/jira/testar-conexao` \| `/campos` \| `/issues` | testa credenciais sem salvar (`GET /rest/api/3/myself`) / lista campos `custom: true` / busca em lote (`key in (...)`) com a config salva |
-| `GET` | `/api/jira/status?forcarAtualizacao=` \| `/prioridades?...` \| `/colunas?...` | nomes reais (`/rest/api/3/status`, `/priority`, colunas do quadro de DEV via `/rest/agile/1.0/board/{id}/configuration`), cacheados; `/colunas` 400 sem quadro configurado |
-| `GET/PUT` | `/api/jira/cores` | mapeamento nome→cor de status, prioridade e coluna, usado pelas badges do Sprint e do Planejamento |
+| `GET` | `/api/jira/status?forcarAtualizacao=` \| `/prioridades?...` \| `/colunas?...` | nomes reais (`/rest/api/3/status`, `/priority`, colunas do quadro de DEV via `/rest/agile/1.0/board/{id}/configuration`), cacheados; `/colunas` 400 sem quadro configurado; `/times`/`/epicos` = caches do Planejamento (épicos só de sprints abertos; cor oculta é mantida) |
+| `GET/PUT` | `/api/jira/cores` | nome→cor de status, prioridade, coluna e time (badges do Sprint/Planejamento) |
 | `GET/PUT` | `/api/jira/quadro` | colunas do quadro que não aparecem no Planejamento (`ColunasOcultas`) |
 | `GET` | `/api/jira/usuarios?forcarAtualizacao=` | usuários reais (`/rest/api/3/users/search`, só `atlassian` ativos), cacheados |
 | `GET/PUT` | `/api/jira/usuarios-mapeamento` | `displayName` do Jira → `ChaveToggl`/`Sigla`/`Cor` (fallback DEV/REV do Sprint) |
@@ -420,64 +363,53 @@ usado no deploy público (Cloud Run). Rotas livres: `/health`, `/swagger`, `/ima
 
 ---
 
-## 4. Frontend (`toggl-report-front`)
+## 4. Frontend (`argos-front`)
 
 React 19 + TypeScript + MUI 9, Vite. `VITE_API_URL` = endereço da API (default `http://localhost:5180`).
 
 ```bash
-cd toggl-report-front && npm install && npm run dev   # :5173
+cd argos-front && npm install && npm run dev   # :5173
 npm run build   # tsc -b && vite build
 ```
 
 ### Navegação e gate de configuração
 
 **Menu lateral** (`MenuLateral`: `Drawer` permanente em `md+`, que um botão no AppBar
-esconde/exibe — preferência em `localStorage` (`utils/preferenciasMenu.ts`); temporário em
+esconde/exibe — **sempre abre expandido** ao carregar, sem persistência; temporário em
 `xs`) com 7 seções — Toggl, Jira, Configurações, Relatório, Gant, Sprint, Dados. **Toda
-navegação (`navegarPara`) recolhe o menu automaticamente** em `md+` (persistindo a
-preferência), dando a largura toda ao conteúdo — não é só ao clicar num item do menu, vale
+navegação (`navegarPara`) recolhe o menu automaticamente** em `md+` (só na sessão), dando a largura toda ao conteúdo — não é só ao clicar num item do menu, vale
 para qualquer chamada de `navegarPara` (atalhos internos, clique na logo etc.). O **Resumo
 da aplicação** é a página inicial e o destino do clique na logo (não é item de menu).
 `features/configuracoes/` (plural) = seção Configurações; o formulário de parâmetros do
 Relatório vive em `features/relatorio/` (espelha `features/gant/`).
 - **`useResumoConfiguracao` (`features/resumo`) é a fonte ÚNICA do gate** e das
-  categorias/responsabilidade/status-final consumidas pelo Sprint; também carrega o quadro de
-  Planejamento (colunas ocultas) e as cores de coluna só para exibição no Resumo (fora do
-  gate). Recarrega a cada troca de seção e após salvamentos — **mecanismo único e genérico**:
-  `ConfiguracoesView.salvarTudo()` salva as abas alteradas e dispara `onSalvo()` uma vez (não
-  por aba) se ao menos uma tiver sucesso; `recarregar` **coalesce recargas concorrentes** (a
-  última prevalece). Relatório/Gant/Sprint ficam `disabled` no menu até a configuração
-  obrigatória estar completa (`configuracoes/completude.ts`): Agrupamento, Tags detalhadas
-  (exigidas exceto no agrupamento "descricao"), Tags DEV/REV/QA do Toggl, Status DEV/REV/QA
-  **e** Concluído/Ignorado do Jira (≥1 em cada), os 7 Campos do Jira (inclui "Analisado por",
-  "Time" e "Previsão de liberação") e o Mapeamento Jira↔Toggl. Cadastro de usuários, conexão
-  do Jira e quadro **não** entram nesse cálculo (têm validação/gate próprios).
-- **Obrigatoriedade é só do frontend**. **Tudo é obrigatório exceto cores** (inclui Sigla do
-  usuário do Toggl; na conexão Jira, URL/e-mail/token — só sem um salvo — e quadro).
-  **Mapeamento Jira↔Toggl completo** (`avaliarMapeamentoJiraToggl`) = todo usuário do Toggl
-  é alvo de ≥1 entrada **e** toda entrada é válida (usuário ainda cadastrado, ou exclusivo do
-  Jira com sigla); chaves órfãs ficam listadas.
-- **Toggl** = CRUD de usuários (exige ≥1 `Administrador` para liberar Configurações).
-  **Jira** = só a conexão (URL/e-mail/token, quadro de DEV, "Testar conexão", "Salvar").
-- **Resumo** = 8 blocos (Usuários do Toggl; Toggl: Configurações; Jira: Conexão, Campos
-  ["N de 7"], Status, Cores [status/prioridade/coluna], Quadro [colunas ocultas]; Jira ↔
-  Toggl: Mapeamento) com atalho para a aba certa; só Cores e Quadro são opcionais. Cada
-  bloco tem sinal "+/–" para expandir/colapsar (`BlocoResumo`, prop `expandido`/
-  `onAlternarExpandido`, opcional — sem elas o bloco fica sempre expandido sem o sinal, usado
-  assim em `PreRequisitosConfiguracoes`), mais "Expandir tudo"/"Colapsar tudo" no topo —
-  **todos colapsados por padrão** ao entrar na tela. Sem rolagem interna própria em nenhum
-  bloco (Cores incluso): o conteúdo flui com a rolagem geral da página.
-- **Configurações** = 6 abas (Toggl; **Jira: Campos**; Jira: Status — DEV/REV/QA +
-  Concluído/Ignorado, mutuamente exclusivos; Jira: Cores — status/prioridade/coluna;
-  **Jira: Quadro** — colunas ocultas do Planejamento, opcional; Jira ↔ Toggl), **um** botão
-  Salvar sempre habilitado (Status/Cores gravam o mesmo `JiraStatus.ini`, independentes).
-  `salvarTudo` (chamado por `navegarComSalvamento` ao sair da seção; permanece se falhar)
-  salva só abas **alteradas** (`onAlterado`, flag monótona — aba nunca tocada gravaria vazio
-  por cima da configuração real), valida **tudo-ou-nada** (`onValidoChange`; aba alterada
-  inválida → nenhuma salva, abre a primeira) e salva **em sequência** (corrida no
-  `PUT /api/jira/configuracao`); falha não interrompe as demais; toast agregado + recarga do
-  Resumo. Abas ficam montadas (`display:none`) após a 1ª visita. **Gate próprio**: só abre
-  com `Administrador` do Toggl **e** Jira configurado (URL+e-mail).
+  categorias/responsabilidade/status-final do Sprint (carrega também quadro e cores de coluna,
+  só para exibição). Recarrega a cada troca de seção e após salvar (`onSalvo()` uma vez por
+  `salvarTudo`; `recarregar` coalesce chamadas concorrentes). Relatório/Gant/Sprint ficam
+  `disabled` até a configuração obrigatória estar completa (`configuracoes/completude.ts`):
+  Agrupamento, Tags detalhadas (exceto agrupamento "descricao"), Tags DEV/REV/QA, Status
+  DEV/REV/QA **e** Concluído/Ignorado (≥1 em cada), os 7 Campos do Jira e o Mapeamento
+  Jira↔Toggl. Usuários, conexão e quadro têm validação própria, fora desse cálculo.
+- **Obrigatoriedade é só do frontend**; **tudo é obrigatório exceto cores**. Mapeamento
+  completo (`avaliarMapeamentoJiraToggl`) = todo usuário do Toggl é alvo de ≥1 entrada **e**
+  toda entrada é válida (usuário cadastrado, ou exclusivo do Jira com sigla).
+- **Toggl** = CRUD de usuários (≥1 `Administrador` libera Configurações). **Jira** = só a
+  conexão (URL/e-mail/token, quadro de DEV, "Testar conexão").
+- **Resumo** = 8 blocos (Usuários; Toggl: Configurações; Jira: Conexão, Campos ["N de 7"],
+  Status, Cores, Quadro; Jira ↔ Toggl) com atalho para a aba; só Cores e Quadro opcionais.
+  "+/–" por bloco (`BlocoResumo`; sem `expandido`/`onAlternarExpandido` fica sempre aberto,
+  como em `PreRequisitosConfiguracoes`) + "Expandir/Colapsar tudo"; **colapsados por padrão**;
+  sem rolagem interna.
+- **Configurações** = 6 abas (Toggl; Jira: Campos; Jira: Status; Jira: Cores; Jira: Quadro;
+  Jira ↔ Toggl), **um** Salvar. `salvarTudo` (também ao sair da seção; permanece se falhar)
+  salva só abas **alteradas** (`onAlterado`, flag monótona — aba não tocada gravaria vazio),
+  valida **tudo-ou-nada** (`onValidoChange`) e salva **em sequência** (corrida no
+  `PUT /api/jira/configuracao`); toast agregado. Abas ficam montadas (`display:none`) após a
+  1ª visita. **Gate próprio**: `Administrador` do Toggl **e** Jira com URL+e-mail.
+- **Sobre**: ícone de informação (`InfoOutlined` pequeno, alinhado à **linha de base** do
+  "ARGOS" via `mb` — medido no navegador) ao lado de `MarcaArgos` no AppBar abre
+  `SobreDialog` (`public/argos.png`, as duas referências do nome, `CreditoApp` — mesma fonte
+  do rodapé; `fullScreen` abaixo de `sm`).
 - **Relatório/Gant**: tela de parâmetros (período + checkbox "Forçar nova consulta à API")
   e botão único **Consultar** — salva os parâmetros, pede confirmação se forçar, consulta e
   mostra a view (com "Voltar"). Busca por descrição inline.
@@ -487,38 +419,25 @@ Relatório vive em `features/relatorio/` (espelha `features/gant/`).
   "Voltar" e **"Planejar"**). **"Informações"** (modal com abas explicando o cálculo) foi
   **removida por completo** a pedido do usuário (ficou complexa demais) — não recriar.
 - **Planejamento** (visão `'planejamento'` do `App`; "Voltar" retorna ao Acompanhamento):
-  card de colaboradores (uma coluna por coluna do quadro, **sigla 1ª palavra (5) + última
-  (4)** (sem stopwords, meio descartado) com tooltip do nome completo — ver §2 — + Total +
-  rodapé "Cartões na coluna",
-  **sem negrito nos valores**), grid de cartões (Coluna com o **nome completo** como badge,
-  sem abreviar — ver §2; Status/Prioridade como badge centralizada; Descrição, depois
-  **Previsão** de liberação — cor por proximidade (vermelho/laranja/**verde**), ver §2 —,
-  depois Time e Épico = texto **à esquerda** sem badge, Time imediatamente antes de Épico;
-  "RES"/"ANA"/"REV" abreviados — rótulos curtos com tooltip do nome completo; bordas
-  verticais a partir de **Previsão** (não mais de Time); Time/Responsável/Analisado/
-  Revisado com padding horizontal
-  `0.25rem` fixo (`SX_CELULA_PADDING_FIXO`/`SX_CABECALHO_PADDING_FIXO`, explícito em rem,
-  não em múltiplo do spacing do tema); pessoas = `BadgeSigla` do mapeado). Tela só renderiza
-  cabeçalho/card/grid depois de um estado "pronto" combinado (consulta principal **e** cores
-  do Jira buscadas à parte — mesmo padrão no Sprint), com `EsqueletoCarregando` até lá.
-  Filtros Coluna, Status, Colaborador (Responsável OU Revisado por), Time, Épico (chave =
-  `grupoChave`, rótulo = `grupoResumo`) e **Prazo** (No prazo/Perto do prazo/Prazo vencido,
-  mesma função `urgenciaPrevisaoLiberacao` da cor — nunca diverge), "Inverter filtros",
-  "Limpar" — E entre filtros, OU dentro; só afetam a grid e resetam ao trocar de sprint
-  (`planejamento/filtros.ts`).
-  **Atualizar** pede confirmação (`DialogoConfirmacao`) antes de consultar o Jira ao vivo.
-  Aberto, o `SprintView` fica **montado e oculto** (preserva filtros/ordenação). Sem quadro,
-  "Planejar" abre diálogo com atalho para Jira → Conexão.
+  card de colaboradores (colunas com sigla + tooltip — §2 — + Total + rodapé "Cartões na
+  coluna", sem negrito) e grid de cartões (Coluna/Status/Prioridade badge; Descrição →
+  Previsão → Time e Épico (badges centralizadas, cores em Jira: Cores; nomes via `/times`/`/epicos`,
+  pois não há listagem confiável no Jira) → ANP → [PRE, RES] → [PRE, REP] (PRE = estimativa DEV/REV do
+  Jira, como no Sprint; cache antigo = "–" até "Atualizar"), grupos no formato dos do Sprint; pessoas =
+  `BadgeSigla`; padding `0.25rem` fixo em `SX_CELULA_PADDING_FIXO`). Só renderiza quando
+  consulta **e** cores do Jira estão prontas (`EsqueletoCarregando` até lá, igual ao Sprint).
+  Filtros Coluna, Status, Colaborador, Time, Épico e **Prazo** (mesma função da cor),
+  "Inverter", "Limpar" — E entre filtros, OU dentro; resetam ao trocar de sprint.
+  **Atualizar** pede confirmação. `SprintView` fica **montado e oculto** (preserva filtros).
+  Sem quadro, "Planejar" abre diálogo com atalho para Jira → Conexão.
 - **Dados** = baixar/importar `.zip` + lista dos `.ini` (`features/dados/arquivosIni.ts`,
   **manual**: §6). Sem usuário do Toggl, o 1º carregamento abre o diálogo de importação.
-- **Responsividade**: a **página nunca rola na horizontal** — só tabelas/grades em container
-  próprio com `overflow-x`; gutter do `Container` `px: { xs: 1, sm: 2 }`; dialogs largos
-  (`SprintDialogInfo`, `SprintDialogDetalheLinha`) em `fullScreen` abaixo de `sm`.
-- **Gant — colunas** (`useLargurasColunasGant`): Categoria, Total e cada data têm largura
-  **fixa = maior conteúdo** (2 passes em `useLayoutEffect`: `auto` + `max-content` com todos
-  expandidos, depois `table-layout:fixed` + `<colgroup>`); Descrição **sem largura** (recebe o
-  resto, mín. 100px, "…" + Tooltip). Sem `ResizeObserver` nem `auto` no passe final (o `auto`
-  redistribui a sobra e a medição virava ponto fixo).
+- **Responsividade**: **a página nunca rola na horizontal** (só tabelas, em container com
+  `overflow-x`); gutter `px: { xs: 1, sm: 2 }`; dialogs largos `fullScreen` abaixo de `sm`.
+- **Gant — colunas** (`useLargurasColunasGant`): Categoria/Total/datas com largura **fixa =
+  maior conteúdo** (passe `max-content` com tudo expandido, depois `table-layout:fixed` +
+  `<colgroup>`); Descrição recebe o resto (mín. 100px, "…" + Tooltip). Sem `ResizeObserver`
+  nem `auto` no passe final (a medição virava ponto fixo).
 
 ### Estrutura
 
@@ -530,24 +449,20 @@ src/features/   uma pasta por área: auth, usuarios-toggl, jira, configuracoes, 
 src/components/ peças reusadas entre features
 src/hooks/      bases genéricas (useRecurso, useRecursoEditavel, useColecaoCrud,
                 useNotificacao, useExpansao), useLarguraColunaRestante, useLargurasColunasGant
-src/utils/      duracao, datas, rotulos, tipografia, consulta, preferenciasMenu
+src/utils/      duracao, datas, rotulos, tipografia, consulta, previsaoLiberacao
 theme.ts        tema MUI único, claro — CORES (paleta) e ALTURA_CONTROLE exportados
 App.tsx         menu lateral + seção ativa + estado elevado (consultas concluídas, sprint)
 ```
 
 **Componentes compartilhados a preferir antes de duplicar**: `BadgeSigla` (tooltip com nome
-completo; texto em `text.primary`; replicado no `<Chip>` do Gant; cantos retos por padrão,
-`borderRadius: 1` só em Usuários do Toggl, `AccordionSummary` do Relatório e tabela
-"Colaboradores" do Sprint), `SelectListaCacheada` (multi-seleção sobre listagem real
-cacheada; "Atualizar lista" = IconButton 40×40), `SelectQuadroJira`, `FiltroMultiSelecao`
-(filtros multi-seleção do Sprint e do Planejamento), `AutocompleteMultiCompacto` (base dos
-dois: altura fixa que **nunca cresce** — 1 chip + chip "+N" com Tooltip dos selecionados; as
-selecionadas **ficam na lista com checkbox marcado** [`disableCloseOnSelect`, sem
-`filterSelectedOptions`] para desmarcar as ocultas no "+N"; `SelectListaCacheada` acrescenta
-às opções os selecionados que sumiram da listagem), `MapaCoresLista`, `ParametrosFormBase`
-(base de Relatório e Gant), `SelectAgrupamento`, `CabecalhoView`, `MarcaTogglReport`,
-`AvisoCache`, `EsqueletoCarregando`, `DialogoConfirmacao`, `BotaoComCarregamento`,
-`IconeAjuda` (`HelpOutlined` + `Tooltip`, `endAdornment` de `TextField`).
+completo; texto `text.primary`; cantos retos, `borderRadius: 1` só em Usuários do Toggl,
+Relatório e "Colaboradores" do Sprint), `SelectListaCacheada` (multi-seleção sobre listagem
+cacheada; acrescenta selecionados que sumiram), `SelectQuadroJira`, `FiltroMultiSelecao`,
+`AutocompleteMultiCompacto` (base dos dois: altura que **nunca cresce** — 1 chip + "+N" com
+Tooltip; selecionadas **ficam na lista marcadas**, `disableCloseOnSelect`, sem
+`filterSelectedOptions`), `MapaCoresLista`, `ParametrosFormBase`, `SelectAgrupamento`,
+`CabecalhoView`, `MarcaArgos`, `CreditoApp`, `SobreDialog`, `AvisoCache`,
+`EsqueletoCarregando`, `DialogoConfirmacao`, `BotaoComCarregamento`, `IconeAjuda`.
 
 ### Decisões técnicas importantes
 
@@ -560,8 +475,7 @@ selecionadas **ficam na lista com checkbox marcado** [`disableCloseOnSelect`, se
 - **Curadoria "TEL primeiro" replicada aqui** (`curarPorDescricao`), simétrica à
   normalização do núcleo — o backend não ordena, só agrupa. **Seleção de usuário** vem do
   campo `Selecionado` (seção Toggl); as telas de consulta não escolhem usuários.
-- **`localStorage` só em 2 lugares**: `features/sprint/tachados.ts` e
-  `utils/preferenciasMenu.ts`; a credencial do login fica em `sessionStorage`
+- **`localStorage` só em `features/sprint/tachados.ts`**; a credencial do login fica em `sessionStorage`
   (`api/credencial.ts`). Não usar para mais nada sem necessidade equivalente.
 - **Cada painel da Jira reenvia a parte que não edita**: `PUT /api/jira/configuracao`
   **substitui a configuração inteira** (conexão + quadro + campos); cada painel faz GET
@@ -570,14 +484,12 @@ selecionadas **ficam na lista com checkbox marcado** [`disableCloseOnSelect`, se
 
 ### Tema
 
-Tema único claro (`theme.ts`) — o tema escuro foi **removido por completo** a pedido do usuário; não reintroduzir.
-`CORES` é a paleta central — nenhuma cor hex deve ficar solta fora de `theme.ts`.
-`error` é propositalmente o vermelho padrão do MUI (não sobrescrever).
-**Altura dos controles**: `ALTURA_CONTROLE = 40` (exportado com `CORES`). `size: 'small'` é o
-default (`defaultProps`) de `TextField`/`Select`/`Autocomplete`/`FormControl`; `Button` padrão
-(`minHeight` no `sizeMedium`) e `ToggleButton` pequeno também têm 40px — inputs, dropdowns e
-botões ficam **nivelados lado a lado**; não sobrescrever `size` em controles de linha. Fora de
-propósito: `Button size="small"`, `IconButton` de tabela e o swatch de cor de 24px.
+Tema único claro (`theme.ts`) — o escuro foi **removido por completo**; não reintroduzir.
+`CORES` é a paleta central (nenhum hex solto fora de `theme.ts`); `error` fica o vermelho
+padrão do MUI. **`ALTURA_CONTROLE = 40`**: `size: 'small'` é default de `TextField`/`Select`/
+`Autocomplete`/`FormControl` e `Button`/`ToggleButton` também têm 40px — controles
+**nivelados lado a lado**; não sobrescrever `size` em controles de linha (exceções:
+`Button size="small"`, `IconButton` de tabela, swatch de 24px).
 
 ---
 
@@ -588,7 +500,7 @@ duplicar uma checagem/loop, ver se há helper em `Configuracao/` (`ServicoChaves
 `DiasUteis`, `Agrupamento.EhValido`, `AnalisadorIni.Escrever`/`DividirLista`) ou
 `Api/Endpoints/` (`ValidacaoDatas`, `TratamentoIo`); fluxos de erro esperados usam
 `ResultadoApiToggl<T>`, nunca exceptions; `end_of_line = crlf`, UTF-8 sem BOM;
-`dotnet build TogglReport.slnx` em **0 warnings**.
+`dotnet build Argos.slnx` em **0 warnings**.
 
 **TypeScript/React**: zero `any`; sem `enum` do TS; estrutura por feature; tipos de
 request/response em `src/api/tipos.ts` devem espelhar exatamente os DTOs/records C#
@@ -599,7 +511,7 @@ por pronta uma mudança.
 
 ## 6. Notas rápidas (gotchas)
 
-- **Depois de mudar `TogglReport.Nucleo`, reiniciar o `TogglReport.Api.exe`** — o processo
+- **Depois de mudar `Argos.Nucleo`, reiniciar o `Argos.Api.exe`** — o processo
   trava o `.dll`, e um `dotnet build` que falha só com `MSB3026`/`MSB3027` (erro de cópia,
   não `error CS...`) é isso, não bug de código.
 - **Rodar a API sem a `CHAVE_CRIPTOGRAFIA` correta (a do `.env`) é perigoso**: usa a chave
@@ -613,7 +525,7 @@ por pronta uma mudança.
 - **Padrões do `.gitignore` para pastas ancorados com `/`** (`/dados/`, `/certificado/`) —
   sem a barra, batem em qualquer profundidade (já ignorou `src/features/dados/`).
 - Todo `.ini` novo com dado sensível (token) ou de cache precisa entrar no
-  `.gitignore`/`.dockerignore` (raiz + `toggl-report-back/`).
+  `.gitignore`/`.dockerignore` (raiz + `argos-back/`).
 - **`features/dados/arquivosIni.ts` é lista manual** dos `.ini` (tipo, explicação, selo de
   token): ao criar/renomear/remover um `.ini` em `CaminhosDados`, atualize-a junto.
 - **Medir overflow mobile** com iframe de 360–400px (`resize_window` do Chrome MCP é instável).
@@ -624,24 +536,18 @@ por pronta uma mudança.
 - **Testar o Jira real sem tocar o Toggl**: rodar a API com `HTTPS_PROXY`/`HTTP_PROXY` numa
   porta morta e `NO_PROXY=.atlassian.net` (Jira direto, demais hosts falham rápido); nunca
   escrever na `dados/` original (usar cópia).
-- **Réplica externa (PowerShell) da descriptografia do token pode deixar um BOM (U+FEFF)**
-  no início do texto; o app o remove — sem isso o Jira devolve 401 mesmo com token válido.
-- **A imagem do back (`aspnet:10.0-alpine`) roda em globalization-invariant** (sem ICU):
-  qualquer cultura **nomeada** (`new CultureInfo("pt-BR")`, `StringComparer.Create(...)`)
-  lança `CultureNotFoundException` — só no container (os `.csproj` têm
-  `InvariantGlobalization=false` e o Windows tem ICU: o dev local não reproduz; validar no
-  Docker ou com `DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1`). Decisão: **nenhuma cultura
-  nomeada no backend** (só `InvariantCulture`), sem habilitar ICU (custo de imagem/ambiente).
-  Ordenar nomes = `ComparadorNomes` (ignora caixa/acento por tabela manual, sem ICU);
-  `OrdinalIgnoreCase` não ignora acento. Teste no container:
-  `docker build -t x toggl-report-back` + `docker run` com **cópia** de `dados/`,
-  `-e CHAVE_CRIPTOGRAFIA`, proxy morto + `NO_PROXY=.atlassian.net`, porta ≠ 5003/5180 (sem
-  `docker compose up`, nunca a `dados/` original).
+- **Descriptografia do token fora do app (PowerShell) pode deixar BOM (U+FEFF)** no início;
+  o app o remove — sem isso o Jira devolve 401 com token válido.
+- **A imagem do back (`aspnet:10.0-alpine`) roda em globalization-invariant**: cultura
+  **nomeada** (`new CultureInfo("pt-BR")`, `StringComparer.Create`) lança
+  `CultureNotFoundException` só no container (o Windows tem ICU; reproduzir com
+  `DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1`). Decisão: só `InvariantCulture`, sem ICU;
+  ordenar nomes com `ComparadorNomes` (`OrdinalIgnoreCase` não ignora acento). Testar com
+  `docker build`/`docker run` usando **cópia** de `dados/`, `-e CHAVE_CRIPTOGRAFIA`, proxy
+  morto + `NO_PROXY=.atlassian.net`, porta ≠ 5003/5180.
 
 ---
 
 ## 7. Projeto irmão
 
-`C:\Projetos\gerador-chave-nfe` segue as mesmas convenções de estilo (pt-BR, sem `var`,
-zero dependências, .NET 10), mas é só um console; cada `CLAUDE.md` é a fonte da verdade do
-seu repositório.
+`C:\Projetos\gerador-chave-nfe`: mesmas convenções (console .NET 10); cada `CLAUDE.md` vale só para o seu repositório.

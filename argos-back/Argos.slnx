@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="Argos.Api\Argos.Api.csproj" />
+  <Project Path="Argos.Nucleo\Argos.Nucleo.csproj" />
+</Solution>

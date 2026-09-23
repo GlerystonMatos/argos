@@ -1,0 +1,16 @@
+{
+    "profiles": {
+        "argos": {
+            "commandName": "Project",
+            "dotnetRunMessages": true,
+            "launchBrowser": false,
+            "applicationUrl": "http://localhost:5180",
+            "environmentVariables": {
+                "ASPNETCORE_ENVIRONMENT": "Development",
+                "AUTH_USUARIO": "",
+                "AUTH_SENHA": "",
+                "CHAVE_CRIPTOGRAFIA": ""
+            }
+        }
+    }
+}
