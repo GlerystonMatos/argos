@@ -1,0 +1,14 @@
+namespace Argos.Nucleo.Configuracao;
+
+public class ConfiguracaoApp
+{
+    public string? DataInicioAnterior { get; set; }
+
+    public string? DataFimAnterior { get; set; }
+
+    public string AgrupamentoPadrao { get; set; } = "ambos";
+
+    public List<string> TagsDetalhadas { get; set; } = new();
+
+    public List<ConfiguracaoUsuarioToggl> Usuarios { get; set; } = new();
+}

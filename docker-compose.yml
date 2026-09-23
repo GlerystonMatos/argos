@@ -1,10 +1,10 @@
 services:
-    toggl_report_api:
-        image: toggl-report-api:latest
+    argos_api:
+        image: argos-api:latest
         restart: on-failure
-        container_name: toggl-report-api
+        container_name: argos-api
         build:
-            context: ./toggl-report-back
+            context: ./argos-back
             dockerfile: Dockerfile
         ports:
             - 5003:8080
@@ -27,17 +27,17 @@ services:
             timeout: 3s
             retries: 3
         networks:
-            - toggl_report_net
+            - argos_net
 
-    toggl_report_web:
-        image: toggl-report-web:latest
+    argos_web:
+        image: argos-web:latest
         restart: on-failure
-        container_name: toggl-report-web
+        container_name: argos-web
         depends_on:
-            toggl_report_api:
+            argos_api:
                 condition: service_healthy
         build:
-            context: ./toggl-report-front
+            context: ./argos-front
             dockerfile: Dockerfile
             args:
                 VITE_API_URL: http://localhost:5003
@@ -49,11 +49,11 @@ services:
             timeout: 3s
             retries: 3
         networks:
-            - toggl_report_net
+            - argos_net
 
 networks:
-    toggl_report_net:
-        name: toggl_report_net
+    argos_net:
+        name: argos_net
 
-# docker-compose down ; docker rmi $(docker images | grep 'toggl-report') ; docker-compose up -d
+# docker-compose down ; docker rmi $(docker images | grep 'argos') ; docker-compose up -d
 # docker-compose down ; docker-compose up -d
