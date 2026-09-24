@@ -55,7 +55,7 @@ antes de tudo (`src/features/auth/`), com o mesmo cabeçalho da aplicação. Sem
 na API, pula direto para o app.
 
 Se não houver nenhum usuário do Toggl cadastrado na primeira verificação, um diálogo oferece restaurar
-a pasta `dados/` a partir de um backup `.zip` (`POST /api/dados/restaurar`) ou seguir e cadastrar tudo
+os dados a partir de um backup `.zip` (`POST /api/dados/restaurar`) ou seguir e cadastrar tudo
 manualmente. Só aparece uma vez por sessão.
 
 ### Navegação
@@ -188,7 +188,7 @@ backend (409); o frontend só espelha.
 - **Colaboradores**: tabela recolhível com nome, sigla, tempo por colaborador, Realizado, **Disponível**
   (tempo por colaborador − Realizado; verde/vermelho/neutro), Pendentes e Concluídas.
 - **Grid de tarefas**: uma linha por descrição/tag, com Prioridade, Status, Código (link para a issue do
-  Jira quando encontrada), Descrição e **Previsão** de liberação (data — vermelha se vencida, laranja se
+  Jira quando encontrada), Descrição e **Previsão** de liberação (com borda à esquerda; data — vermelha se vencida, laranja se
   perto do prazo, **verde** se no prazo — campo do Jira, janela configurável em Jira: Campos), mais os
   grupos **DEV / REV / QA** (PRE, REA, sigla de quem apontou e situação Pendente/Concluído). Colaboradores
   que ocupam categorias diferentes da mesma descrição **mesclam numa linha**; linhas de tag nunca mesclam.
@@ -251,15 +251,16 @@ sprint ativo do quadro). **Voltar** retorna ao Acompanhamento, que continua mont
 
 ### Seção Dados
 
-Baixar (`GET /api/dados/download`) e importar (`POST /api/dados/restaurar`) um `.zip` com a pasta `dados/`
-— útil como backup ou para levar os dados a outra instalação. O `.zip` precisa ter os arquivos direto na
-raiz (não uma pasta `dados/` por dentro; a API rejeita com 400). Importar sobrescreve só os arquivos
+Baixar (`GET /api/dados/download`) e importar (`POST /api/dados/restaurar`) um `.zip` com os documentos
+JSON da aplicação — útil como backup ou para levar os dados a outra instalação. O `.zip` precisa ter os arquivos direto na
+raiz (não uma pasta `dados/` por dentro; a API rejeita com 400). Importar sobrescreve só os documentos
 presentes no `.zip` (os demais, inclusive os caches de consulta, ficam intactos — deixe os caches de
 fora, a menos que queira substituí-los) e recarrega a página ao final. O mesmo diálogo de importação
-é oferecido no primeiro uso. Cuidado com o que vai no `.zip`: a API extrai qualquer arquivo da raiz, sem
+é oferecido no primeiro uso. Cuidado com o que vai no `.zip`: a API grava qualquer `.json` da raiz, sem
 lista de nomes permitidos.
 
-Abaixo dos botões, a seção lista, só para consulta, os 21 arquivos `.ini` que a aplicação pode criar,
+Abaixo dos botões, a seção lista, só para consulta, os 26 documentos `.json` que a aplicação pode criar
+(`features/dados/arquivosDados.ts`, lista manual),
 agrupados em cadastro, configuração, parâmetros e cache: para cada um, o que guarda, qual ação o gera e
 uma marca "Contém token (enc:)" nos que trazem API Token criptografado.
 

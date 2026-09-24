@@ -13,11 +13,11 @@ public static class BuscaEndpoints
             if (string.IsNullOrWhiteSpace(termo))
                 return Results.BadRequest("Informe um termo de busca.");
 
-            ConfiguracaoApp configuracao = CarregadorConfiguracaoIni.Carregar(caminhos);
+            ConfiguracaoApp configuracao = CarregadorConfiguracao.Carregar(caminhos);
             if (configuracao.Usuarios.Count == 0)
                 return Results.BadRequest("Nenhum usuário do Toggl cadastrado.");
 
-            CacheConsulta? cache = CarregadorCacheIni.Carregar(caminhos.RelatorioData);
+            CacheConsulta? cache = CarregadorCache.Carregar(caminhos.RelatorioData);
             if (cache is null)
                 return Results.Conflict("Não há dados em cache. Chame POST /api/consultas primeiro.");
 

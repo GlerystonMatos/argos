@@ -2,79 +2,128 @@ namespace Argos.Nucleo.Configuracao;
 
 public sealed class CaminhosDados
 {
-    private const string NomePasta = "dados";
+    internal const string NomeUsuarios = "TogglUsuarios";
 
-    private const string PrefixoCacheSprint = "SprintData_";
+    internal const string NomeTogglConfiguracao = "TogglConfiguracao";
 
-    private const string PrefixoCacheJiraSprint = "JiraSprintData_";
+    internal const string NomeTogglTags = "TogglTags";
 
-    private const string PrefixoCacheJiraPlanejamento = "JiraPlanejamentoData_";
+    internal const string NomeTogglTagsCache = "TogglTagsCache";
+
+    internal const string NomeRelatorioParametros = "RelatorioParametros";
+
+    internal const string NomeRelatorioData = "RelatorioData";
+
+    internal const string NomeGantParametros = "GantParametros";
+
+    internal const string NomeGantData = "GantData";
+
+    internal const string NomeSprints = "Sprints";
+
+    internal const string NomeJiraConexao = "JiraConexao";
+
+    internal const string NomeJiraCampos = "JiraCampos";
+
+    internal const string NomeJiraStatus = "JiraStatus";
+
+    internal const string NomeJiraPrioridades = "JiraPrioridades";
+
+    internal const string NomeJiraColunas = "JiraColunas";
+
+    internal const string NomeJiraTimes = "JiraTimes";
+
+    internal const string NomeJiraEpicos = "JiraEpicos";
+
+    internal const string NomeJiraQuadro = "JiraQuadro";
+
+    internal const string NomeJiraTogglMapeamento = "JiraTogglMapeamento";
+
+    internal const string NomeJiraStatusCache = "JiraStatusCache";
+
+    internal const string NomeJiraPrioridadesCache = "JiraPrioridadesCache";
+
+    internal const string NomeJiraColunasCache = "JiraColunasCache";
+
+    internal const string NomeJiraUsuariosCache = "JiraUsuariosCache";
+
+    internal const string NomeJiraQuadrosCache = "JiraQuadrosCache";
+
+    internal const string PrefixoCacheSprint = "SprintData_";
+
+    internal const string PrefixoCacheJiraSprint = "JiraSprintData_";
+
+    internal const string PrefixoCacheJiraPlanejamento = "JiraPlanejamentoData_";
 
     private const int TamanhoMaximoChaveSprint = 100;
 
-    public CaminhosDados(string diretorioBase)
+    public CaminhosDados(IArmazenamentoDados armazenamento)
     {
-        PastaDados = Path.Combine(diretorioBase, NomePasta);
+        Armazenamento = armazenamento;
     }
 
-    public string PastaDados { get; }
+    public IArmazenamentoDados Armazenamento { get; }
 
-    public string Usuarios => Caminho("TogglUsuarios.ini");
+    public DocumentoDados Usuarios => Documento(NomeUsuarios);
 
-    public string TogglConfiguracao => Caminho("TogglConfiguracao.ini");
+    public DocumentoDados TogglConfiguracao => Documento(NomeTogglConfiguracao);
 
-    public string TogglTags => Caminho("TogglTags.ini");
+    public DocumentoDados TogglTags => Documento(NomeTogglTags);
 
-    public string TogglTagsCache => Caminho("TogglTagsCache.ini");
+    public DocumentoDados TogglTagsCache => Documento(NomeTogglTagsCache);
 
-    public string RelatorioParametros => Caminho("RelatorioParametros.ini");
+    public DocumentoDados RelatorioParametros => Documento(NomeRelatorioParametros);
 
-    public string RelatorioData => Caminho("RelatorioData.ini");
+    public DocumentoDados RelatorioData => Documento(NomeRelatorioData);
 
-    public string GantParametros => Caminho("GantParametros.ini");
+    public DocumentoDados GantParametros => Documento(NomeGantParametros);
 
-    public string GantData => Caminho("GantData.ini");
+    public DocumentoDados GantData => Documento(NomeGantData);
 
-    public string Sprints => Caminho("Sprints.ini");
+    public DocumentoDados Sprints => Documento(NomeSprints);
 
-    public string JiraConexao => Caminho("JiraConexao.ini");
+    public DocumentoDados JiraConexao => Documento(NomeJiraConexao);
 
-    public string JiraCampos => Caminho("JiraCampos.ini");
+    public DocumentoDados JiraCampos => Documento(NomeJiraCampos);
 
-    public string JiraStatus => Caminho("JiraStatus.ini");
+    public DocumentoDados JiraStatus => Documento(NomeJiraStatus);
 
-    public string JiraPrioridades => Caminho("JiraPrioridades.ini");
+    public DocumentoDados JiraPrioridades => Documento(NomeJiraPrioridades);
 
-    public string JiraColunas => Caminho("JiraColunas.ini");
+    public DocumentoDados JiraColunas => Documento(NomeJiraColunas);
 
-    public string JiraTimes => Caminho("JiraTimes.ini");
+    public DocumentoDados JiraTimes => Documento(NomeJiraTimes);
 
-    public string JiraEpicos => Caminho("JiraEpicos.ini");
+    public DocumentoDados JiraEpicos => Documento(NomeJiraEpicos);
 
-    public string JiraQuadro => Caminho("JiraQuadro.ini");
+    public DocumentoDados JiraQuadro => Documento(NomeJiraQuadro);
 
-    public string JiraTogglMapeamento => Caminho("JiraTogglMapeamento.ini");
+    public DocumentoDados JiraTogglMapeamento => Documento(NomeJiraTogglMapeamento);
 
-    public string JiraStatusCache => Caminho("JiraStatusCache.ini");
+    public DocumentoDados JiraStatusCache => Documento(NomeJiraStatusCache);
 
-    public string JiraPrioridadesCache => Caminho("JiraPrioridadesCache.ini");
+    public DocumentoDados JiraPrioridadesCache => Documento(NomeJiraPrioridadesCache);
 
-    public string JiraColunasCache => Caminho("JiraColunasCache.ini");
+    public DocumentoDados JiraColunasCache => Documento(NomeJiraColunasCache);
 
-    public string JiraUsuariosCache => Caminho("JiraUsuariosCache.ini");
+    public DocumentoDados JiraUsuariosCache => Documento(NomeJiraUsuariosCache);
 
-    public string JiraQuadrosCache => Caminho("JiraQuadrosCache.ini");
+    public DocumentoDados JiraQuadrosCache => Documento(NomeJiraQuadrosCache);
 
-    public string? CacheSprint(DadosSprint sprint) => CaminhoPorSprint(PrefixoCacheSprint, sprint);
+    public DocumentoDados? CacheSprint(DadosSprint sprint) => DocumentoPorSprint(PrefixoCacheSprint, sprint);
 
-    public string? CacheJiraSprint(DadosSprint sprint) => CaminhoPorSprint(PrefixoCacheJiraSprint, sprint);
+    public DocumentoDados? CacheJiraSprint(DadosSprint sprint) => DocumentoPorSprint(PrefixoCacheJiraSprint, sprint);
 
-    public string? CacheJiraPlanejamento(DadosSprint sprint) => CaminhoPorSprint(PrefixoCacheJiraPlanejamento, sprint);
+    public DocumentoDados? CacheJiraPlanejamento(DadosSprint sprint) => DocumentoPorSprint(PrefixoCacheJiraPlanejamento, sprint);
 
-    private string Caminho(string nomeArquivo) => Path.Combine(PastaDados, nomeArquivo);
+    public static bool EhCacheToggl(string nome) =>
+        nome.Equals(NomeRelatorioData, StringComparison.OrdinalIgnoreCase)
+        || nome.Equals(NomeGantData, StringComparison.OrdinalIgnoreCase)
+        || nome.StartsWith(PrefixoCacheSprint, StringComparison.OrdinalIgnoreCase);
 
-    private string? CaminhoPorSprint(string prefixo, DadosSprint sprint) =>
-        ChaveSprintValida(sprint.Chave) ? Caminho($"{prefixo}{sprint.Chave}.ini") : null;
+    private DocumentoDados Documento(string nome) => new(Armazenamento, nome);
+
+    private DocumentoDados? DocumentoPorSprint(string prefixo, DadosSprint sprint) =>
+        ChaveSprintValida(sprint.Chave) ? Documento($"{prefixo}{sprint.Chave}") : null;
 
     private static bool ChaveSprintValida(string chave) =>
         chave.Length is > 0 and <= TamanhoMaximoChaveSprint

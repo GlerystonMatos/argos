@@ -3,21 +3,23 @@ WORKDIR /app
 
 COPY Argos.Api/*.csproj ./Argos.Api/
 COPY Argos.Nucleo/*.csproj ./Argos.Nucleo/
+COPY Argos.Armazenamento/*.csproj ./Argos.Armazenamento/
 
 RUN dotnet restore Argos.Api/Argos.Api.csproj
 
 COPY Argos.Api/. ./Argos.Api/
 COPY Argos.Nucleo/. ./Argos.Nucleo/
+COPY Argos.Armazenamento/. ./Argos.Armazenamento/
 
 WORKDIR /app/Argos.Api
-RUN dotnet publish -c Release -o out --no-restore
+RUN dotnet publish -c Release -o /app/out --no-restore
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0-alpine
 WORKDIR /app
 
 RUN apk add --no-cache su-exec
 
-COPY --chown=$APP_UID:$APP_UID --from=build /app/Argos.Api/out .
+COPY --chown=$APP_UID:$APP_UID --from=build /app/out .
 RUN chown $APP_UID:$APP_UID /app
 
 COPY entrypoint.sh /entrypoint.sh

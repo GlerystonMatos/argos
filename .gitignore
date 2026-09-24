@@ -9,3 +9,7 @@ dados.rar
 
 .env
 !.env.example
+
+# Credenciais de service account (Firebase/Firestore)
+credenciais-firebase*.json
+*-sa.json

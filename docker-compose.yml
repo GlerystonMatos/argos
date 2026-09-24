@@ -16,7 +16,7 @@ services:
             - TZ=America/Sao_Paulo
             - ASPNETCORE_HTTPS_PORT=443
             - ASPNETCORE_URLS=https://+:443;http://+:8080
-            - Kestrel__Certificates__Default__Password=${KESTREL_CERT_PASSWORD}
+            - Kestrel__Certificates__Default__Password=${KESTREL_CERTIFICATE_PASSWORD}
             - Kestrel__Certificates__Default__Path=/app/certificado/certificado.pfx
             - AUTH__USUARIO=${AUTH__USUARIO}
             - AUTH__SENHA=${AUTH__SENHA}

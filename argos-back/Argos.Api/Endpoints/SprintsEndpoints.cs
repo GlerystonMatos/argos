@@ -11,7 +11,7 @@ public static class SprintsEndpoints
 
         grupo.MapGet("/", () =>
         {
-            List<DadosSprint> sprints = CarregadorSprintsIni.Carregar(caminhos.Sprints);
+            List<DadosSprint> sprints = CarregadorSprints.Carregar(caminhos.Sprints);
             List<SprintDto> resposta = sprints
                 .Select(s => new SprintDto(s.Chave, s.Nome, s.HorasPorDia, s.MargemPercentual, s.DataInicio, s.DataFim, s.Fechado))
                 .ToList();
@@ -33,7 +33,7 @@ public static class SprintsEndpoints
             if (request.MargemPercentual < 0 || request.MargemPercentual >= 100)
                 return Results.BadRequest("A margem deve ser maior ou igual a 0 e menor que 100.");
 
-            List<DadosSprint> sprints = CarregadorSprintsIni.Carregar(caminhos.Sprints);
+            List<DadosSprint> sprints = CarregadorSprints.Carregar(caminhos.Sprints);
 
             if (ServicoSprints.NomeEmUso(sprints, request.Nome, ignorar: null))
                 return Results.Conflict($"Já existe um sprint chamado '{request.Nome}'.");
@@ -51,7 +51,7 @@ public static class SprintsEndpoints
             sprints.Add(sprint);
 
             IResult? erroPersistencia = TratamentoIo.Executar(
-                () => CarregadorSprintsIni.Salvar(caminhos.Sprints, sprints),
+                () => CarregadorSprints.Salvar(caminhos.Sprints, sprints),
                 "Não foi possível salvar os sprints.");
             if (erroPersistencia is not null)
                 return erroPersistencia;
@@ -63,7 +63,7 @@ public static class SprintsEndpoints
 
         grupo.MapPut("/{chave}", (string chave, EditarSprintRequest request) =>
         {
-            List<DadosSprint> sprints = CarregadorSprintsIni.Carregar(caminhos.Sprints);
+            List<DadosSprint> sprints = CarregadorSprints.Carregar(caminhos.Sprints);
             DadosSprint? sprint = sprints.FirstOrDefault(s => s.Chave == chave);
             if (sprint is null)
                 return Results.NotFound();
@@ -96,7 +96,7 @@ public static class SprintsEndpoints
             sprint.DataFim = fim.ToString("yyyy-MM-dd");
 
             IResult? erroPersistencia = TratamentoIo.Executar(
-                () => CarregadorSprintsIni.Salvar(caminhos.Sprints, sprints),
+                () => CarregadorSprints.Salvar(caminhos.Sprints, sprints),
                 "Não foi possível salvar os sprints.");
             if (erroPersistencia is not null)
                 return erroPersistencia;
@@ -107,7 +107,7 @@ public static class SprintsEndpoints
 
         grupo.MapPost("/{chave}/fechar", (string chave) =>
         {
-            List<DadosSprint> sprints = CarregadorSprintsIni.Carregar(caminhos.Sprints);
+            List<DadosSprint> sprints = CarregadorSprints.Carregar(caminhos.Sprints);
             DadosSprint? sprint = sprints.FirstOrDefault(s => s.Chave == chave);
             if (sprint is null)
                 return Results.NotFound();
@@ -115,7 +115,7 @@ public static class SprintsEndpoints
             sprint.Fechado = true;
 
             IResult? erroPersistencia = TratamentoIo.Executar(
-                () => CarregadorSprintsIni.Salvar(caminhos.Sprints, sprints),
+                () => CarregadorSprints.Salvar(caminhos.Sprints, sprints),
                 "Não foi possível salvar os sprints.");
             if (erroPersistencia is not null)
                 return erroPersistencia;
@@ -126,7 +126,7 @@ public static class SprintsEndpoints
 
         grupo.MapPost("/{chave}/reabrir", (string chave) =>
         {
-            List<DadosSprint> sprints = CarregadorSprintsIni.Carregar(caminhos.Sprints);
+            List<DadosSprint> sprints = CarregadorSprints.Carregar(caminhos.Sprints);
             DadosSprint? sprint = sprints.FirstOrDefault(s => s.Chave == chave);
             if (sprint is null)
                 return Results.NotFound();
@@ -134,7 +134,7 @@ public static class SprintsEndpoints
             sprint.Fechado = false;
 
             IResult? erroPersistencia = TratamentoIo.Executar(
-                () => CarregadorSprintsIni.Salvar(caminhos.Sprints, sprints),
+                () => CarregadorSprints.Salvar(caminhos.Sprints, sprints),
                 "Não foi possível salvar os sprints.");
             if (erroPersistencia is not null)
                 return erroPersistencia;
@@ -145,7 +145,7 @@ public static class SprintsEndpoints
 
         grupo.MapDelete("/{chave}", (string chave) =>
         {
-            List<DadosSprint> sprints = CarregadorSprintsIni.Carregar(caminhos.Sprints);
+            List<DadosSprint> sprints = CarregadorSprints.Carregar(caminhos.Sprints);
             DadosSprint? sprint = sprints.FirstOrDefault(s => s.Chave == chave);
             if (sprint is null)
                 return Results.NotFound();
@@ -159,28 +159,20 @@ public static class SprintsEndpoints
                 return erroCaches;
 
             IResult? erroPersistencia = TratamentoIo.Executar(
-                () => CarregadorSprintsIni.Salvar(caminhos.Sprints, sprints),
+                () => CarregadorSprints.Salvar(caminhos.Sprints, sprints),
                 "Não foi possível salvar os sprints.");
             if (erroPersistencia is not null)
                 return erroPersistencia;
 
             return Results.NoContent();
         })
-        .WithSummary("Remove um sprint cadastrado e os caches dele (SprintData_<chave>.ini, JiraSprintData_<chave>.ini e JiraPlanejamentoData_<chave>.ini)");
+        .WithSummary("Remove um sprint cadastrado e os caches dele (SprintData_<chave>, JiraSprintData_<chave> e JiraPlanejamentoData_<chave>)");
     }
 
     private static void ApagarCachesDoSprint(CaminhosDados caminhos, DadosSprint sprint)
     {
-        string? cacheToggl = caminhos.CacheSprint(sprint);
-        if (cacheToggl is not null)
-            File.Delete(cacheToggl);
-
-        string? cacheJira = caminhos.CacheJiraSprint(sprint);
-        if (cacheJira is not null)
-            File.Delete(cacheJira);
-
-        string? cachePlanejamento = caminhos.CacheJiraPlanejamento(sprint);
-        if (cachePlanejamento is not null)
-            File.Delete(cachePlanejamento);
+        caminhos.CacheSprint(sprint)?.Apagar();
+        caminhos.CacheJiraSprint(sprint)?.Apagar();
+        caminhos.CacheJiraPlanejamento(sprint)?.Apagar();
     }
 }

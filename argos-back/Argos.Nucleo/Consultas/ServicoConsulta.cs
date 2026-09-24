@@ -5,11 +5,11 @@ namespace Argos.Nucleo.Consultas;
 
 public static class ServicoConsulta
 {
-    public static CacheConsulta? CarregarCacheSeExistente(string caminhoCache)
+    public static CacheConsulta? CarregarCacheSeExistente(DocumentoDados documentoCache)
     {
         try
         {
-            return CarregadorCacheIni.Carregar(caminhoCache);
+            return CarregadorCache.Carregar(documentoCache);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -79,14 +79,14 @@ public static class ServicoConsulta
         return cache;
     }
 
-    public static bool SalvarCache(string caminhoCache, ConfiguracaoApp configuracao, DateTime inicio, DateTime fim,
+    public static bool SalvarCache(DocumentoDados documentoCache, ConfiguracaoApp configuracao, DateTime inicio, DateTime fim,
         Dictionary<string, List<RegistroTempoDto>> registrosPorUsuario, List<string> ordemUsuarios)
     {
         CacheConsulta cache = MontarCache(configuracao, inicio, fim, registrosPorUsuario, ordemUsuarios);
 
         try
         {
-            CarregadorCacheIni.Salvar(caminhoCache, cache);
+            CarregadorCache.Salvar(documentoCache, cache);
             return true;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)

@@ -13,7 +13,7 @@ public static class GantEndpoints
 
         grupo.MapGet("/parametros", () =>
         {
-            ConfiguracaoGant configuracao = CarregadorConfiguracaoGantIni.Carregar(caminhos);
+            ConfiguracaoGant configuracao = CarregadorConfiguracaoGant.Carregar(caminhos);
             return Results.Ok(new ParametrosGantDto(configuracao.DataInicio, configuracao.DataFim, configuracao.TagsSelecionadas, configuracao.Agrupamento));
         })
         .WithSummary("Obtém o período salvo dos parâmetros do Gant e o agrupamento/tags da fonte única de configuração do Toggl");
@@ -23,7 +23,7 @@ public static class GantEndpoints
             if (!Agrupamento.EhValido(request.Agrupamento))
                 return Results.BadRequest("Agrupamento deve ser 'descricao', 'tag' ou 'ambos'.");
 
-            PeriodoSalvo periodo = CarregadorPeriodoIni.Carregar(caminhos.GantParametros);
+            PeriodoSalvo periodo = CarregadorPeriodo.Carregar(caminhos.GantParametros);
             bool atualizarPeriodo = !string.IsNullOrWhiteSpace(request.DataInicio) || !string.IsNullOrWhiteSpace(request.DataFim);
 
             if (atualizarPeriodo)
@@ -35,16 +35,16 @@ public static class GantEndpoints
                 periodo.DataFim = fim.ToString("yyyy-MM-dd");
             }
 
-            ConfiguracaoCategoriasSprint toggl = CarregadorConfiguracaoCategoriasSprintIni.Carregar(caminhos);
+            ConfiguracaoCategoriasSprint toggl = CarregadorConfiguracaoCategoriasSprint.Carregar(caminhos);
             toggl.Agrupamento = request.Agrupamento;
             toggl.TagsDetalhadas = NormalizacaoListas.Normalizar(request.TagsSelecionadas);
 
             IResult? erroPersistencia = TratamentoIo.Executar(
                 () =>
                 {
-                    CarregadorConfiguracaoCategoriasSprintIni.Salvar(caminhos, toggl);
+                    CarregadorConfiguracaoCategoriasSprint.Salvar(caminhos, toggl);
                     if (atualizarPeriodo)
-                        CarregadorPeriodoIni.Salvar(caminhos.GantParametros, periodo);
+                        CarregadorPeriodo.Salvar(caminhos.GantParametros, periodo);
                 },
                 "Não foi possível salvar os parâmetros do Gant.");
             if (erroPersistencia is not null)
@@ -52,14 +52,14 @@ public static class GantEndpoints
 
             return Results.Ok(new ParametrosGantDto(periodo.DataInicio, periodo.DataFim, toggl.TagsDetalhadas, toggl.Agrupamento));
         })
-        .WithSummary("Atualiza o período do Gant e o agrupamento/tags (fonte única em TogglConfiguracao.ini/TogglTags.ini, compartilhada com Relatório e Sprint); datas omitidas preservam as salvas");
+        .WithSummary("Atualiza o período do Gant e o agrupamento/tags (fonte única em TogglConfiguracao/TogglTags, compartilhada com Relatório e Sprint); datas omitidas preservam as salvas");
 
         grupo.MapPost("/consultas", async (ConsultarRequest request) =>
         {
             if (!ValidacaoDatas.Tenta(request.DataInicio, request.DataFim, out DateTime inicio, out DateTime fim, out IResult? erroDatas))
                 return erroDatas!;
 
-            ConfiguracaoApp configuracao = CarregadorConfiguracaoIni.Carregar(caminhos);
+            ConfiguracaoApp configuracao = CarregadorConfiguracao.Carregar(caminhos);
             configuracao.Usuarios = configuracao.Usuarios.Where(u => u.Selecionado).ToList();
 
             if (configuracao.Usuarios.Count == 0)
@@ -89,18 +89,18 @@ public static class GantEndpoints
 
             return Results.Ok(new ConsultarResponse(request.DataInicio, request.DataFim, VeioDoCache: false, eventos));
         })
-        .WithSummary("Consulta o Toggl para o Gant respeitando o cache e o limite de 30 req/hora; salva o retorno cru em GantData.ini");
+        .WithSummary("Consulta o Toggl para o Gant respeitando o cache e o limite de 30 req/hora; salva o retorno cru em GantData");
 
         grupo.MapGet("/", (string dataInicio, string dataFim, string? termo) =>
         {
             if (!DateTime.TryParse(dataInicio, out DateTime inicio) || !DateTime.TryParse(dataFim, out DateTime fim))
                 return Results.BadRequest("Datas inválidas. Use o formato AAAA-MM-DD.");
 
-            ConfiguracaoApp configuracao = CarregadorConfiguracaoIni.Carregar(caminhos);
+            ConfiguracaoApp configuracao = CarregadorConfiguracao.Carregar(caminhos);
             if (configuracao.Usuarios.Count == 0)
                 return Results.BadRequest("Nenhum usuário do Toggl cadastrado.");
 
-            CacheConsulta? cache = CarregadorCacheIni.Carregar(caminhos.GantData);
+            CacheConsulta? cache = CarregadorCache.Carregar(caminhos.GantData);
             if (cache is null || cache.DataInicio != dataInicio || cache.DataFim != dataFim)
                 return Results.Conflict("Não há consulta salva para esse período. Chame POST /api/gant/consultas primeiro.");
 

@@ -1,11 +1,11 @@
 namespace Argos.Nucleo.Configuracao;
 
-public static class CarregadorConfiguracaoIni
+public static class CarregadorConfiguracao
 {
     public static ConfiguracaoApp Carregar(CaminhosDados caminhos)
     {
-        PeriodoSalvo periodo = CarregadorPeriodoIni.Carregar(caminhos.RelatorioParametros);
-        ConfiguracaoCategoriasSprint toggl = CarregadorConfiguracaoCategoriasSprintIni.Carregar(caminhos);
+        PeriodoSalvo periodo = CarregadorPeriodo.Carregar(caminhos.RelatorioParametros);
+        ConfiguracaoCategoriasSprint toggl = CarregadorConfiguracaoCategoriasSprint.Carregar(caminhos);
 
         return new ConfiguracaoApp
         {
@@ -13,7 +13,7 @@ public static class CarregadorConfiguracaoIni
             DataFimAnterior = periodo.DataFim,
             AgrupamentoPadrao = toggl.Agrupamento,
             TagsDetalhadas = toggl.TagsDetalhadas,
-            Usuarios = CarregadorUsuariosTogglIni.Carregar(caminhos.Usuarios)
+            Usuarios = CarregadorUsuariosToggl.Carregar(caminhos.Usuarios)
         };
     }
 }

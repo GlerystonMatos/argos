@@ -11,7 +11,7 @@ public static class SprintStatusFinalEndpoints
 
         grupo.MapGet("/", () =>
         {
-            ConfiguracaoStatusFinalSprint configuracao = CarregadorConfiguracaoStatusFinalSprintIni.Carregar(caminhos.JiraStatus);
+            ConfiguracaoStatusFinalSprint configuracao = CarregadorConfiguracaoStatusFinalSprint.Carregar(caminhos.JiraStatus);
             return Results.Ok(new StatusFinalSprintDto(configuracao.StatusConcluido, configuracao.StatusIgnorado));
         })
         .WithSummary("Obtém o mapeamento global de status finais do Jira (Concluído/Ignorado) para os totalizadores do Sprint");
@@ -31,7 +31,7 @@ public static class SprintStatusFinalEndpoints
             };
 
             IResult? erroPersistencia = TratamentoIo.Executar(
-                () => CarregadorConfiguracaoStatusFinalSprintIni.Salvar(caminhos.JiraStatus, configuracao),
+                () => CarregadorConfiguracaoStatusFinalSprint.Salvar(caminhos.JiraStatus, configuracao),
                 "Não foi possível salvar os status finais.");
             if (erroPersistencia is not null)
                 return erroPersistencia;

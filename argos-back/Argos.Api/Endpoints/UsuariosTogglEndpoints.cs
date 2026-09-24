@@ -12,7 +12,7 @@ public static class UsuariosTogglEndpoints
 
         grupo.MapGet("/", () =>
         {
-            List<UsuarioTogglResumoDto> resposta = CarregadorUsuariosTogglIni.Carregar(caminhos.Usuarios)
+            List<UsuarioTogglResumoDto> resposta = CarregadorUsuariosToggl.Carregar(caminhos.Usuarios)
                 .Select(u => new UsuarioTogglResumoDto(u.Chave, u.NomeExibicao, ServicoUsuariosToggl.MascararToken(u.TokenApi), u.Sigla, u.Cor, u.Selecionado, u.Administrador))
                 .ToList();
             return Results.Ok(resposta);
@@ -35,7 +35,7 @@ public static class UsuariosTogglEndpoints
             if (string.IsNullOrWhiteSpace(request.NomeExibicao))
                 return Results.BadRequest("Nome de exibição é obrigatório.");
 
-            List<ConfiguracaoUsuarioToggl> usuarios = CarregadorUsuariosTogglIni.Carregar(caminhos.Usuarios);
+            List<ConfiguracaoUsuarioToggl> usuarios = CarregadorUsuariosToggl.Carregar(caminhos.Usuarios);
 
             if (ServicoUsuariosToggl.NomeEmUso(usuarios, request.NomeExibicao, ignorar: null))
                 return Results.Conflict($"Já existe um usuário do Toggl chamado '{request.NomeExibicao}'.");
@@ -61,7 +61,7 @@ public static class UsuariosTogglEndpoints
                 ServicoUsuariosToggl.DesmarcarOutrosAdministradores(usuarios, usuario);
 
             IResult? erroPersistencia = TratamentoIo.Executar(
-                () => CarregadorUsuariosTogglIni.Salvar(caminhos.Usuarios, usuarios),
+                () => CarregadorUsuariosToggl.Salvar(caminhos.Usuarios, usuarios),
                 "Não foi possível salvar a configuração.");
             if (erroPersistencia is not null)
                 return erroPersistencia;
@@ -73,7 +73,7 @@ public static class UsuariosTogglEndpoints
 
         grupo.MapPut("/{chave}", async (string chave, EditarUsuarioTogglRequest request) =>
         {
-            List<ConfiguracaoUsuarioToggl> usuarios = CarregadorUsuariosTogglIni.Carregar(caminhos.Usuarios);
+            List<ConfiguracaoUsuarioToggl> usuarios = CarregadorUsuariosToggl.Carregar(caminhos.Usuarios);
             ConfiguracaoUsuarioToggl? usuario = usuarios.FirstOrDefault(u => u.Chave == chave);
             if (usuario is null)
                 return Results.NotFound();
@@ -124,7 +124,7 @@ public static class UsuariosTogglEndpoints
             }
 
             IResult? erroPersistencia = TratamentoIo.Executar(
-                () => CarregadorUsuariosTogglIni.Salvar(caminhos.Usuarios, usuarios),
+                () => CarregadorUsuariosToggl.Salvar(caminhos.Usuarios, usuarios),
                 "Não foi possível salvar a configuração.");
             if (erroPersistencia is not null)
                 return erroPersistencia;
@@ -135,7 +135,7 @@ public static class UsuariosTogglEndpoints
 
         grupo.MapDelete("/{chave}", (string chave) =>
         {
-            List<ConfiguracaoUsuarioToggl> usuarios = CarregadorUsuariosTogglIni.Carregar(caminhos.Usuarios);
+            List<ConfiguracaoUsuarioToggl> usuarios = CarregadorUsuariosToggl.Carregar(caminhos.Usuarios);
             ConfiguracaoUsuarioToggl? usuario = usuarios.FirstOrDefault(u => u.Chave == chave);
             if (usuario is null)
                 return Results.NotFound();
@@ -143,7 +143,7 @@ public static class UsuariosTogglEndpoints
             usuarios.Remove(usuario);
 
             IResult? erroPersistencia = TratamentoIo.Executar(
-                () => CarregadorUsuariosTogglIni.Salvar(caminhos.Usuarios, usuarios),
+                () => CarregadorUsuariosToggl.Salvar(caminhos.Usuarios, usuarios),
                 "Não foi possível salvar a configuração.");
             if (erroPersistencia is not null)
                 return erroPersistencia;

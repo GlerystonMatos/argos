@@ -11,7 +11,7 @@ public static class ConfiguracaoEndpoints
 
         grupo.MapGet("/", () =>
         {
-            ConfiguracaoApp configuracao = CarregadorConfiguracaoIni.Carregar(caminhos);
+            ConfiguracaoApp configuracao = CarregadorConfiguracao.Carregar(caminhos);
             return Results.Ok(new ParametrosConfiguracaoDto(
                 configuracao.AgrupamentoPadrao, configuracao.TagsDetalhadas, configuracao.DataInicioAnterior, configuracao.DataFimAnterior));
         })
@@ -22,7 +22,7 @@ public static class ConfiguracaoEndpoints
             if (!Agrupamento.EhValido(request.Agrupamento))
                 return Results.BadRequest("Agrupamento deve ser 'descricao', 'tag' ou 'ambos'.");
 
-            PeriodoSalvo periodo = CarregadorPeriodoIni.Carregar(caminhos.RelatorioParametros);
+            PeriodoSalvo periodo = CarregadorPeriodo.Carregar(caminhos.RelatorioParametros);
             bool atualizarPeriodo = !string.IsNullOrWhiteSpace(request.DataInicio) || !string.IsNullOrWhiteSpace(request.DataFim);
 
             if (atualizarPeriodo)
@@ -34,16 +34,16 @@ public static class ConfiguracaoEndpoints
                 periodo.DataFim = fim.ToString("yyyy-MM-dd");
             }
 
-            ConfiguracaoCategoriasSprint toggl = CarregadorConfiguracaoCategoriasSprintIni.Carregar(caminhos);
+            ConfiguracaoCategoriasSprint toggl = CarregadorConfiguracaoCategoriasSprint.Carregar(caminhos);
             toggl.Agrupamento = request.Agrupamento;
             toggl.TagsDetalhadas = NormalizacaoListas.Normalizar(request.TagsDetalhadas);
 
             IResult? erroPersistencia = TratamentoIo.Executar(
                 () =>
                 {
-                    CarregadorConfiguracaoCategoriasSprintIni.Salvar(caminhos, toggl);
+                    CarregadorConfiguracaoCategoriasSprint.Salvar(caminhos, toggl);
                     if (atualizarPeriodo)
-                        CarregadorPeriodoIni.Salvar(caminhos.RelatorioParametros, periodo);
+                        CarregadorPeriodo.Salvar(caminhos.RelatorioParametros, periodo);
                 },
                 "Não foi possível salvar a configuração.");
             if (erroPersistencia is not null)
@@ -51,6 +51,6 @@ public static class ConfiguracaoEndpoints
 
             return Results.Ok(new ParametrosConfiguracaoDto(toggl.Agrupamento, toggl.TagsDetalhadas, periodo.DataInicio, periodo.DataFim));
         })
-        .WithSummary("Atualiza agrupamento, tags detalhadas (fonte única em TogglConfiguracao.ini/TogglTags.ini, compartilhada com Gant e Sprint) e período; datas omitidas preservam as salvas");
+        .WithSummary("Atualiza agrupamento, tags detalhadas (fonte única em TogglConfiguracao/TogglTags, compartilhada com Gant e Sprint) e período; datas omitidas preservam as salvas");
     }
 }

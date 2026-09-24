@@ -7,6 +7,8 @@ locals {
     # Usada por baixo dos panos pela conexão Cloud Build 2ª geração com o
     # GitHub (guarda o token de autorização OAuth).
     "secretmanager.googleapis.com",
+    # Banco de dados do app (Firestore), no lugar da pasta dados/.
+    "firestore.googleapis.com",
   ]
 }
 

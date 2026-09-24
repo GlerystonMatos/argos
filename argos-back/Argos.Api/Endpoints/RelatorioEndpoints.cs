@@ -15,11 +15,11 @@ public static class RelatorioEndpoints
             if (!DateTime.TryParse(dataInicio, out _) || !DateTime.TryParse(dataFim, out _))
                 return Results.BadRequest("Datas inválidas. Use o formato AAAA-MM-DD.");
 
-            ConfiguracaoApp configuracao = CarregadorConfiguracaoIni.Carregar(caminhos);
+            ConfiguracaoApp configuracao = CarregadorConfiguracao.Carregar(caminhos);
             if (configuracao.Usuarios.Count == 0)
                 return Results.BadRequest("Nenhum usuário do Toggl cadastrado.");
 
-            CacheConsulta? cache = CarregadorCacheIni.Carregar(caminhos.RelatorioData);
+            CacheConsulta? cache = CarregadorCache.Carregar(caminhos.RelatorioData);
             if (cache is null || cache.DataInicio != dataInicio || cache.DataFim != dataFim)
                 return Results.Conflict("Não há consulta salva para esse período. Chame POST /api/consultas primeiro.");
 

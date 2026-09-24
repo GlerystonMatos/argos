@@ -13,7 +13,7 @@ public static class ConsultasEndpoints
             if (!ValidacaoDatas.Tenta(request.DataInicio, request.DataFim, out DateTime inicio, out DateTime fim, out IResult? erroDatas))
                 return erroDatas!;
 
-            ConfiguracaoApp configuracao = CarregadorConfiguracaoIni.Carregar(caminhos);
+            ConfiguracaoApp configuracao = CarregadorConfiguracao.Carregar(caminhos);
             configuracao.Usuarios = configuracao.Usuarios.Where(u => u.Selecionado).ToList();
 
             if (configuracao.Usuarios.Count == 0)
@@ -44,6 +44,6 @@ public static class ConsultasEndpoints
             return Results.Ok(new ConsultarResponse(request.DataInicio, request.DataFim, VeioDoCache: false, eventos));
         })
         .WithTags("Consultas")
-        .WithSummary("Consulta o Toggl respeitando o cache e o limite de 30 req/hora; salva o retorno cru em RelatorioData.ini");
+        .WithSummary("Consulta o Toggl respeitando o cache e o limite de 30 req/hora; salva o retorno cru em RelatorioData");
     }
 }

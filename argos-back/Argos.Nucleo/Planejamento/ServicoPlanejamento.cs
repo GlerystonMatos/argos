@@ -39,16 +39,16 @@ public static class ServicoPlanejamento
 
     private static IEnumerable<CartaoQuadroJira> CartoesDosCaches(CaminhosDados caminhos, bool somenteSprintsAbertos)
     {
-        foreach (DadosSprint sprint in CarregadorSprintsIni.Carregar(caminhos.Sprints))
+        foreach (DadosSprint sprint in CarregadorSprints.Carregar(caminhos.Sprints))
         {
             if (somenteSprintsAbertos && sprint.Fechado)
                 continue;
 
-            string? caminhoCache = caminhos.CacheJiraPlanejamento(sprint);
-            if (caminhoCache is null || !File.Exists(caminhoCache))
+            DocumentoDados? documentoCache = caminhos.CacheJiraPlanejamento(sprint);
+            if (documentoCache is null)
                 continue;
 
-            CachePlanejamentoJira? cache = CarregadorCachePlanejamentoJiraIni.Ler(caminhoCache);
+            CachePlanejamentoJira? cache = CarregadorCachePlanejamentoJira.Ler(documentoCache);
             if (cache is null)
                 continue;
 
