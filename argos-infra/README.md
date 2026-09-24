@@ -88,9 +88,9 @@ flowchart TB
 
 | Componente | Tecnologia | Como está sendo usado | Por quê |
 |---|---|---|---|
-| **Cloud Billing Budget** | Orçamento (criado via `gcloud`, fora do Terraform) | Alerta configurado em `R$ 0,01` / `1%` → publica no tópico Pub/Sub | "Avise no primeiro centavo de gasto"; a criação do Budget depende de recursos que só existem após o `apply` e não entrou no escopo de automação |
+| **Cloud Billing Budget** | Orçamento (criado via `gcloud`, fora do Terraform) | Orçamento de `R$ 0,01` → publica o gasto do mês no tópico Pub/Sub várias vezes por dia | "Avise no primeiro centavo de gasto"; a criação do Budget depende de recursos que só existem após o `apply` e não entrou no escopo de automação |
 | **Pub/Sub `budget-notifications`** | Tópico | Único canal entre o Budget e a Function | É o padrão oficial do Google para *"disable billing with notifications"* |
-| **Cloud Function `billing-killswitch`** | Python 3.12, gen2, gatilho Eventarc | **Qualquer** mensagem no tópico → desabilita o billing do projeto `app` (`billing_account_name=""`) | Não inspeciona o conteúdo da mensagem (o tópico só recebe alerta desse budget); transforma "conta subindo" em "projeto suspenso" antes de virar fatura alta |
+| **Cloud Function `billing-killswitch`** | Python 3.12, gen2, gatilho Eventarc | Notificação com `costAmount > budgetAmount` → desabilita o billing do projeto `app` (`billing_account_name=""`); gasto dentro do orçamento ou mensagem que não é de budget → só registra no log | O Budget publica no tópico **várias vezes por dia**, mesmo abaixo do limite — sem comparar os valores, a primeira notificação de rotina já desligaria o projeto; transforma "conta subindo" em "projeto suspenso" antes de virar fatura alta |
 | **Cloud Storage (bucket de source)** | Bucket dedicado | Guarda o `.zip` do código da Function (empacotado pelo provider `archive`) | `google_cloudfunctions2_function` exige `storage_source` em GCS — não aceita código inline nem Git |
 | **Eventarc** | — | Entrega as mensagens Pub/Sub → Function gen2 | Obrigatório para *event trigger* de Function gen2 com SA customizada |
 | **Service Account `billing-killswitch`** | IAM Service Account | `roles/billing.admin` **na billing account** + `roles/browser` e `roles/billing.projectManager` **no projeto `app`** | Desligar o billing de outro projeto exige permissão nos dois lados: na billing account e no projeto (`resourcemanager.projects.get` para ler o billing, `deleteBillingAssignment` para desvinculá-lo). A function roda no `finops`, então não herda nada do `app` — sem os papéis no projeto, dá 403 |
@@ -469,11 +469,15 @@ dela.
 #### 3.7 Testar o killswitch
 
 ```powershell
-gcloud pubsub topics publish budget-notifications --project=SEU_PROJETO_FINOPS_ID --message="teste manual"
+gcloud pubsub topics publish budget-notifications --project=SEU_PROJETO_FINOPS_ID --message='{\"costAmount\": 1.0, \"budgetAmount\": 0.01}'
 ```
-Publica uma mensagem no tópico, como se o orçamento tivesse estourado — a
-Function **desliga o faturamento do projeto da aplicação** (ela não valida o
-conteúdo, só a chegada da mensagem). Este é o melhor momento para testar: o
+Publica no tópico uma notificação falsa de budget com gasto (`costAmount`)
+acima do orçamento (`budgetAmount`) — a Function **desliga o faturamento do
+projeto da aplicação**. As barras antes das aspas são necessárias no
+PowerShell 5.1 (sem elas as aspas internas somem e o JSON chega inválido);
+em bash, use `'{"costAmount": 1.0, "budgetAmount": 0.01}'`. Uma mensagem com
+`costAmount` menor ou igual ao `budgetAmount`, ou que não seja JSON, só é
+registrada no log, sem desligar nada. Este é o melhor momento para testar: o
 projeto da aplicação ainda está vazio, então não há nada no ar para
 derrubar.
 
@@ -483,7 +487,8 @@ derrubar.
 gcloud functions logs read billing-killswitch --gen2 --region=us-central1 --project=SEU_PROJETO_FINOPS_ID --limit=20
 ```
 Espere ~1 minuto depois do passo anterior. O esperado é
-`Billing desabilitado em ...`. Um `403 The caller does not have permission`
+`Gasto 1.0 acima do orçamento 0.01: billing desabilitado em ...`
+(`Mensagem ignorada` = o JSON chegou quebrado; confira as aspas do 3.7). Um `403 The caller does not have permission`
 em `get_project_billing_info` significa que faltam os papéis da SA **no
 projeto da aplicação** (`roles/browser` e `roles/billing.projectManager`,
 em `service_account.tf`): rode `terraform apply` de novo no finops, espere
@@ -516,8 +521,11 @@ gcloud billing budgets create `
   --notifications-rule-pubsub-topic=projects/SEU_PROJETO_FINOPS_ID/topics/budget-notifications
 ```
 Cria o alerta que alimenta o killswitch — fica fora do Terraform e vive na
-conta de faturamento, não no projeto. `0.01` com `percent=1.0` = "avise no
-primeiro centavo de gasto" (o mais perto de zero que o mecanismo aceita).
+conta de faturamento, não no projeto. Orçamento de `0.01` = "desligue no
+primeiro centavo de gasto" (o mais perto de zero que o mecanismo aceita). O
+`--threshold-rule` só controla os e-mails de alerta: o Pub/Sub recebe o gasto
+do mês **várias vezes por dia**, mesmo abaixo do limite, e é a Function que
+compara `costAmount` com `budgetAmount` antes de agir.
 Detalhes:
 
 - A **moeda** precisa ser a da conta de faturamento — se ela for em dólar,
@@ -986,7 +994,8 @@ gcloud functions logs read billing-killswitch --gen2 --region=us-central1 --proj
 ```
 Log da execução da function — confirma se rodou, se deu erro de permissão
 (sinal de que os papéis de Eventarc/IAM do `terraform/finops` precisam de
-ajuste), ou se completou (`Billing desabilitado em ...`).
+ajuste), se ignorou a mensagem (`dentro do orçamento`) ou se desligou o
+billing (`... billing desabilitado em ...`).
 
 ### IAM e service accounts
 
