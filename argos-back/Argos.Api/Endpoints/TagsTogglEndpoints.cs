@@ -14,12 +14,12 @@ public static class TagsTogglEndpoints
         {
             if (!forcarAtualizacao)
             {
-                CacheTagsToggl? cacheExistente = CarregadorCacheTagsTogglIni.Carregar(caminhos.TogglTagsCache);
+                CacheTagsToggl? cacheExistente = CarregadorCacheTagsToggl.Carregar(caminhos.TogglTagsCache);
                 if (cacheExistente is not null)
                     return Results.Ok(new TagsTogglResponse(cacheExistente.Tags, true, cacheExistente.AtualizadoEm));
             }
 
-            ConfiguracaoUsuarioToggl? administrador = CarregadorUsuariosTogglIni.Carregar(caminhos.Usuarios).FirstOrDefault(u => u.Administrador);
+            ConfiguracaoUsuarioToggl? administrador = CarregadorUsuariosToggl.Carregar(caminhos.Usuarios).FirstOrDefault(u => u.Administrador);
             if (administrador is null)
                 return Results.BadRequest("Nenhum usuário do Toggl está marcado como Administrador. Marque um usuário como Administrador para listar as tags.");
 
@@ -32,7 +32,7 @@ public static class TagsTogglEndpoints
             CacheTagsToggl cache = new() { Tags = resultado.Dados!, AtualizadoEm = atualizadoEm };
 
             IResult? erroPersistencia = TratamentoIo.Executar(
-                () => CarregadorCacheTagsTogglIni.Salvar(caminhos.TogglTagsCache, cache),
+                () => CarregadorCacheTagsToggl.Salvar(caminhos.TogglTagsCache, cache),
                 "Não foi possível salvar o cache de tags do Toggl.");
             if (erroPersistencia is not null)
                 return erroPersistencia;

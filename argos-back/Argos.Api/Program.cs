@@ -1,5 +1,6 @@
 using Argos.Api.Autenticacao;
 using Argos.Api.Endpoints;
+using Argos.Armazenamento;
 using Argos.Nucleo.Configuracao;
 using System.Text.Json.Serialization;
 
@@ -107,7 +108,13 @@ app.UseSwaggerUI(opcoes =>
         """;
 });
 
-CaminhosDados caminhos = new(AppContext.BaseDirectory);
+string? projetoFirestore = app.Configuration["ARMAZENAMENTO:PROJETO_FIRESTORE"];
+IArmazenamentoDados armazenamento = string.IsNullOrWhiteSpace(projetoFirestore)
+    ? new ArmazenamentoArquivos(Path.Combine(AppContext.BaseDirectory, "dados"))
+    : new ArmazenamentoFirestore(projetoFirestore.Trim());
+app.Logger.LogInformation("Armazenamento de dados: {Armazenamento}", armazenamento.Descricao);
+
+CaminhosDados caminhos = new(armazenamento);
 
 app.MapConfiguracaoEndpoints(caminhos);
 app.MapUsuariosTogglEndpoints(caminhos);
@@ -115,7 +122,7 @@ app.MapTagsTogglEndpoints(caminhos);
 app.MapConsultasEndpoints(caminhos);
 app.MapRelatorioEndpoints(caminhos);
 app.MapBuscaEndpoints(caminhos);
-app.MapDadosEndpoints(caminhos.PastaDados);
+app.MapDadosEndpoints(armazenamento);
 app.MapGantEndpoints(caminhos);
 app.MapSprintsEndpoints(caminhos);
 app.MapSprintCategoriasEndpoints(caminhos);

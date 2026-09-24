@@ -1,7 +1,3 @@
-data "google_project" "app" {
-  project_id = var.app_project_id
-}
-
 resource "google_service_account" "cloud_build_deployer" {
   project      = var.app_project_id
   account_id   = "cloud-build-deployer"
@@ -32,12 +28,29 @@ resource "google_project_iam_member" "deployer_log_writer" {
   member  = "serviceAccount:${google_service_account.cloud_build_deployer.email}"
 }
 
-# Também obrigatório: os serviços Cloud Run (cloud-run.tf) não têm service
-# account de runtime dedicada — rodam com a conta padrão do Compute Engine
-# (mais simples, sem duas SAs extras não pedidas). Para o deployer conseguir
-# fazer "gcloud run deploy", ele precisa "agir como" essa conta.
-resource "google_service_account_iam_member" "deployer_act_as_default_compute" {
-  service_account_id = "projects/${var.app_project_id}/serviceAccounts/${data.google_project.app.number}-compute@developer.gserviceaccount.com"
+# Identidade de runtime dos 2 serviços Cloud Run (cloud-run.tf). Dedicada em
+# vez da conta padrão do Compute Engine: essa só existe com a API do Compute
+# habilitada (que este projeto não usa) — referenciá-la sem a API falha com
+# "Service account ...-compute@developer.gserviceaccount.com does not exist".
+resource "google_service_account" "runtime" {
+  project      = var.app_project_id
+  account_id   = "argos-runtime"
+  display_name = "Runtime dos serviços Cloud Run do Argos"
+
+  depends_on = [google_project_service.app]
+}
+
+# Também obrigatório: para o deployer conseguir fazer "gcloud run deploy" de
+# um serviço que roda com a SA de runtime, ele precisa "agir como" ela.
+resource "google_service_account_iam_member" "deployer_act_as_runtime" {
+  service_account_id = google_service_account.runtime.name
   role               = "roles/iam.serviceAccountUser"
   member             = "serviceAccount:${google_service_account.cloud_build_deployer.email}"
+}
+
+# O backend grava os dados no Firestore (firestore.tf) com a SA de runtime.
+resource "google_project_iam_member" "runtime_firestore_user" {
+  project = var.app_project_id
+  role    = "roles/datastore.user"
+  member  = "serviceAccount:${google_service_account.runtime.email}"
 }

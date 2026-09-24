@@ -169,7 +169,7 @@ export function SprintLinhaTarefa({
                     </Box>
                 </Tooltip>
             </TableCell>
-            <TableCell align="center" sx={{ width: '1%', px: 0.5, whiteSpace: 'nowrap' }}>
+            <TableCell align="center" sx={{ width: '1%', px: 0.5, whiteSpace: 'nowrap', borderLeft: 1, borderColor: 'divider' }}>
                 {linha.previsaoLiberacao ? (
                     <Tooltip title={urgenciaPrevisao ? ROTULOS_URGENCIA_PREVISAO_LIBERACAO[urgenciaPrevisao] : 'Previsão de liberação'}>
                         <Box component="span" sx={{ color: corPrevisao ?? 'text.primary', fontWeight: corPrevisao ? 700 : undefined }}>

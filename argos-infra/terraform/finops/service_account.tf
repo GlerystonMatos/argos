@@ -33,6 +33,24 @@ resource "google_billing_account_iam_member" "killswitch_billing_admin" {
   member             = "serviceAccount:${google_service_account.killswitch.email}"
 }
 
+# O papel na billing account não basta: ler e alterar o billing de um projeto
+# também exige permissão NO PROJETO de app (a function roda em outro projeto,
+# então não herda nada dele). Sem isso, get_project_billing_info dá 403.
+# - roles/browser: resourcemanager.projects.get (getBillingInfo)
+# - roles/billing.projectManager: resourcemanager.projects.deleteBillingAssignment
+#   (updateBillingInfo com billing_account_name vazio)
+resource "google_project_iam_member" "killswitch_app_browser" {
+  project = var.app_project_id
+  role    = "roles/browser"
+  member  = "serviceAccount:${google_service_account.killswitch.email}"
+}
+
+resource "google_project_iam_member" "killswitch_app_billing_project_manager" {
+  project = var.app_project_id
+  role    = "roles/billing.projectManager"
+  member  = "serviceAccount:${google_service_account.killswitch.email}"
+}
+
 # Permissões para o Eventarc entregar as mensagens do tópico Pub/Sub à
 # function (exigidas para o event_trigger de uma Cloud Run Function 2ª
 # geração com service_account_email customizada).

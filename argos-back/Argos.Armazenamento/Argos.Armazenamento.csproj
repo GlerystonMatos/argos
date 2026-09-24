@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>Argos.Armazenamento</RootNamespace>
+    <AssemblyName>Argos.Armazenamento</AssemblyName>
+    <InvariantGlobalization>false</InvariantGlobalization>
+    <NeutralLanguage>pt-BR</NeutralLanguage>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
+    <WarningLevel>8</WarningLevel>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
+    <WarningLevel>8</WarningLevel>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Argos.Nucleo\Argos.Nucleo.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Google.Cloud.Firestore" Version="4.4.0" />
+  </ItemGroup>
+
+</Project>

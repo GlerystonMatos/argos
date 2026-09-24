@@ -8,7 +8,7 @@ Este repositório reúne três projetos independentes:
 
 ## [`argos-back/`](./argos-back/README.md) — C# / .NET 10
 
-Web API local (autenticação HTTP Basic opcional, documentada via Swagger) que expõe as funcionalidades da aplicação, além de uma biblioteca de núcleo compartilhada. Consulta o Toggl Track, faz cache do retorno em INI (`dados/`), agrupa por descrição/tag e permite busca por parte da descrição.
+Web API local (autenticação HTTP Basic opcional, documentada via Swagger) que expõe as funcionalidades da aplicação, além de uma biblioteca de núcleo compartilhada. Consulta o Toggl Track, guarda configuração e cache em JSON (arquivos em `dados/` ou [Firestore](./argos-infra/README.md#firestore--armazenamento-de-dados)), agrupa por descrição/tag e permite busca por parte da descrição.
 
 ➡️ **[Documentação completa do back-end](./argos-back/README.md)**
 
@@ -20,7 +20,7 @@ Frontend web que consome a Web API acima, com o fluxo completo (usuários e conf
 
 ## [`argos-infra/`](./argos-infra/README.md) — Terraform + GCP
 
-Infraestrutura de deploy em produção no Google Cloud (Cloud Run + Cloud Build + Artifact Registry), com premissa de custo zero — scale-to-zero, sem banco de dados, e um killswitch de billing isolado num projeto GCP separado para proteger contra estouro de orçamento.
+Infraestrutura de deploy em produção no Google Cloud (Cloud Run + Cloud Build + Artifact Registry), com premissa de custo zero — scale-to-zero, dados no Firestore (criado pelo próprio Terraform) dentro da cota gratuita, e um killswitch de billing isolado num projeto GCP separado para proteger contra estouro de orçamento.
 
 ➡️ **[Documentação completa da infra](./argos-infra/README.md)**
 
@@ -41,7 +41,7 @@ cd argos-front && npm install && npm run dev
 ```bash
 cp .env.example .env
 ```
-Preencha `KESTREL_CERT_PASSWORD` com a senha real do certificado em
+Preencha `KESTREL_CERTIFICATE_PASSWORD` com a senha real do certificado em
 `./certificado/certificado.pfx` — o `docker-compose.yml` lê essa senha do
 `.env` (gitignored), nunca em texto puro no arquivo versionado.
 
@@ -61,10 +61,11 @@ usuário não-root da imagem no início do container (`entrypoint.sh` da Api) �
 sem isso, gravações nela (ex.: restaurar backup pelo frontend) falhavam com
 `UnauthorizedAccessException`, já que o Docker cria o ponto de montagem como
 `root` por padrão. Ver [README do back-end](./argos-back/README.md#docker).
+No `docker-compose` a Api grava `dados/*.json` (sem Firestore).
 
 ## Segurança
 
-Os arquivos com token ou cache (`TogglUsuarios.ini`, `JiraConexao.ini`, `RelatorioData.ini`, `GantData.ini`, `SprintData_<sprint>.ini` — gerados na pasta `dados/` de cada executável) guardam API Tokens **criptografados** (chave em `CHAVE_CRIPTOGRAFIA`; sem ela, os tokens gravados não são decifrados e o cache deixa de bater) e nunca são versionados (`.gitignore`); os demais `.ini` de configuração, parâmetros e cache de listagens (`TogglConfiguracao.ini`, `TogglTags.ini`, `Jira*.ini`, `Sprints.ini`, `RelatorioParametros.ini`, `GantParametros.ini`, ...) ficam ao lado, sem token. A Web API não exige autenticação por padrão (uso local) — pode ser ligada (`AUTH__USUARIO`/`AUTH__SENHA`) para uso exposto, com tela de login própria no frontend em vez do popup nativo do navegador (ver `argos-back/README.md#segurança`, que também descreve a pasta `dados/`).
+Os documentos com token ou cache (`TogglUsuarios`, `JiraConexao`, `RelatorioData`, `GantData`, `SprintData_<sprint>` — no Firestore ou em `dados/*.json` ao lado do executável) guardam API Tokens **criptografados** (chave em `CHAVE_CRIPTOGRAFIA`; sem ela, os tokens gravados não são decifrados e o cache deixa de bater) e nunca são versionados (`.gitignore`); os demais documentos de configuração, parâmetros e cache de listagens (`TogglConfiguracao`, `TogglTags`, `Jira*`, `Sprints`, `RelatorioParametros`, `GantParametros`, ...) não têm token. A Web API não exige autenticação por padrão (uso local) — pode ser ligada (`AUTH__USUARIO`/`AUTH__SENHA`) para uso exposto, com tela de login própria no frontend em vez do popup nativo do navegador (ver `argos-back/README.md#segurança`; estrutura dos documentos em [`argos-infra/README.md`](./argos-infra/README.md#estrutura-de-dados)).
 
 Revisado (2026-09-06) o conteúdo rastreado pelo Git em busca de segredos antes deste repositório se tornar público: nenhuma chave de API, token do GitHub/GCP, credencial de service account ou dado real de usuário foi encontrado versionado. Dois pontos corrigidos: a senha do certificado HTTPS do `docker-compose.yml` estava em texto puro — movida para `.env` (gitignored, com `.env.example` como template); e os IDs reais dos dois projetos GCP foram substituídos por placeholders (`SEU_PROJETO_APP_ID`/`SEU_PROJETO_FINOPS_ID`) em todo `argos-infra/` e nos READMEs — nenhum identificador real de projeto GCP permanece versionado.
 

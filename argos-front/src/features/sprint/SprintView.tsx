@@ -462,7 +462,7 @@ export function SprintView({ chaveSprint, onVoltar, onPlanejar, quadroConfigurad
                                 </TableCell>
                                 <TableCell rowSpan={2} align="center" sx={{ py: 0.25, width: '1%', px: 0.5, whiteSpace: 'nowrap', verticalAlign: 'bottom' }}>Código</TableCell>
                                 <TableCell rowSpan={2} sx={{ py: 0.25, px: 0.8, verticalAlign: 'bottom' }}>Descrição</TableCell>
-                                <TableCell rowSpan={2} align="center" sx={{ py: 0.25, width: '1%', px: 0.5, whiteSpace: 'nowrap', verticalAlign: 'bottom' }}>Previsão</TableCell>
+                                <TableCell rowSpan={2} align="center" sx={{ py: 0.25, width: '1%', px: 0.5, whiteSpace: 'nowrap', verticalAlign: 'bottom', borderLeft: 1, borderColor: 'divider' }}>Previsão</TableCell>
                                 {GRUPOS.map((grupo) => (
                                     <TableCell
                                         key={grupo.rotulo}

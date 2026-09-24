@@ -16,22 +16,22 @@ public static class SprintPlanejamentoEndpoints
             if (string.IsNullOrWhiteSpace(chaveSprint))
                 return Results.BadRequest("A chave do sprint é obrigatória.");
 
-            DadosSprint? sprint = CarregadorSprintsIni.Carregar(caminhos.Sprints)
+            DadosSprint? sprint = CarregadorSprints.Carregar(caminhos.Sprints)
                 .FirstOrDefault(s => s.Chave == chaveSprint);
             if (sprint is null)
                 return Results.NotFound("Sprint não encontrado.");
 
-            string? caminhoCache = caminhos.CacheJiraPlanejamento(sprint);
+            DocumentoDados? caminhoCache = caminhos.CacheJiraPlanejamento(sprint);
             if (caminhoCache is null)
                 return Results.BadRequest("A chave do sprint é inválida para nome de arquivo de cache.");
 
-            CachePlanejamentoJira? cache = CarregadorCachePlanejamentoJiraIni.Ler(caminhoCache);
+            CachePlanejamentoJira? cache = CarregadorCachePlanejamentoJira.Ler(caminhoCache);
             if (cache is null)
                 return Results.Conflict("Não há planejamento salvo para esse sprint. Chame POST /api/sprint/planejamento/consultas primeiro.");
 
-            ConfiguracaoMapeamentoJiraToggl mapeamento = CarregadorConfiguracaoMapeamentoJiraTogglIni.Carregar(caminhos.JiraTogglMapeamento);
-            List<ConfiguracaoUsuarioToggl> usuariosToggl = CarregadorUsuariosTogglIni.Carregar(caminhos.Usuarios);
-            ConfiguracaoQuadroPlanejamento configuracaoQuadro = CarregadorConfiguracaoQuadroPlanejamentoIni.Carregar(caminhos.JiraQuadro);
+            ConfiguracaoMapeamentoJiraToggl mapeamento = CarregadorConfiguracaoMapeamentoJiraToggl.Carregar(caminhos.JiraTogglMapeamento);
+            List<ConfiguracaoUsuarioToggl> usuariosToggl = CarregadorUsuariosToggl.Carregar(caminhos.Usuarios);
+            ConfiguracaoQuadroPlanejamento configuracaoQuadro = CarregadorConfiguracaoQuadroPlanejamento.Carregar(caminhos.JiraQuadro);
 
             ResultadoPlanejamento resultado = ServicoPlanejamento.Montar(cache, mapeamento, usuariosToggl, configuracaoQuadro.ColunasOcultas);
             return Results.Ok(ParaDto(resultado));
@@ -43,16 +43,16 @@ public static class SprintPlanejamentoEndpoints
             if (string.IsNullOrWhiteSpace(request.ChaveSprint))
                 return Results.BadRequest("A chave do sprint é obrigatória.");
 
-            DadosSprint? sprint = CarregadorSprintsIni.Carregar(caminhos.Sprints)
+            DadosSprint? sprint = CarregadorSprints.Carregar(caminhos.Sprints)
                 .FirstOrDefault(s => s.Chave == request.ChaveSprint);
             if (sprint is null)
                 return Results.NotFound("Sprint não encontrado.");
 
-            string? caminhoCache = caminhos.CacheJiraPlanejamento(sprint);
+            DocumentoDados? caminhoCache = caminhos.CacheJiraPlanejamento(sprint);
             if (caminhoCache is null)
                 return Results.BadRequest("A chave do sprint é inválida para nome de arquivo de cache.");
 
-            CachePlanejamentoJira? cache = CarregadorCachePlanejamentoJiraIni.Ler(caminhoCache);
+            CachePlanejamentoJira? cache = CarregadorCachePlanejamentoJira.Ler(caminhoCache);
 
             if (sprint.Fechado)
             {
@@ -62,7 +62,7 @@ public static class SprintPlanejamentoEndpoints
                 return Results.Ok(ParaResposta(cache, veioDoCache: true));
             }
 
-            ConfiguracaoJira configuracao = CarregadorConfiguracaoJiraIni.Carregar(caminhos);
+            ConfiguracaoJira configuracao = CarregadorConfiguracaoJira.Carregar(caminhos);
             string? erroConfiguracao = ValidarConfiguracao(configuracao);
             if (erroConfiguracao is not null)
                 return Results.BadRequest(erroConfiguracao);
@@ -113,14 +113,14 @@ public static class SprintPlanejamentoEndpoints
                 DateTime.UtcNow.ToString("O"));
 
             IResult? erroPersistencia = TratamentoIo.Executar(
-                () => CarregadorCachePlanejamentoJiraIni.Salvar(caminhoCache, novoCache),
+                () => CarregadorCachePlanejamentoJira.Salvar(caminhoCache, novoCache),
                 "Não foi possível salvar o cache do planejamento do sprint.");
             if (erroPersistencia is not null)
                 return erroPersistencia;
 
             return Results.Ok(ParaResposta(novoCache, veioDoCache: false));
         })
-        .WithSummary("Consulta os cartões do sprint ativo do quadro de DEV no Jira (colunas, sprint ativo e cartões) e grava JiraPlanejamentoData_<chave>.ini; sem forçar reaproveita o cache do mesmo quadro. Sprint fechado nunca chama o Jira: devolve o cache salvo ou 409.");
+        .WithSummary("Consulta os cartões do sprint ativo do quadro de DEV no Jira (colunas, sprint ativo e cartões) e grava JiraPlanejamentoData_<chave>; sem forçar reaproveita o cache do mesmo quadro. Sprint fechado nunca chama o Jira: devolve o cache salvo ou 409.");
     }
 
     private static string? ValidarConfiguracao(ConfiguracaoJira configuracao)

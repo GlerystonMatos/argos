@@ -1,6 +1,6 @@
 namespace Argos.Nucleo.Configuracao;
 
-public static class CarregadorConfiguracaoResponsabilidadeSprintIni
+public static class CarregadorConfiguracaoResponsabilidadeSprint
 {
     public static ConfiguracaoResponsabilidadeSprint Padrao() => new()
     {
@@ -9,9 +9,9 @@ public static class CarregadorConfiguracaoResponsabilidadeSprintIni
         StatusQa = new List<string>()
     };
 
-    public static ConfiguracaoResponsabilidadeSprint Carregar(string caminhoStatus)
+    public static ConfiguracaoResponsabilidadeSprint Carregar(DocumentoDados documentoStatus)
     {
-        EstadoStatusJira estado = ArquivoStatusJiraIni.Carregar(caminhoStatus);
+        EstadoStatusJira estado = ArquivoStatusJira.Carregar(documentoStatus);
         return new ConfiguracaoResponsabilidadeSprint
         {
             StatusDev = estado.Dev,
@@ -20,9 +20,9 @@ public static class CarregadorConfiguracaoResponsabilidadeSprintIni
         };
     }
 
-    public static void Salvar(string caminhoStatus, ConfiguracaoResponsabilidadeSprint configuracao)
+    public static void Salvar(DocumentoDados documentoStatus, ConfiguracaoResponsabilidadeSprint configuracao)
     {
-        ArquivoStatusJiraIni.Atualizar(caminhoStatus, estado =>
+        ArquivoStatusJira.Atualizar(documentoStatus, estado =>
         {
             estado.Dev = configuracao.StatusDev;
             estado.Rev = configuracao.StatusRev;

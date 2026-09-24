@@ -6,16 +6,17 @@ que não devem ser revertidas sem motivo.
 
 **Nome: "Argos"** (Argos Panoptes + o cão de Odisseu; texto no `SobreDialog`), grafia
 **única** em tudo — marca, pastas `argos-*`, `Argos.*`, pacote npm, recursos de infra; nunca
-"Argus". Ex-`toggl-report`: sem compatibilidade com o nome antigo; o ambiente GCP antigo é
-destruído, não migrado (`argos-infra/README.md`, "Destruir o ambiente antigo").
+"Argus". Ex-`toggl-report`: sem compatibilidade com o nome antigo (nem no código nem na
+infra — o README da infra só descreve o ambiente atual: criar do zero e remover tudo).
 
 O repositório reúne **três projetos independentes**:
 
 - **`argos-back/`** — **.NET 10** (`Argos.slnx`): **`Argos.Nucleo`** (lógica de negócio e
-  INI, zero `PackageReference`) e **`Argos.Api`** (Minimal APIs, HTTP Basic opcional). O
+  contrato de armazenamento, zero `PackageReference`), **`Argos.Armazenamento`** (Firestore) e **`Argos.Api`**
+  (Minimal APIs, HTTP Basic opcional). O
   projeto console foi **removido por completo** — não recriar sem pedido explícito.
 - **`argos-front/`** — React 19 + TypeScript + MUI (Vite) que consome a Web API.
-- **`argos-infra/`** — Terraform (`app` + `finops`/killswitch) + Cloud Build no GCP.
+- **`argos-infra/`** — Terraform (`app` + Firestore, `finops`/killswitch) + Cloud Build no GCP.
 
 Aplicação: relatórios de tempo trabalhado da **API v9 do Toggl Track**, em três
 visualizações independentes — **Relatório**, **Gant** e **Sprint** — cada uma com parâmetros
@@ -26,7 +27,7 @@ módulo **Planejamento** (só Jira, sem Toggl).
 **Tudo em pt-BR**: interface, mensagens, identificadores, pastas, namespaces
 (`Argos.Nucleo.<Pasta>`, `Argos.Api.<Pasta>`). Em inglês só o
 inevitável (`Program`, `Main`, `Task`/`async`, `[JsonPropertyName]` com nomes da API do
-Toggl) e siglas (`Dto`, `Api`, `Ini`, `Http`, `Toggl`). **Sem comentários** em
+Toggl) e siglas (`Dto`, `Api`, `Http`, `Toggl`). **Sem comentários** em
 `Argos.Nucleo` (nomes claros no lugar de comentário; regras de domínio não óbvias
 ficam aqui, não inline). O frontend usa comentários com moderação.
 
@@ -41,22 +42,22 @@ ficam aqui, não inline). O frontend usa comentários com moderação.
   chamadas sem usuário específico, como listar tags reais). **Só um `Administrador` por
   vez**: `ServicoUsuariosToggl.DesmarcarOutrosAdministradores` desmarca o anterior no
   POST/PUT de `/api/usuarios-toggl`.
-- **Cache de consulta**: cada visualização tem seu cache `.ini` com o retorno **cru** da
+- **Cache de consulta**: cada visualização tem seu cache com o retorno **cru** da
   última consulta por usuário. Período+usuários iguais → reaproveita o cache em vez de
   chamar a API; agrupamento/cálculo sempre roda em runtime (o cache nunca guarda resultado
   processado). Também é reserva quando o rate limit (§2) é atingido. `ServicoConsulta`
   (núcleo) centraliza a decisão para as 3 visualizações — cada consumidor só decide
   **quando** chamar (`forcarConsultaApi`).
-- **Sem exportação para CSV**; API só com Swashbuckle de dependência.
+- **Sem exportação para CSV**.
 
 ---
 
 ## 2. `Argos.Nucleo`
 
 ```
-Configuracao/    modelos + carregadores/salvadores de todos os .ini, criptografia de token,
-                 parser INI compartilhado (AnalisadorIni), helpers (ServicoChaves, DiasUteis,
-                 Agrupamento.EhValido), CaminhosDados (instância: um caminho por arquivo)
+Configuracao/    IArmazenamentoDados + ArmazenamentoArquivos, carregadores de cada documento,
+                 criptografia, helpers (ServicoChaves, DiasUteis, Agrupamento.EhValido),
+                 CaminhosDados (um DocumentoDados por documento)
 Gant/            CelulaGant / LinhaGant / ResultadoGant / ServicoGant.Montar
 Sprint/          CabecalhoSprint / BlocoCategoriaSprint /
                  LinhaTarefaSprint / LinhaColaboradorSprint / ResultadoSprint / ServicoSprint
@@ -75,38 +76,40 @@ Planejamento/    ServicoPlanejamento.Montar,
                  ResultadoPlanejamento / CartaoPlanejamento / ColaboradorPlanejamento / PessoaPlanejamento
 ```
 
-### Modelo de dados (`dados/`, plana, INI relacional)
+### Armazenamento (`IArmazenamentoDados`, documentos JSON)
 
-Formato **único**, sem lógica de migração/compatibilidade no código: mudar nome ou formato
-de `.ini` = trocar a constante em `CaminhosDados` e ajustar/renomear o arquivo real à mão
-(o cache antigo só fica órfão; uma nova consulta recria).
+Documentos JSON (camelCase) por nome; esquema no README da infra (seção Firestore). **Só JSON**.
+`ARMAZENAMENTO__PROJETO_FIRESTORE` preenchida → Firestore (coleção `dados`, banco `(default)`: cota
+grátis = 1 banco/projeto); vazia → `dados/*.json`. Contrato **síncrono** de propósito (sync-over-async
+no adaptador); sem migração de formato no código. **Firestore** (`argos-back/Argos.Armazenamento`): caches Toggl divididos em `usuarios/{chave}/blocos/`
+(≤1000 registros; doc máx. 1 MiB), `Apagar` recursivo, erro → `IOException`; inteiro vai como `long`
+(ternário `long : double` já virou double) e `double` inteiro volta `N.0`.
 
-| Arquivo | Conteúdo |
+| Documento | Conteúdo |
 |---|---|
-| `TogglUsuarios.ini` | `[Usuario:<chave>]`; `TokenApi` criptografado (`enc:`) |
-| `TogglConfiguracao.ini` | `[Geral]` `Agrupamento`/`CorTag` — **fonte única** de agrupamento do Relatório/Gant/Sprint |
-| `TogglTags.ini` | `[Tag:<nome>]` `Categorias` (Dev,Rev,Qa) / `Detalhar` |
-| `JiraConexao.ini` | `[Conexao]` URL/e-mail/token (`enc:`) + `QuadroId`/`QuadroNome` (quadro de DEV) |
-| `JiraCampos.ini` | `[Campo:EstimativaDesenvolvimento\|EstimativaRevisao\|EstimativaTestes\|RevisadoPor\|AnalisadoPor\|Time]` `Id`/`Nome` |
-| `JiraStatus.ini` | `[Status:<nome>]` `Cor`/`Responsaveis`/`Final` (Concluido\|Ignorado) |
-| `JiraPrioridades.ini` | `[Prioridade:<nome>]` `Cor` |
-| `JiraColunas.ini`, `JiraTimes.ini`, `JiraEpicos.ini` | `[Coluna:<nome>]`/`[Time:<nome>]`/`[Epico:<chave>]` `Cor` (badges do Planejamento) |
-| `JiraQuadro.ini` | `[Geral]` `ColunasOcultas` (JSON; colunas do quadro que não aparecem no Planejamento) |
-| `JiraTogglMapeamento.ini` | `[Usuario:<displayName Jira>]` `ChaveToggl`/`Sigla`/`Cor` |
-| `Sprints.ini` | `[Sprint:<chave>]` Nome/HorasPorDia/MargemPercentual/DataInicio/DataFim/`Fechado` (default `False`) |
-| `RelatorioParametros.ini`, `GantParametros.ini` | `[Geral]` só `DataInicio`/`DataFim` |
-| `RelatorioData.ini`, `GantData.ini` | cache **global** por período (se sobrescreve ao trocar de período) |
-| `SprintData_<chave>.ini`, `JiraSprintData_<chave>.ini`, `JiraPlanejamentoData_<chave>.ini` | cache **um arquivo por sprint** (Toggl / Jira / Planejamento) |
-| `TogglTagsCache.ini`, `JiraStatusCache.ini`, `JiraPrioridadesCache.ini`, `JiraColunasCache.ini`, `JiraUsuariosCache.ini`, `JiraQuadrosCache.ini` | listagens reais cacheadas |
+| `TogglUsuarios` | usuários; token `enc:` |
+| `TogglConfiguracao` | `Agrupamento`/`CorTag` — **fonte única** do Relatório/Gant/Sprint |
+| `TogglTags` | por tag: `Categorias` (Dev,Rev,Qa) / `Detalhar` |
+| `JiraConexao` | URL/e-mail/token `enc:` + `QuadroId`/`QuadroNome` (DEV) |
+| `JiraCampos` | campos customizados + janela da Previsão |
+| `JiraStatus` | por status: `Cor`/`Responsaveis`/`Final` (Concluido\|Ignorado) |
+| `JiraPrioridades`, `JiraColunas`, `JiraTimes`, `JiraEpicos` | cor por nome (épico: por chave) |
+| `JiraQuadro` | `ColunasOcultas` do Planejamento |
+| `JiraTogglMapeamento` | por `displayName` do Jira: `ChaveToggl`/`Sigla`/`Cor` |
+| `Sprints` | Nome/HorasPorDia/MargemPercentual/DataInicio/DataFim/`Fechado` |
+| `RelatorioParametros`, `GantParametros` | só `DataInicio`/`DataFim` |
+| `RelatorioData`, `GantData` | cache **global** por período (sobrescreve ao trocar) |
+| `SprintData_`/`JiraSprintData_`/`JiraPlanejamentoData_<chave>` | cache **por sprint** |
+| `TogglTagsCache`, `Jira*Cache` | listagens reais |
 
-- **Cache por sprint**: `DELETE` do sprint apaga os três arquivos; o caminho só é montado a
-  partir de sprint **existente** em `Sprints.ini` + validação de caracteres da chave
+- **Cache por sprint**: `DELETE` do sprint apaga os três documentos; a referência só é montada a
+  partir de sprint **existente** em `Sprints` + validação de caracteres da chave
   (anti path-traversal) — `POST /api/sprint/consultas` com chave inexistente = 404,
   inválida = 400. Isolar por sprint é deliberado: consultar um não perde o cache de outro.
-- **`JiraStatus.ini`** é gravado por **3 endpoints** (`/api/sprint/responsabilidade`,
+- **`JiraStatus`** é gravado por **3 endpoints** (`/api/sprint/responsabilidade`,
   `/api/sprint/status-final`, `/api/jira/cores`) vindos de duas abas independentes do front
-  (Status dispara 2 PUTs em paralelo), então `ArquivoStatusJiraIni` faz read-modify-write
-  (merge por seção) sob **lock estático**. Os demais arquivos ainda não têm lock.
+  (Status dispara 2 PUTs em paralelo), então `ArquivoStatusJira` faz read-modify-write
+  (merge) sob **lock estático** (basta: Cloud Run máx. 1 instância); os demais sem lock.
 
 ### Regras de domínio importantes
 
@@ -135,7 +138,7 @@ de `.ini` = trocar a constante em `CaminhosDados` e ajustar/renomear o arquivo r
 ### Sprint — regras de negócio (decididas com o usuário)
 
 Terceira visualização, com **gestão** (CRUD de sprints) além do acompanhamento. O mapeamento
-**global** TAG→categoria Dev/Rev/Qa + `CorTag` vive em `TogglTags.ini`/`TogglConfiguracao.ini`
+**global** TAG→categoria Dev/Rev/Qa + `CorTag` vive em `TogglTags`/`TogglConfiguracao`
 (sem TAG default; sem `CorTag` o frontend usa `CORES.corIndisponivel` só na exibição).
 
 **Fechar/reabrir sprint** (`DadosSprint.Fechado`): "Fechar" no Acompanhamento
@@ -157,12 +160,12 @@ td         = floor(tempoTotal - margem)      # tempo por colaborador
 ct         = td * nº de colaboradores selecionados   # capacidade total
 ```
 Só a fórmula acima é válida (não é "70% do total" nem "70% de 70%"). `MargemPercentual`
-(`DadosSprint`, `Sprints.ini`) é **obrigatória no cadastro/edição do sprint**, mesmo padrão
+(`DadosSprint`, `Sprints`) é **obrigatória no cadastro/edição do sprint**, mesmo padrão
 de `HorasPorDia` (0 ≤ valor < 100; validada em `POST`/`PUT /api/sprints`); sprints salvos
 antes dessa mudança leem com fallback 30 (o valor fixo antigo) até serem editados.
 
 **Totalizadores do cabeçalho "Pendentes"/"Concluído"** (`CabecalhoSprint`): duas listas
-globais de status do Jira (`Final` = `Concluido`/`Ignorado` em `JiraStatus.ini`),
+globais de status do Jira (`Final` = `Concluido`/`Ignorado` em `JiraStatus`),
 **mutuamente exclusivas** (a UI esconde de uma o que está na outra; `PUT
 /api/sprint/status-final` devolve 400 se houver status nas duas). **Concluídas** = descrições
 distintas (nunca linha de tag) com `Situacao` em `StatusConcluido`; **Pendentes** =
@@ -197,14 +200,13 @@ Linhas de tag nunca contam.
   tooltip e no duplo clique (`SprintDialogDetalheLinha`).
 - **Prioridade/Situação/PRE vêm do Jira** — sem integração ou issue não encontrada,
   Prioridade e Situação = "Nenhuma" (cinza) e PRE = "–"; nunca editáveis nem persistidos.
-- **"Previsão" (Previsão de liberação)**: coluna logo após Descrição, mesma fonte
-  (`IssueJira.PrevisaoLiberacao`, campo customizado opcional) e mesmo destaque de cor por
-  proximidade do Planejamento — ver §2 Planejamento (regra e janela configurável
-  compartilhadas entre as duas telas, `utils/previsaoLiberacao.ts`).
+- **Previsão (de liberação)**: após Descrição (`IssueJira.PrevisaoLiberacao`, opcional),
+  cor igual ao Planejamento (§2, `utils/previsaoLiberacao.ts`). A grid zera `borderRight`
+  nas 6 primeiras colunas; a Previsão tem `borderLeft` próprio (como o início dos grupos).
 
 **Integração Jira (opcional, por sprint)**: `POST /api/sprint/consultas` extrai os códigos
 TEL de **todos** os registros crus do Toggl recém-buscados (independe do `Agrupamento`),
-busca em lote (`key in (...)`) e grava em `JiraSprintData_<chave>.ini`; falha do Jira nunca
+busca em lote (`key in (...)`) e grava em `JiraSprintData_<chave>`; falha do Jira nunca
 quebra a consulta do Toggl. `ServicoSprint.Montar` aplica só a linhas de descrição:
 `Prioridade`/`Situacao` e `PreHoras` de cada bloco DEV/REV/QA (campo customizado próprio por
 grupo; sem o campo, 0). "Estimativa original" (`timeoriginalestimate`) foi **removida por
@@ -217,7 +219,7 @@ completo** — não recriar. `IssueJira.UrlIssue` vira link no Código.
   de cada instância Jira). Ambos: só o `displayName` do "user picker".
 - **Fallback DEV/REV via mapeamento Jira↔Toggl** — regra crítica, já reimplementada mais
   de uma vez; **DEV vem de `Responsavel`, REV vem de `RevisadoPor`, nunca o contrário**.
-  `[Usuario:<displayName Jira>]` de `JiraTogglMapeamento.ini` guarda `ChaveToggl`/`Sigla`/
+  `[Usuario:<displayName Jira>]` de `JiraTogglMapeamento` guarda `ChaveToggl`/`Sigla`/
   `Cor` (suporta usuários **exclusivos do Jira**, sem conta Toggl). `AplicarFallbackJira`
   preenche DEV a partir de `Responsavel` e REV a partir de `RevisadoPor`, só quando **(a)**
   nenhuma linha daquela descrição já tem colaborador nesse bloco (nunca sobrescreve tempo
@@ -248,15 +250,15 @@ bloco combinado dedicado (dois `if` dariam falso positivo com "Inverter filtros"
 são independentes.
 
 **Prioridade/Situação — cores**: a busca de issues do Jira não expõe cor; vem de
-**mapeamento por nome exato** (`GET/PUT /api/jira/cores` → `Cor` em `JiraStatus.ini`/
-`JiraPrioridades.ini`), alimentado pela listagem **real** (`/api/jira/status`/`/prioridades`,
+**mapeamento por nome exato** (`GET/PUT /api/jira/cores` → `Cor` em `JiraStatus`/
+`JiraPrioridades`), alimentado pela listagem **real** (`/api/jira/status`/`/prioridades`,
 cacheadas). Sem cor: **Prioridade** usa paleta fixa por severidade (`Muito alta`…`Muito
 baixa`); **Status** vai ao cinza `corIndisponivel` — **não** usar `statusCategory` como
 fallback (o amarelo de "indeterminate" se confundia com cor configurada). Badge de tag usa
 `CorTag`; texto de badge em `text.primary`; `BadgeTexto` tem **largura fixa** com ellipsis +
 `Tooltip`.
 
-**Responsabilidade por status** (`Responsaveis` em `JiraStatus.ini`, status do Jira →
+**Responsabilidade por status** (`Responsaveis` em `JiraStatus`, status do Jira →
 DEV/REV/QA): `ServicoSprint.Montar` calcula `GrupoResponsavelStatus`/
 `SituacaoSemGrupoResponsavel` comparando `Situacao` às listas — (1) bate com um grupo →
 esse grupo "Pendente", os demais (com colaborador) "Concluído"; (2) responsabilidade
@@ -280,25 +282,25 @@ contagem por colaborador.
   também na listagem do Sprint. **Cor da Previsão** — fonte única `utils/previsaoLiberacao.ts`
   (célula **e** filtro Prazo): sem data = nada; ≤ hoje = vermelho (`corPendente`); até hoje +
   janela = laranja (`corPrazoProximo`); além = **verde** (`corConcluido`). Janela
-  `JanelaAlertaPrevisaoLiberacaoDias` (padrão 5) em `JiraCampos.ini`.
+  `JanelaAlertaPrevisaoLiberacaoDias` (padrão 5) em `JiraCampos`.
 - **Épico = `fields.parent`** (o campo Agile `epic` vem vazio — não usar); no backend
   `GrupoChave`/`GrupoResumo`. Badge com cor **configurada no app** por **chave** do épico
   (o título muda com o período).
 - **Coluna** = `status.id` ∈ `columnConfig.columns[].statuses[].id`; fora de todas →
-  "(sem coluna)" no fim. Na grid: badge com **nome completo** (cor em `JiraColunas.ini`), sem
+  "(sem coluna)" no fim. Na grid: badge com **nome completo** (cor em `JiraColunas`), sem
   abreviar nem popover. **Só o cabeçalho do card "Colaboradores"** usa sigla
   (`siglarColunas`, `abreviacaoColuna.ts`, reescrita 4x): remove artigos/preposições curtos,
   **5 letras da 1ª palavra** + (havendo mais) **4 da última**, meio descartado; separador "-"
   ou "/" se o nome tiver barra ("Pronto Para Produção" → "PRONT-PROD", "Pausado/Impedido" →
   "PAUSA/IMPE"); colisão: as seguintes ganham 1 letra por vez ("REVIS" → "REVISA"). Em
   runtime, `nowrap`. ANP/RES/REP na grid de cartões = mapa fixo com `Tooltip`.
-- **Colunas ocultas** (`JiraQuadro.ini`): `ServicoPlanejamento.Montar` **exclui por
+- **Colunas ocultas** (`JiraQuadro`): `ServicoPlanejamento.Montar` **exclui por
   completo** esses cartões (grid, totais, contagens) — não é "(sem coluna)".
 - **Contagem**: 1 por cartão se a pessoa é Responsável OU Revisado por ("Analisado por" não
   conta). Pessoa = mapeamento Jira↔Toggl contra **todos** os usuários do Toggl; exclusivo do
   Jira usa Sigla/Cor da entrada; sem mapeamento → iniciais (até 3), `mapeado=false`. Chave
   de filtro = `displayName`. Código/Descrição via `ServicoCodigoTel`.
-- **Cache `JiraPlanejamentoData_<chave>.ini`** (dado **cru**). Reutiliza, exceto: "Atualizar"
+- **Cache `JiraPlanejamentoData_<chave>`** (dado **cru**). Reutiliza, exceto: "Atualizar"
   da tela; "Forçar nova consulta em: Jira/Ambos" (**2º `POST` em segundo plano**, falha =
   aviso, "Toggl" sozinho não força; `atualizacoesPlanejamento.ts` guarda as promessas por
   sprint); sem cache válido (ausente, `QuadroId` diferente ou `SprintJira` nulo). **Sprint
@@ -313,28 +315,28 @@ contagem por colaborador.
 ## 3. `Argos.Api`
 
 Minimal APIs (não Controllers), CORS `AllowAny` (uso local), `JsonStringEnumConverter`
-global, Swagger em `/swagger`. Sobe em `http://localhost:5180`; `dados/` ao lado do executável.
+global, Swagger em `/swagger`. Sobe em `http://localhost:5180`; dados no Firestore ou em `dados/` ao lado do executável (§2).
 
 ### Endpoints principais
 
 | Método | Rota | Descrição |
 |---|---|---|
-| `GET/PUT` | `/api/configuracao` | agrupamento/tags (fonte única) + período do relatório (`RelatorioParametros.ini`; datas opcionais no PUT — omitidas preservam o salvo) |
+| `GET/PUT` | `/api/configuracao` | agrupamento/tags (fonte única) + período do relatório (`RelatorioParametros`; datas opcionais no PUT — omitidas preservam o salvo) |
 | `GET/POST/PUT/DELETE` | `/api/usuarios-toggl` | CRUD de usuários do Toggl (inclui `administrador`); `POST .../validar-token` |
-| `GET` | `/api/usuarios-toggl/tags?forcarAtualizacao=` | tags reais do workspace (token do `Administrador`), cache `TogglTagsCache.ini` |
-| `POST` | `/api/consultas` | cache-first via `ServicoConsulta`, grava `RelatorioData.ini` |
+| `GET` | `/api/usuarios-toggl/tags?forcarAtualizacao=` | tags reais do workspace (token do `Administrador`), cache `TogglTagsCache` |
+| `POST` | `/api/consultas` | cache-first via `ServicoConsulta`, grava `RelatorioData` |
 | `GET` | `/api/relatorio?dataInicio=&dataFim=` \| `/api/busca?termo=` | relatório agrupado / busca por descrição sobre o cache; 409 sem cache exato p/ o período |
-| `GET`/`POST` | `/api/dados/download` \| `/restaurar` | zip da raiz de `dados/` / restaura de um `.zip` (sobrescreve arquivos de mesmo nome) |
-| `GET/PUT` | `/api/gant/parametros` | período do Gant (`GantParametros.ini`, datas opcionais no PUT) + agrupamento/tags da fonte única |
-| `POST` | `/api/gant/consultas` | idem `/api/consultas`, grava `GantData.ini` |
+| `GET`/`POST` | `/api/dados/download` \| `/restaurar` | zip plano com um `<Documento>.json` por documento / restaura `.json` (sobrescreve só os presentes) |
+| `GET/PUT` | `/api/gant/parametros` | período do Gant (`GantParametros`, datas opcionais no PUT) + agrupamento/tags da fonte única |
+| `POST` | `/api/gant/consultas` | idem `/api/consultas`, grava `GantData` |
 | `GET` | `/api/gant?dataInicio=&dataFim=&termo=` | 409 sem cache; `termo` filtra antes de agrupar |
 | `GET/POST/PUT/DELETE` | `/api/sprints` | CRUD de sprints; `PUT` 409 se fechado; `DELETE` apaga os 3 caches do sprint |
 | `POST` | `/api/sprints/{chave}/fechar` \| `/reabrir` | trava/destrava edição e consulta |
 | `GET/PUT` | `/api/sprint/categorias` | mapeamento DEV/REV/QA + agrupamento + tags detalhadas + `CorTag` |
-| `GET/PUT` | `/api/sprint/responsabilidade` \| `/status-final` | status do Jira → DEV/REV/QA / Concluído\|Ignorado (`JiraStatus.ini`); `status-final` `PUT` 400 se um status estiver nas duas listas |
+| `GET/PUT` | `/api/sprint/responsabilidade` \| `/status-final` | status do Jira → DEV/REV/QA / Concluído\|Ignorado (`JiraStatus`); `status-final` `PUT` 400 se um status estiver nas duas listas |
 | `POST` | `/api/sprint/consultas` | cache-first via `ServicoConsulta`; `chaveSprint` obrigatório (404 inexistente, 400 inválida) isola os caches; `origem` (`nenhum`\|`toggl`\|`jira`\|`ambos`) escolhe o que forçar; fechado ignora `origem` e devolve 409 sem cache |
 | `GET` | `/api/sprint?chaveSprint=` | 409 sem cache p/ o período do sprint |
-| `GET/PUT` | `/api/jira/configuracao` | conexão + `quadroId`/`quadroNome` + campos (inclui `campoAnalisadoPor*`/`campoTime*`) (`JiraConexao.ini`/`JiraCampos.ini`); token sempre mascarado; `PUT` substitui tudo |
+| `GET/PUT` | `/api/jira/configuracao` | conexão + `quadroId`/`quadroNome` + campos (inclui `campoAnalisadoPor*`/`campoTime*`) (`JiraConexao`/`JiraCampos`); token sempre mascarado; `PUT` substitui tudo |
 | `POST` | `/api/jira/testar-conexao` \| `/campos` \| `/issues` | testa credenciais sem salvar (`GET /rest/api/3/myself`) / lista campos `custom: true` / busca em lote (`key in (...)`) com a config salva |
 | `GET` | `/api/jira/status?forcarAtualizacao=` \| `/prioridades?...` \| `/colunas?...` | nomes reais (`/rest/api/3/status`, `/priority`, colunas do quadro de DEV via `/rest/agile/1.0/board/{id}/configuration`), cacheados; `/colunas` 400 sem quadro configurado; `/times`/`/epicos` = caches do Planejamento (épicos só de sprints abertos; cor oculta é mantida) |
 | `GET/PUT` | `/api/jira/cores` | nome→cor de status, prioridade, coluna e time (badges do Sprint/Planejamento) |
@@ -430,7 +432,7 @@ Relatório vive em `features/relatorio/` (espelha `features/gant/`).
   "Inverter", "Limpar" — E entre filtros, OU dentro; resetam ao trocar de sprint.
   **Atualizar** pede confirmação. `SprintView` fica **montado e oculto** (preserva filtros).
   Sem quadro, "Planejar" abre diálogo com atalho para Jira → Conexão.
-- **Dados** = baixar/importar `.zip` + lista dos `.ini` (`features/dados/arquivosIni.ts`,
+- **Dados** = baixar/importar `.zip` + lista dos `.json` (`features/dados/arquivosDados.ts`,
   **manual**: §6). Sem usuário do Toggl, o 1º carregamento abre o diálogo de importação.
 - **Responsividade**: **a página nunca rola na horizontal** (só tabelas, em container com
   `overflow-x`); gutter `px: { xs: 1, sm: 2 }`; dialogs largos `fullScreen` abaixo de `sm`.
@@ -497,7 +499,7 @@ padrão do MUI. **`ALTURA_CONTROLE = 40`**: `size: 'small'` é default de `TextF
 
 **C# (núcleo/API)**: tipo explícito no lugar de `var`; sem comentários no núcleo; antes de
 duplicar uma checagem/loop, ver se há helper em `Configuracao/` (`ServicoChaves`,
-`DiasUteis`, `Agrupamento.EhValido`, `AnalisadorIni.Escrever`/`DividirLista`) ou
+`DiasUteis`, `Agrupamento.EhValido`) ou
 `Api/Endpoints/` (`ValidacaoDatas`, `TratamentoIo`); fluxos de erro esperados usam
 `ResultadoApiToggl<T>`, nunca exceptions; `end_of_line = crlf`, UTF-8 sem BOM;
 `dotnet build Argos.slnx` em **0 warnings**.
@@ -516,18 +518,17 @@ por pronta uma mudança.
   não `error CS...`) é isso, não bug de código.
 - **Rodar a API sem a `CHAVE_CRIPTOGRAFIA` correta (a do `.env`) é perigoso**: usa a chave
   embutida, não descriptografa os tokens `enc:`, o cache nunca "bate" e a consulta cai na
-  **rede real** do Toggl — e, se todos falharem, `RelatorioData.ini` é regravado só com
-  `[Geral]` (perde o cache). Em testes use **cópia** de `dados/`, a chave certa e proxy morto.
+  **rede real** do Toggl — e, se todos falharem, `RelatorioData` é regravado sem usuários
+  (perde o cache). Em testes use **cópia** dos dados, a chave certa e proxy morto.
   Mudar a chave embutida rotaciona a criptografia (tokens `enc:` gravados sem a env var
   precisam ser reinseridos).
-- **O zip de `/api/dados/download` inclui qualquer arquivo da raiz de `dados/`** (até um
-  `dados.zip` antigo) e a restauração não tem whitelist de nomes.
+- **A restauração grava qualquer `.json` da raiz do zip** (sem whitelist de nomes).
 - **Padrões do `.gitignore` para pastas ancorados com `/`** (`/dados/`, `/certificado/`) —
   sem a barra, batem em qualquer profundidade (já ignorou `src/features/dados/`).
-- Todo `.ini` novo com dado sensível (token) ou de cache precisa entrar no
-  `.gitignore`/`.dockerignore` (raiz + `argos-back/`).
-- **`features/dados/arquivosIni.ts` é lista manual** dos `.ini` (tipo, explicação, selo de
-  token): ao criar/renomear/remover um `.ini` em `CaminhosDados`, atualize-a junto.
+- **Build do back tem contexto `argos-back/`** (compose e Cloud Build); `ProjectReference` entre os
+  projetos sempre relativo à pasta irmã (`..\Argos.Nucleo\...` — caminho que sobe até a raiz quebra no container).
+- **`features/dados/arquivosDados.ts` é lista manual** dos documentos (tipo, explicação, selo de
+  token): ao criar/renomear/remover um documento em `CaminhosDados`, atualize-a junto.
 - **Medir overflow mobile** com iframe de 360–400px (`resize_window` do Chrome MCP é instável).
 - **"Gant" (um "t" só)** é a nomenclatura correta neste projeto, mesmo que pedidos digam "Gantt".
 - **Tags reais do Toggl** usam o token do `Administrador` em `GET /me`; `default_workspace_id`
@@ -535,7 +536,8 @@ por pronta uma mudança.
   /workspaces` (1º).
 - **Testar o Jira real sem tocar o Toggl**: rodar a API com `HTTPS_PROXY`/`HTTP_PROXY` numa
   porta morta e `NO_PROXY=.atlassian.net` (Jira direto, demais hosts falham rápido); nunca
-  escrever na `dados/` original (usar cópia).
+  escrever nos dados originais (usar cópia). **Firestore sem tocar produção**: emulador em Docker
+  (`google-cloud-cli:emulators`, receita no README da infra) + `FIRESTORE_EMULATOR_HOST`.
 - **Descriptografia do token fora do app (PowerShell) pode deixar BOM (U+FEFF)** no início;
   o app o remove — sem isso o Jira devolve 401 com token válido.
 - **A imagem do back (`aspnet:10.0-alpine`) roda em globalization-invariant**: cultura
@@ -543,7 +545,7 @@ por pronta uma mudança.
   `CultureNotFoundException` só no container (o Windows tem ICU; reproduzir com
   `DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1`). Decisão: só `InvariantCulture`, sem ICU;
   ordenar nomes com `ComparadorNomes` (`OrdinalIgnoreCase` não ignora acento). Testar com
-  `docker build`/`docker run` usando **cópia** de `dados/`, `-e CHAVE_CRIPTOGRAFIA`, proxy
+  `docker build`/`docker run` usando **cópia** dos dados, `-e CHAVE_CRIPTOGRAFIA`, proxy
   morto + `NO_PROXY=.atlassian.net`, porta ≠ 5003/5180.
 
 ---

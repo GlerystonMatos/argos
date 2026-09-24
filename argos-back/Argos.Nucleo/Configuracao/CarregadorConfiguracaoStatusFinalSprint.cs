@@ -1,6 +1,6 @@
 namespace Argos.Nucleo.Configuracao;
 
-public static class CarregadorConfiguracaoStatusFinalSprintIni
+public static class CarregadorConfiguracaoStatusFinalSprint
 {
     public static ConfiguracaoStatusFinalSprint Padrao() => new()
     {
@@ -8,9 +8,9 @@ public static class CarregadorConfiguracaoStatusFinalSprintIni
         StatusIgnorado = new List<string>()
     };
 
-    public static ConfiguracaoStatusFinalSprint Carregar(string caminhoStatus)
+    public static ConfiguracaoStatusFinalSprint Carregar(DocumentoDados documentoStatus)
     {
-        EstadoStatusJira estado = ArquivoStatusJiraIni.Carregar(caminhoStatus);
+        EstadoStatusJira estado = ArquivoStatusJira.Carregar(documentoStatus);
         return new ConfiguracaoStatusFinalSprint
         {
             StatusConcluido = estado.Concluido,
@@ -18,9 +18,9 @@ public static class CarregadorConfiguracaoStatusFinalSprintIni
         };
     }
 
-    public static void Salvar(string caminhoStatus, ConfiguracaoStatusFinalSprint configuracao)
+    public static void Salvar(DocumentoDados documentoStatus, ConfiguracaoStatusFinalSprint configuracao)
     {
-        ArquivoStatusJiraIni.Atualizar(caminhoStatus, estado =>
+        ArquivoStatusJira.Atualizar(documentoStatus, estado =>
         {
             estado.Concluido = configuracao.StatusConcluido;
             estado.Ignorado = configuracao.StatusIgnorado;

@@ -1,11 +1,11 @@
 namespace Argos.Nucleo.Configuracao;
 
-public static class CarregadorConfiguracaoGantIni
+public static class CarregadorConfiguracaoGant
 {
     public static ConfiguracaoGant Carregar(CaminhosDados caminhos)
     {
-        PeriodoSalvo periodo = CarregadorPeriodoIni.Carregar(caminhos.GantParametros);
-        ConfiguracaoCategoriasSprint toggl = CarregadorConfiguracaoCategoriasSprintIni.Carregar(caminhos);
+        PeriodoSalvo periodo = CarregadorPeriodo.Carregar(caminhos.GantParametros);
+        ConfiguracaoCategoriasSprint toggl = CarregadorConfiguracaoCategoriasSprint.Carregar(caminhos);
 
         return new ConfiguracaoGant
         {

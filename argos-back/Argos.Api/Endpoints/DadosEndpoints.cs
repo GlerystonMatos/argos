@@ -1,61 +1,74 @@
+using Argos.Nucleo.Configuracao;
 using System.IO.Compression;
+using System.Text;
+using System.Text.Json;
 
 namespace Argos.Api.Endpoints;
 
 public static class DadosEndpoints
 {
-    public static void MapDadosEndpoints(this WebApplication app, string pastaDados)
+    private const string ExtensaoJson = ".json";
+
+    private static readonly UTF8Encoding Codificacao = new(encoderShouldEmitUTF8Identifier: false);
+
+    public static void MapDadosEndpoints(this WebApplication app, IArmazenamentoDados armazenamento)
     {
         RouteGroupBuilder grupo = app.MapGroup("/api/dados").WithTags("Dados");
 
-        grupo.MapGet("/download", () => BaixarPastaDados(pastaDados))
-            .WithSummary("Baixa a pasta dados/ inteira (todos os .ini presentes), compactada em .zip");
+        grupo.MapGet("/download", () => BaixarPastaDados(armazenamento))
+            .WithSummary("Baixa todos os documentos de dados (um .json por documento), compactados em .zip");
 
-        grupo.MapPost("/restaurar", (IFormFile arquivo) => RestaurarPastaDados(arquivo, pastaDados))
-            .WithSummary("Restaura a pasta dados/ a partir de um .zip enviado (sobrescreve arquivos existentes)")
+        grupo.MapPost("/restaurar", (IFormFile arquivo) => RestaurarPastaDados(arquivo, armazenamento))
+            .WithSummary("Restaura os dados a partir de um .zip enviado (um .json por documento; sobrescreve documentos de mesmo nome)")
             .DisableAntiforgery();
     }
 
-    private static IResult BaixarPastaDados(string pastaDados)
+    private static IResult BaixarPastaDados(IArmazenamentoDados armazenamento)
     {
-        if (!Directory.Exists(pastaDados))
-        {
-            return Results.NotFound();
-        }
-
-        string[] arquivos = Directory.GetFiles(pastaDados);
-        if (arquivos.Length == 0)
-        {
-            return Results.NotFound();
-        }
-
         MemoryStream memoria = new();
-        using (ZipArchive zip = new(memoria, ZipArchiveMode.Create, leaveOpen: true))
+
+        try
         {
-            foreach (string arquivo in arquivos)
+            IReadOnlyList<string> nomes = armazenamento.Listar();
+            if (nomes.Count == 0)
             {
-                zip.CreateEntryFromFile(arquivo, Path.GetFileName(arquivo));
+                return Results.NotFound();
             }
+
+            using ZipArchive zip = new(memoria, ZipArchiveMode.Create, leaveOpen: true);
+            foreach (string nome in nomes)
+            {
+                string? conteudo = armazenamento.Ler(nome);
+                if (conteudo is null)
+                {
+                    continue;
+                }
+
+                ZipArchiveEntry entrada = zip.CreateEntry(nome + ExtensaoJson);
+                using Stream fluxo = entrada.Open();
+                fluxo.Write(Codificacao.GetBytes(conteudo));
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return Results.Problem("Não foi possível ler os dados.", statusCode: 500);
         }
 
         memoria.Position = 0;
         return Results.File(memoria, "application/zip", "dados.zip");
     }
 
-    private static IResult RestaurarPastaDados(IFormFile arquivo, string pastaDados)
+    private static IResult RestaurarPastaDados(IFormFile arquivo, IArmazenamentoDados armazenamento)
     {
         if (arquivo.Length == 0)
         {
             return Results.BadRequest("Arquivo vazio.");
         }
 
+        Dictionary<string, string> documentos = new(StringComparer.OrdinalIgnoreCase);
+
         try
         {
-            if (!Directory.Exists(pastaDados))
-            {
-                Directory.CreateDirectory(pastaDados);
-            }
-
             using Stream fluxo = arquivo.OpenReadStream();
             using ZipArchive zip = new(fluxo);
 
@@ -75,7 +88,22 @@ public static class DadosEndpoints
                 }
             }
 
-            zip.ExtractToDirectory(pastaDados, overwriteFiles: true);
+            foreach (ZipArchiveEntry entrada in zip.Entries.Where(e => Path.GetExtension(e.Name).Equals(ExtensaoJson, StringComparison.OrdinalIgnoreCase)))
+            {
+                string nome = Path.GetFileNameWithoutExtension(entrada.Name);
+                string json = LerTexto(entrada);
+                if (!EhObjetoJson(json))
+                {
+                    return Results.BadRequest($"O arquivo \"{entrada.Name}\" não é um JSON válido.");
+                }
+
+                documentos[nome] = json;
+            }
+
+            foreach ((string nome, string json) in documentos)
+            {
+                armazenamento.Gravar(nome, json);
+            }
         }
         catch (InvalidDataException)
         {
@@ -87,5 +115,24 @@ public static class DadosEndpoints
         }
 
         return Results.NoContent();
+    }
+
+    private static string LerTexto(ZipArchiveEntry entrada)
+    {
+        using StreamReader leitor = new(entrada.Open(), Codificacao, detectEncodingFromByteOrderMarks: true);
+        return leitor.ReadToEnd();
+    }
+
+    private static bool EhObjetoJson(string json)
+    {
+        try
+        {
+            using JsonDocument documento = JsonDocument.Parse(json);
+            return documento.RootElement.ValueKind == JsonValueKind.Object;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
     }
 }

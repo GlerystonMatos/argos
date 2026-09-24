@@ -21,6 +21,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Argos.Nucleo\Argos.Nucleo.csproj" />
+    <ProjectReference Include="..\Argos.Armazenamento\Argos.Armazenamento.csproj" />
   </ItemGroup>
 
   <ItemGroup>

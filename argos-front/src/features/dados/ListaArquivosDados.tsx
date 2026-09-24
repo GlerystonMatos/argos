@@ -1,21 +1,21 @@
 import type { ReactNode } from 'react';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import { Box, Chip, Stack, Divider, Typography } from '@mui/material';
-import { ARQUIVOS_INI, GRUPOS_TIPO_ARQUIVO_INI } from './arquivosIni';
+import { ARQUIVOS_DADOS, GRUPOS_TIPO_ARQUIVO_DADOS } from './arquivosDados';
 
-export function ListaArquivosIni(): ReactNode {
+export function ListaArquivosDados(): ReactNode {
     return (
         <Stack spacing={1.5}>
-            <Typography variant="subtitle2">Arquivos .ini que a aplicação pode criar</Typography>
+            <Typography variant="subtitle2">Arquivos .json que a aplicação pode criar</Typography>
 
             <Typography variant="body2" color="text.secondary">
-                A lista é informativa: são os nomes reais usados na pasta <code>dados/</code>, criados sob demanda na
+                A lista é informativa: são os nomes reais dos documentos (pasta <code>dados/</code> ou Firestore), criados sob demanda na
                 primeira vez que a ação correspondente é executada. Importar um <code>.zip</code> substitui os arquivos
                 de mesmo nome.
             </Typography>
 
-            {GRUPOS_TIPO_ARQUIVO_INI.map((grupo) => {
-                const arquivos = ARQUIVOS_INI.filter((arquivo) => arquivo.tipo === grupo.tipo);
+            {GRUPOS_TIPO_ARQUIVO_DADOS.map((grupo) => {
+                const arquivos = ARQUIVOS_DADOS.filter((arquivo) => arquivo.tipo === grupo.tipo);
                 return (
                     <Stack key={grupo.tipo} spacing={0.5}>
                         <Typography variant="subtitle2">
