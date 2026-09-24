@@ -1,6 +1,7 @@
 import { CORES } from '../../theme';
 import type { ReactNode } from 'react';
 import { formatarData } from '../../utils/datas';
+import { LinkJira } from '../../components/LinkJira';
 import { formatarDuracao } from '../../utils/duracao';
 import { BadgeSigla } from '../../components/BadgeSigla';
 import { BadgeTexto, EtiquetaFixa } from '../sprint/SprintBadges';
@@ -113,18 +114,7 @@ export function PlanejamentoLinhaCartao({ cartao, larguraDescricao, coresStatus,
                     largura={LARGURA_BADGE} />
             </TableCell>
             <TableCell align="center" sx={{ width: '1%', px: 0.5, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
-                {cartao.urlIssue ? (
-                    <Box
-                        component="a"
-                        href={cartao.urlIssue}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        sx={{ color: 'primary.main', textDecoration: 'underline' }}>
-                        {cartao.codigo}
-                    </Box>
-                ) : (
-                    cartao.codigo
-                )}
+                <LinkJira url={cartao.urlIssue}>{cartao.codigo}</LinkJira>
             </TableCell>
             <TableCell
                 sx={{

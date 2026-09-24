@@ -33,6 +33,7 @@ import {
     Button,
     Tooltip,
     Checkbox,
+    TextField,
     Typography,
     FormControlLabel,
 } from '@mui/material';
@@ -53,6 +54,7 @@ export function PlanejamentoView({ sprint, onVoltar, janelaAlertaPrevisaoLiberac
     const [carregandoCores, setCarregandoCores] = useState(true);
     const [filtrosAbertos, setFiltrosAbertos] = useState(false);
     const [filtros, setFiltros] = useState<FiltrosPlanejamento>(FILTROS_VAZIOS);
+    const [termoBusca, setTermoBusca] = useState('');
     const [inverterFiltros, setInverterFiltros] = useState(false);
     const [confirmandoAtualizar, setConfirmandoAtualizar] = useState(false);
 
@@ -69,11 +71,12 @@ export function PlanejamentoView({ sprint, onVoltar, janelaAlertaPrevisaoLiberac
             .finally(() => setCarregandoCores(false));
     }, []);
 
-    const carregandoTudo = carregando || carregandoCores;
+    const carregandoTudo = carregando || carregandoCores || atualizando;
     const pronto = !carregandoTudo && resultado !== null;
 
     useEffect(() => {
         setFiltros(FILTROS_VAZIOS);
+        setTermoBusca('');
         setInverterFiltros(false);
     }, [sprint.chave]);
 
@@ -97,14 +100,15 @@ export function PlanejamentoView({ sprint, onVoltar, janelaAlertaPrevisaoLiberac
     );
 
     const cartoesFiltrados = useMemo(
-        () => filtrarCartoes(resultado?.cartoes ?? [], filtros, inverterFiltros, janelaAlertaPrevisaoLiberacaoDias),
-        [resultado, filtros, inverterFiltros, janelaAlertaPrevisaoLiberacaoDias],
+        () => filtrarCartoes(resultado?.cartoes ?? [], filtros, termoBusca, inverterFiltros, janelaAlertaPrevisaoLiberacaoDias),
+        [resultado, filtros, termoBusca, inverterFiltros, janelaAlertaPrevisaoLiberacaoDias],
     );
 
-    const filtrosVazios = semFiltros(filtros) && !inverterFiltros;
+    const filtrosVazios = semFiltros(filtros) && termoBusca.trim() === '' && !inverterFiltros;
 
     function limparFiltros(): void {
         setFiltros(FILTROS_VAZIOS);
+        setTermoBusca('');
         setInverterFiltros(false);
     }
 
@@ -137,6 +141,12 @@ export function PlanejamentoView({ sprint, onVoltar, janelaAlertaPrevisaoLiberac
                 <Stack
                     direction={{ xs: 'column', sm: 'row' }}
                     sx={{ flexWrap: { sm: 'wrap' }, gap: 1, alignItems: { xs: 'stretch', sm: 'flex-start' }, mt: '0.5rem !important', mb: '0.5rem !important' }}>
+                    <TextField
+                        label="Filtrar por código ou descrição"
+                        value={termoBusca}
+                        onChange={(e) => setTermoBusca(e.target.value)}
+                        size="small"
+                        sx={{ minWidth: { xs: 0, sm: 200 }, flex: 1 }} />
                     <FiltroMultiSelecao
                         label="Coluna"
                         placeholder="Todas"

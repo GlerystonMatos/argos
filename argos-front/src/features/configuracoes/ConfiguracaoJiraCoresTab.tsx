@@ -7,10 +7,11 @@ import { useRef, forwardRef, useImperativeHandle } from 'react';
 
 interface ConfiguracaoJiraCoresTabProps {
     onAlterado: () => void;
+    salvando?: boolean;
 }
 
 export const ConfiguracaoJiraCoresTab = forwardRef<AbaConfiguracoesHandle, ConfiguracaoJiraCoresTabProps>(
-    function ConfiguracaoJiraCoresTab({ onAlterado }, ref): ReactNode {
+    function ConfiguracaoJiraCoresTab({ onAlterado, salvando = false }, ref): ReactNode {
         const { notificarSucesso } = useNotificacao();
         const refPainelCores = useRef<CoresJiraPanelHandle>(null);
 
@@ -22,6 +23,6 @@ export const ConfiguracaoJiraCoresTab = forwardRef<AbaConfiguracoesHandle, Confi
 
         useImperativeHandle(ref, () => ({ salvar: salvarAba }));
 
-        return <CoresJiraPanel ref={refPainelCores} onAlterado={onAlterado} />;
+        return <CoresJiraPanel ref={refPainelCores} onAlterado={onAlterado} salvando={salvando} />;
     },
 );

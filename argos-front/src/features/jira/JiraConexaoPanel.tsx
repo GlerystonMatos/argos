@@ -6,6 +6,7 @@ import { useConfiguracaoJira } from './useConfiguracaoJira';
 import { useNotificacao } from '../../hooks/useNotificacao';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import { SelectQuadroJira } from '../../components/SelectQuadroJira';
+import { EsqueletoCarregando } from '../../components/EsqueletoCarregando';
 import { useEffect, useState, forwardRef, useImperativeHandle } from 'react';
 import { BotaoComCarregamento } from '../../components/BotaoComCarregamento';
 import { Alert, Link, Stack, TextField, InputAdornment } from '@mui/material';
@@ -23,7 +24,7 @@ export interface JiraConexaoPanelHandle {
 
 export const JiraConexaoPanel = forwardRef<JiraConexaoPanelHandle, JiraConexaoPanelProps>(
     function JiraConexaoPanel({ onValidoChange, onSujoChange }, ref): ReactNode {
-        const { carregando, carregar, salvarParcial, testarConexao } = useConfiguracaoJira();
+        const { carregando, carregado, carregar, salvarParcial, testarConexao } = useConfiguracaoJira();
         const { notificarErro, notificarSucesso } = useNotificacao();
 
         const [urlDominio, setUrlDominio] = useState('');
@@ -38,6 +39,7 @@ export const JiraConexaoPanel = forwardRef<JiraConexaoPanelHandle, JiraConexaoPa
         const [versaoConexao, setVersaoConexao] = useState(0);
 
         const [testando, setTestando] = useState(false);
+        const [salvando, setSalvando] = useState(false);
         const [resultadoTeste, setResultadoTeste] = useState<{ sucesso: boolean; mensagem: string | null } | null>(null);
 
         useEffect(() => {
@@ -68,6 +70,7 @@ export const JiraConexaoPanel = forwardRef<JiraConexaoPanelHandle, JiraConexaoPa
         }
 
         async function salvar(): Promise<boolean> {
+            setSalvando(true);
             try {
                 const atualizado = await salvarParcial({
                     urlDominio: urlDominio.trim(),
@@ -87,6 +90,8 @@ export const JiraConexaoPanel = forwardRef<JiraConexaoPanelHandle, JiraConexaoPa
             } catch (erro) {
                 notificarErro(erro, 'Não foi possível salvar a conexão com o Jira');
                 return false;
+            } finally {
+                setSalvando(false);
             }
         }
 
@@ -122,6 +127,8 @@ export const JiraConexaoPanel = forwardRef<JiraConexaoPanelHandle, JiraConexaoPa
             setAlterado(true);
         }
 
+        const bloqueado = carregando || salvando;
+
         const linkTokens = (
             <>
                 Gerado em{' '}
@@ -130,6 +137,8 @@ export const JiraConexaoPanel = forwardRef<JiraConexaoPanelHandle, JiraConexaoPa
                 </Link>
             </>
         );
+
+        if (!carregado) return <EsqueletoCarregando />;
 
         return (
             <Stack spacing={3} sx={{ mt: '0.5rem !important' }}>
@@ -150,7 +159,7 @@ export const JiraConexaoPanel = forwardRef<JiraConexaoPanelHandle, JiraConexaoPa
                             ),
                         },
                     }}
-                    disabled={carregando}
+                    disabled={bloqueado}
                     fullWidth />
 
                 <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mt: '1rem !important' }}>
@@ -170,7 +179,7 @@ export const JiraConexaoPanel = forwardRef<JiraConexaoPanelHandle, JiraConexaoPa
                                 ),
                             },
                         }}
-                        disabled={carregando}
+                        disabled={bloqueado}
                         fullWidth />
                     <TextField
                         required={!tokenJaSalvo}
@@ -190,7 +199,7 @@ export const JiraConexaoPanel = forwardRef<JiraConexaoPanelHandle, JiraConexaoPa
                                 ),
                             },
                         }}
-                        disabled={carregando}
+                        disabled={bloqueado}
                         fullWidth />
                 </Stack>
 
@@ -203,13 +212,13 @@ export const JiraConexaoPanel = forwardRef<JiraConexaoPanelHandle, JiraConexaoPa
                     error={alterado && !quadroPreenchido}
                     helperText={alterado && !quadroPreenchido ? 'Selecione o quadro de DEV.' : undefined}
                     ajuda="Quadro Scrum do Jira usado pelo Planejamento (cartões do sprint ativo). A lista usa a conexão já salva: salve a conexão antes de listar os quadros."
-                    disabled={carregando} />
+                    disabled={bloqueado} />
 
                 <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mt: '0.8rem !important' }}>
                     <BotaoComCarregamento
                         variant="outlined"
                         carregando={testando}
-                        disabled={!podeTestar || carregando}
+                        disabled={!podeTestar || bloqueado}
                         onClick={() => void testar()}>
                         Testar conexão
                     </BotaoComCarregamento>

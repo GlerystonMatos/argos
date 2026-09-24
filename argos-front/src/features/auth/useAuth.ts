@@ -2,14 +2,35 @@ import { ErroApi } from '../../api/http';
 import { useCallback, useEffect, useState } from 'react';
 import { listarUsuarios } from '../../api/usuariosTogglApi';
 import { obterCredencial, definirCredencial, limparCredencial } from '../../api/credencial';
+import { esquecerLogin, lembrarLogin, recuperarLoginLembrado } from '../../api/loginLembrado';
 
 interface ResultadoUseAuth {
     autenticado: boolean;
     verificando: boolean;
     entrando: boolean;
     erro: string | null;
-    entrar: (usuario: string, senha: string) => Promise<void>;
+    entrar: (usuario: string, senha: string, lembrar: boolean) => Promise<void>;
     sair: () => void;
+}
+
+async function verificarAcessoInicial(): Promise<boolean> {
+    const lembrada = await recuperarLoginLembrado();
+    if (lembrada !== null) {
+        definirCredencial(lembrada);
+        try {
+            await listarUsuarios();
+            return true;
+        } catch {
+            limparCredencial();
+            return false;
+        }
+    }
+    try {
+        await listarUsuarios();
+        return true;
+    } catch {
+        return false;
+    }
 }
 
 export function useAuth(): ResultadoUseAuth {
@@ -23,26 +44,28 @@ export function useAuth(): ResultadoUseAuth {
             return;
         }
 
-        listarUsuarios()
-            .then(() => setAutenticado(true))
-            .catch(() => setAutenticado(false))
+        verificarAcessoInicial()
+            .then((ok) => setAutenticado(ok))
             .finally(() => setVerificando(false));
     }, []);
 
     useEffect(() => {
         function aoPerderAutenticacao(): void {
+            void esquecerLogin();
             setAutenticado(false);
         }
         window.addEventListener('auth:necessaria', aoPerderAutenticacao);
         return () => window.removeEventListener('auth:necessaria', aoPerderAutenticacao);
     }, []);
 
-    const entrar = useCallback(async (usuario: string, senha: string): Promise<void> => {
+    const entrar = useCallback(async (usuario: string, senha: string, lembrar: boolean): Promise<void> => {
         setEntrando(true);
         setErro(null);
-        definirCredencial(btoa(`${usuario}:${senha}`));
+        const credencial = btoa(`${usuario}:${senha}`);
+        definirCredencial(credencial);
         try {
             await listarUsuarios();
+            await (lembrar ? lembrarLogin(credencial) : esquecerLogin());
             setAutenticado(true);
         } catch (erroCapturado) {
             limparCredencial();
@@ -57,6 +80,7 @@ export function useAuth(): ResultadoUseAuth {
     }, []);
 
     const sair = useCallback(() => {
+        void esquecerLogin();
         limparCredencial();
         setAutenticado(false);
     }, []);

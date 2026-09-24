@@ -1,16 +1,17 @@
 import type { ReactNode } from 'react';
 import { useSprints } from './useSprints';
-import { useEffect, useState } from 'react';
 import AddIcon from '@mui/icons-material/Add';
 import type { Sprint } from '../../api/tipos';
 import EditIcon from '@mui/icons-material/Edit';
 import { formatarPeriodo } from '../../utils/datas';
 import DeleteIcon from '@mui/icons-material/Delete';
+import { useEffect, useMemo, useState } from 'react';
 import { SprintFormDialog } from './SprintFormDialog';
 import LockOpenIcon from '@mui/icons-material/LockOpen';
 import { useNotificacao } from '../../hooks/useNotificacao';
 import { CabecalhoView } from '../../components/CabecalhoView';
 import { DialogoConfirmacao } from '../../components/DialogoConfirmacao';
+import { EsqueletoCarregando } from '../../components/EsqueletoCarregando';
 import { BotaoComCarregamento } from '../../components/BotaoComCarregamento';
 
 import {
@@ -41,7 +42,16 @@ export function SprintsPanel({
     semUsuarios = false,
 }: SprintsPanelProps): ReactNode {
     const { notificarErro, notificarSucesso } = useNotificacao();
-    const { sprints, carregando, carregar, remover, reabrir } = useSprints();
+    const { sprints, carregando, carregado, carregar, remover, reabrir } = useSprints();
+
+    // Mais recentes primeiro: data fim decrescente (ISO yyyy-MM-dd ordena como texto); empate por início e nome.
+    const sprintsOrdenados = useMemo(
+        () => [...sprints].sort((a, b) =>
+            b.dataFim.localeCompare(a.dataFim)
+            || b.dataInicio.localeCompare(a.dataInicio)
+            || a.nome.localeCompare(b.nome, 'pt-BR')),
+        [sprints],
+    );
 
     const [dialogoAberto, setDialogoAberto] = useState(false);
     const [sprintEmEdicao, setSprintEmEdicao] = useState<Sprint | null>(null);
@@ -110,71 +120,77 @@ export function SprintsPanel({
                         </BotaoComCarregamento>
                     </CabecalhoView>
 
-                    {sprints.length === 0 && !carregando ? (
-                        <Alert severity="info">
-                            Nenhum sprint cadastrado ainda. Cadastre um sprint para poder acompanhar a capacidade.
-                        </Alert>
-                    ) : undefined}
+                    {!carregado ? (
+                        <EsqueletoCarregando />
+                    ) : (
+                        <>
+                            {sprints.length === 0 && !carregando ? (
+                                <Alert severity="info">
+                                    Nenhum sprint cadastrado ainda. Cadastre um sprint para poder acompanhar a capacidade.
+                                </Alert>
+                            ) : undefined}
 
-                    <List disablePadding>
-                        {sprints.map((sprint) => (
-                            <ListItem
-                                key={sprint.chave}
-                                divider
-                                disablePadding
-                                secondaryAction={
-                                    <Stack direction="row" spacing={0.5}>
-                                        {sprint.fechado ? (
-                                            <IconButton
-                                                edge="end"
-                                                onClick={() => setSprintParaReabrir(sprint)}
-                                                disabled={reabrindoChave === sprint.chave}
-                                                aria-label="reabrir">
-                                                <LockOpenIcon fontSize="small" />
-                                            </IconButton>
-                                        ) : undefined}
-                                        <IconButton edge="end" onClick={() => abrirParaEditar(sprint)} aria-label="editar">
-                                            <EditIcon fontSize="small" />
-                                        </IconButton>
-                                        <IconButton
-                                            edge="end"
-                                            onClick={() => setSprintParaExcluir(sprint)}
-                                            disabled={removendoChave === sprint.chave}
-                                            aria-label="remover">
-                                            <DeleteIcon fontSize="small" />
-                                        </IconButton>
-                                    </Stack>
-                                }>
-                                <ListItemButton
-                                    selected={sprintSelecionadoChave === sprint.chave}
-                                    onClick={() => onSelecionar(sprint)}
-                                    sx={{ '&&': { pr: sprint.fechado ? 16 : 11 } }}>
-                                    <Radio
-                                        edge="start"
-                                        checked={sprintSelecionadoChave === sprint.chave}
-                                        tabIndex={-1}
-                                        aria-label="Selecionar sprint" />
-                                    <ListItemText
-                                        primary={
-                                            <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-                                                <span>{sprint.nome}</span>
-                                                {sprint.fechado ? <Chip label="Fechado" size="small" /> : undefined}
+                            <List disablePadding>
+                                {sprintsOrdenados.map((sprint) => (
+                                    <ListItem
+                                        key={sprint.chave}
+                                        divider
+                                        disablePadding
+                                        secondaryAction={
+                                            <Stack direction="row" spacing={0.5}>
+                                                {sprint.fechado ? (
+                                                    <IconButton
+                                                        edge="end"
+                                                        onClick={() => setSprintParaReabrir(sprint)}
+                                                        disabled={reabrindoChave === sprint.chave}
+                                                        aria-label="reabrir">
+                                                        <LockOpenIcon fontSize="small" />
+                                                    </IconButton>
+                                                ) : undefined}
+                                                <IconButton edge="end" onClick={() => abrirParaEditar(sprint)} aria-label="editar">
+                                                    <EditIcon fontSize="small" />
+                                                </IconButton>
+                                                <IconButton
+                                                    edge="end"
+                                                    onClick={() => setSprintParaExcluir(sprint)}
+                                                    disabled={removendoChave === sprint.chave}
+                                                    aria-label="remover">
+                                                    <DeleteIcon fontSize="small" />
+                                                </IconButton>
                                             </Stack>
-                                        }
-                                        secondary={`${formatarPeriodo(sprint.dataInicio, sprint.dataFim)} · ${sprint.horasPorDia}h/dia · margem ${sprint.margemPercentual}%`} />
-                                </ListItemButton>
-                            </ListItem>
-                        ))}
-                    </List>
+                                        }>
+                                        <ListItemButton
+                                            selected={sprintSelecionadoChave === sprint.chave}
+                                            onClick={() => onSelecionar(sprint)}
+                                            sx={{ '&&': { pr: sprint.fechado ? 16 : 11 } }}>
+                                            <Radio
+                                                edge="start"
+                                                checked={sprintSelecionadoChave === sprint.chave}
+                                                tabIndex={-1}
+                                                aria-label="Selecionar sprint" />
+                                            <ListItemText
+                                                primary={
+                                                    <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                                                        <span>{sprint.nome}</span>
+                                                        {sprint.fechado ? <Chip label="Fechado" size="small" /> : undefined}
+                                                    </Stack>
+                                                }
+                                                secondary={`${formatarPeriodo(sprint.dataInicio, sprint.dataFim)} · ${sprint.horasPorDia}h/dia · margem ${sprint.margemPercentual}%`} />
+                                        </ListItemButton>
+                                    </ListItem>
+                                ))}
+                            </List>
 
-                    <Stack direction="row" sx={{ justifyContent: 'flex-end' }}>
-                        <BotaoComCarregamento
-                            variant="contained"
-                            disabled={sprintSelecionadoChave === null || semUsuarios}
-                            onClick={onConfirmarSelecao}>
-                            Selecionar
-                        </BotaoComCarregamento>
-                    </Stack>
+                            <Stack direction="row" sx={{ justifyContent: 'flex-end' }}>
+                                <BotaoComCarregamento
+                                    variant="contained"
+                                    disabled={sprintSelecionadoChave === null || semUsuarios || carregando}
+                                    onClick={onConfirmarSelecao}>
+                                    Selecionar
+                                </BotaoComCarregamento>
+                            </Stack>
+                        </>
+                    )}
                 </Stack>
             </CardContent>
 

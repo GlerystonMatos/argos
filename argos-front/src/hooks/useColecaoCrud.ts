@@ -10,6 +10,7 @@ interface OperacoesColecao<T, TCriar, TEditar> {
 export interface ResultadoUseColecaoCrud<T, TCriar, TEditar> {
     itens: T[];
     carregando: boolean;
+    carregado: boolean;
     carregar: () => Promise<T[]>;
     criar: (dados: TCriar) => Promise<T>;
     editar: (chave: string, dados: TEditar) => Promise<T>;
@@ -24,6 +25,7 @@ export function useColecaoCrud<T extends { chave: string }, TCriar, TEditar>({
 }: OperacoesColecao<T, TCriar, TEditar>): ResultadoUseColecaoCrud<T, TCriar, TEditar> {
     const [itens, setItens] = useState<T[]>([]);
     const [carregando, setCarregando] = useState(false);
+    const [carregado, setCarregado] = useState(false);
 
     const carregar = useCallback(async (): Promise<T[]> => {
         setCarregando(true);
@@ -33,6 +35,7 @@ export function useColecaoCrud<T extends { chave: string }, TCriar, TEditar>({
             return lista;
         } finally {
             setCarregando(false);
+            setCarregado(true);
         }
     }, [listar]);
 
@@ -59,5 +62,5 @@ export function useColecaoCrud<T extends { chave: string }, TCriar, TEditar>({
         [removerApi],
     );
 
-    return { itens, carregando, carregar, criar, editar, remover };
+    return { itens, carregando, carregado, carregar, criar, editar, remover };
 }

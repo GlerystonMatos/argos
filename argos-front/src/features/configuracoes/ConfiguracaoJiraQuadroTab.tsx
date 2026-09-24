@@ -4,6 +4,7 @@ import { listarColunasJira } from '../../api/jiraListasApi';
 import { useNotificacao } from '../../hooks/useNotificacao';
 import { useQuadroPlanejamento } from './useQuadroPlanejamento';
 import { SelectListaCacheada } from '../../components/SelectListaCacheada';
+import { EsqueletoCarregando } from '../../components/EsqueletoCarregando';
 import type { AbaConfiguracoesHandle, AbaConfiguracoesProps } from './abas';
 import { useEffect, useState, forwardRef, useImperativeHandle } from 'react';
 import type { RespostaListaCacheada } from '../../components/SelectListaCacheada';
@@ -20,8 +21,8 @@ function obterOpcoesColunas(): (forcarAtualizacao: boolean) => Promise<RespostaL
 }
 
 export const ConfiguracaoJiraQuadroTab = forwardRef<AbaConfiguracoesHandle, AbaConfiguracoesProps>(
-    function ConfiguracaoJiraQuadroTab({ onAlterado }, ref): ReactNode {
-        const { carregar, salvar, carregando } = useQuadroPlanejamento();
+    function ConfiguracaoJiraQuadroTab({ onAlterado, salvando = false }, ref): ReactNode {
+        const { carregar, salvar, carregando, carregado, salvando: salvandoQuadro } = useQuadroPlanejamento();
         const { notificarErro, notificarSucesso } = useNotificacao();
 
         const [colunasOcultas, setColunasOcultas] = useState<string[]>([]);
@@ -56,6 +57,8 @@ export const ConfiguracaoJiraQuadroTab = forwardRef<AbaConfiguracoesHandle, AbaC
 
         useImperativeHandle(ref, () => ({ salvar: salvarAba }));
 
+        if (!carregado) return <EsqueletoCarregando />;
+
         return (
             <Stack spacing={2}>
                 <Stack spacing={0.5}>
@@ -72,7 +75,7 @@ export const ConfiguracaoJiraQuadroTab = forwardRef<AbaConfiguracoesHandle, AbaC
                         setColunasOcultas(valor);
                         onAlterado?.();
                     }}
-                    disabled={carregando}
+                    disabled={carregando || salvando || salvandoQuadro}
                     label="Colunas ocultas"
                     obterOpcoes={obterOpcoesColunas()} />
             </Stack>

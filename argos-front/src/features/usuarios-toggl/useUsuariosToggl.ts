@@ -18,6 +18,7 @@ import {
 interface ResultadoUseUsuariosToggl {
     usuariosToggl: UsuarioTogglResumo[];
     carregando: boolean;
+    carregado: boolean;
     carregar: () => Promise<UsuarioTogglResumo[]>;
     criar: (dados: CriarUsuarioTogglRequest) => Promise<UsuarioTogglResumo>;
     editar: (chave: string, dados: EditarUsuarioTogglRequest) => Promise<UsuarioTogglResumo>;

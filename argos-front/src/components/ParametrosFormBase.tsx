@@ -1,21 +1,22 @@
 import type { ReactNode } from 'react';
 import { useEffect, useState } from 'react';
+import { ConsultaDialog } from './ConsultaDialog';
+import { ROTULO_CONSULTAR } from './origemConsulta';
 import { temDadoAproveitavel } from '../utils/consulta';
 import { useNotificacao } from '../hooks/useNotificacao';
-import { DialogoConfirmacao } from './DialogoConfirmacao';
+import { EsqueletoCarregando } from './EsqueletoCarregando';
+import type { OrigemConsultaToggl } from './origemConsulta';
 import { BotaoComCarregamento } from './BotaoComCarregamento';
 import { periodoEhValido, ultimos30Dias } from '../utils/datas';
+import { SeletorOrigemConsulta } from './SeletorOrigemConsulta';
 import type { Agrupamento, ConsultarResponse } from '../api/tipos';
 
 import {
     Card,
-    Alert,
     Stack,
-    Checkbox,
     TextField,
     Typography,
     CardContent,
-    FormControlLabel,
 } from '@mui/material';
 
 export interface DadosParametros {
@@ -39,14 +40,18 @@ export interface ParametrosConsultaProps {
 
 interface ParametrosFormBaseProps extends ParametrosConsultaProps {
     titulo: string;
+    tituloConsulta: string;
     mensagemErroCarregar: string;
     carregarInicial: () => Promise<ParametrosCarregados>;
     salvarParametros: (dados: DadosParametros) => Promise<unknown>;
     executarConsulta: (dataInicio: string, dataFim: string, forcarConsultaApi: boolean) => Promise<ConsultarResponse>;
 }
 
+const OPCOES_ORIGEM: readonly OrigemConsultaToggl[] = ['nenhum', 'toggl'];
+
 export function ParametrosFormBase({
     titulo,
+    tituloConsulta,
     semUsuarios,
     mensagemErroCarregar,
     carregarInicial,
@@ -60,8 +65,8 @@ export function ParametrosFormBase({
     const [consultando, setConsultando] = useState(false);
     const [semDados, setSemDados] = useState(false);
     const [carregandoInicial, setCarregandoInicial] = useState(true);
-    const [forcarConsultaApi, setForcarConsultaApi] = useState(false);
-    const [confirmandoConsultaForcada, setConfirmandoConsultaForcada] = useState(false);
+    const [dialogoAberto, setDialogoAberto] = useState(false);
+    const [origem, setOrigem] = useState<OrigemConsultaToggl>('nenhum');
     const [tags, setTags] = useState<string[]>([]);
     const [agrupamento, setAgrupamento] = useState<Agrupamento>('ambos');
 
@@ -104,7 +109,7 @@ export function ParametrosFormBase({
 
     const periodoValido = periodoEhValido(dataInicio, dataFim);
 
-    async function salvarEConsultar(): Promise<void> {
+    async function salvarEConsultar(forcarConsultaApi: boolean): Promise<void> {
         setSemDados(false);
         setConsultando(true);
         try {
@@ -119,6 +124,7 @@ export function ParametrosFormBase({
             try {
                 const resposta = await executarConsulta(dataInicio, dataFim, forcarConsultaApi);
                 if (temDadoAproveitavel(resposta)) {
+                    setDialogoAberto(false);
                     onConcluida(resposta);
                 } else {
                     setSemDados(true);
@@ -136,16 +142,27 @@ export function ParametrosFormBase({
             notificarErro(new Error('A data fim não pode ser anterior à data início.'));
             return;
         }
-        if (forcarConsultaApi) {
-            setConfirmandoConsultaForcada(true);
-            return;
-        }
-        void salvarEConsultar();
+        setSemDados(false);
+        setOrigem('nenhum');
+        setDialogoAberto(true);
     }
 
-    function confirmarConsultaForcada(): void {
-        setConfirmandoConsultaForcada(false);
-        void salvarEConsultar();
+    function cancelarConsulta(): void {
+        setSemDados(false);
+        setDialogoAberto(false);
+    }
+
+    if (carregandoInicial) {
+        return (
+            <Card variant="outlined">
+                <CardContent>
+                    <Stack spacing={3}>
+                        <Typography variant="h6">{titulo}</Typography>
+                        <EsqueletoCarregando />
+                    </Stack>
+                </CardContent>
+            </Card>
+        );
     }
 
     return (
@@ -185,17 +202,7 @@ export function ParametrosFormBase({
                             fullWidth />
                     </Stack>
 
-                    <FormControlLabel
-                        control={
-                            <Checkbox
-                                checked={forcarConsultaApi}
-                                onChange={(evento) => setForcarConsultaApi(evento.target.checked)}
-                                disabled={carregandoInicial || consultando} />
-                        }
-                        label="Forçar nova consulta à API (ignora o cache local)"
-                        sx={{ mt: '0.5rem !important', ml: '-0.5rem !important' }} />
-
-                    <Stack direction="row" spacing={1} sx={{ justifyContent: 'flex-end', mt: '0rem !important' }}>
+                    <Stack direction="row" spacing={1} sx={{ justifyContent: 'flex-end' }}>
                         <BotaoComCarregamento
                             variant="contained"
                             carregando={consultando}
@@ -204,23 +211,25 @@ export function ParametrosFormBase({
                             Consultar
                         </BotaoComCarregamento>
                     </Stack>
-
-                    {semDados ? (
-                        <Alert severity="warning">Nenhum usuário do Toggl retornou dados para este período.</Alert>
-                    ) : undefined}
                 </Stack>
             </CardContent>
 
-            <DialogoConfirmacao
-                aberto={confirmandoConsultaForcada}
-                titulo="Forçar nova consulta à API?"
-                mensagem="Isso ignora o cache local e consulta o Toggl de novo, consumindo o limite de 30 requisições/hora por usuário. Deseja continuar?"
-                textoConfirmar="Consultar mesmo assim"
-                textoCancelar="Não"
-                focoNoCancelar
-                onConfirmar={confirmarConsultaForcada}
-                onCancelar={() => setConfirmandoConsultaForcada(false)}
-            />
+            <ConsultaDialog
+                aberto={dialogoAberto}
+                titulo={tituloConsulta}
+                consultando={consultando}
+                rotuloConsultar={ROTULO_CONSULTAR[origem]}
+                vaiForcarToggl={origem === 'toggl'}
+                semDadoAproveitavel={semDados}
+                onConsultar={() => void salvarEConsultar(origem === 'toggl')}
+                onCancelar={cancelarConsulta}>
+                <SeletorOrigemConsulta
+                    opcoes={OPCOES_ORIGEM}
+                    valor={origem}
+                    disabled={consultando}
+                    onChange={setOrigem}
+                    descricao="Nenhum: usa o cache do Toggl quando disponível para o período. Toggl: força nova consulta ao Toggl, ignorando o cache." />
+            </ConsultaDialog>
         </Card>
     );
 }

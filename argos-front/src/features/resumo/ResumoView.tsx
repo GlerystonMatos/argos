@@ -3,6 +3,8 @@ import type { ReactNode } from 'react';
 import { ListaCoresResumo } from './ListaCoresResumo';
 import { rotularAgrupamento } from '../../utils/rotulos';
 import type { Secao } from '../../components/MenuLateral';
+import UnfoldLessIcon from '@mui/icons-material/UnfoldLess';
+import UnfoldMoreIcon from '@mui/icons-material/UnfoldMore';
 import type { AbaConfiguracoes } from '../configuracoes/abas';
 import { TOTAL_CAMPOS_JIRA } from '../configuracoes/completude';
 import { ListaMapeamentoResumo } from './ListaMapeamentoResumo';
@@ -108,12 +110,10 @@ export function ResumoView({ resumo, onNavegar }: ResumoViewProps): ReactNode {
         });
     }
 
-    function expandirTodos(): void {
-        setColapsados(new Set());
-    }
+    const todosExpandidos = colapsados.size === 0;
 
-    function colapsarTodos(): void {
-        setColapsados(new Set(BLOCOS_RESUMO));
+    function alternarTodos(): void {
+        setColapsados(todosExpandidos ? new Set(BLOCOS_RESUMO) : new Set());
     }
 
     const pendenciasObrigatorias = [
@@ -127,9 +127,9 @@ export function ResumoView({ resumo, onNavegar }: ResumoViewProps): ReactNode {
         <Card variant="outlined">
             <CardContent>
                 <Stack spacing={2}>
-                    <Stack direction="row" spacing={1}>
+                    <Stack direction="row" spacing={1} useFlexGap sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
                         <Typography variant="h6" >Resumo da aplicação</Typography>
-                        {configuracaoCompleta ? (
+                        {!carregado ? undefined : configuracaoCompleta ? (
                             <Alert severity="success" sx={{ py: 0 }}>Relatório, Gant e Sprint estão liberados.</Alert>
                         ) : (
                             <Alert severity="warning" sx={{ py: 0 }}>
@@ -137,21 +137,20 @@ export function ResumoView({ resumo, onNavegar }: ResumoViewProps): ReactNode {
                                 {pendenciasObrigatorias.length > 0 ? ` Pendente: ${listarPendencias(pendenciasObrigatorias)}.` : ''}
                             </Alert>
                         )}
+                        {carregado ? (
+                            <BotaoComCarregamento
+                                startIcon={todosExpandidos ? <UnfoldLessIcon /> : <UnfoldMoreIcon />}
+                                onClick={alternarTodos}
+                                sx={{ ml: 'auto', flexShrink: 0 }}>
+                                {todosExpandidos ? 'Colapsar tudo' : 'Expandir tudo'}
+                            </BotaoComCarregamento>
+                        ) : undefined}
                     </Stack>
 
                     {!carregado ? (
                         <EsqueletoCarregando />
                     ) : (
                         <>
-                            <Stack direction="row" spacing={1} sx={{ mt: '0.25rem !important' }}>
-                                <BotaoComCarregamento size="small" variant="outlined" onClick={expandirTodos}>
-                                    Expandir tudo
-                                </BotaoComCarregamento>
-                                <BotaoComCarregamento size="small" variant="outlined" onClick={colapsarTodos}>
-                                    Colapsar tudo
-                                </BotaoComCarregamento>
-                            </Stack>
-
                             <BlocoResumo
                                 icone={<IconeStatus completo={existeUsuarioAdministrador} />}
                                 titulo="Usuários do Toggl"

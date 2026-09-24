@@ -16,6 +16,7 @@ export function ParametrosGantForm({ semUsuarios, onConcluida }: ParametrosConsu
     return (
         <ParametrosFormBase
             titulo="Parâmetros do Gant"
+            tituloConsulta="Consultar Gant"
             semUsuarios={semUsuarios}
             mensagemErroCarregar="Não foi possível carregar os parâmetros do Gant salvos"
             carregarInicial={async () => {

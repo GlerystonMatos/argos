@@ -4,6 +4,8 @@ import type { ResultadoUseBusca } from './useBusca';
 import { formatarDuracao } from '../../utils/duracao';
 import { useNotificacao } from '../../hooks/useNotificacao';
 import type { ResultadoBuscaDescricao } from '../../api/tipos';
+import { DescricaoComLinkJira } from '../../components/LinkJira';
+import { EsqueletoCarregando } from '../../components/EsqueletoCarregando';
 import { BotaoComCarregamento } from '../../components/BotaoComCarregamento';
 
 import {
@@ -16,14 +18,16 @@ import {
 
 interface BuscaPanelProps {
     busca: ResultadoUseBusca;
+    urlDominioJira: string;
 }
 
 interface ListaResultadoBuscaProps {
     resultado: ResultadoBuscaDescricao;
     termo: string;
+    urlDominioJira: string;
 }
 
-function ListaResultadoBusca({ resultado, termo }: ListaResultadoBuscaProps): ReactNode {
+function ListaResultadoBusca({ resultado, termo, urlDominioJira }: ListaResultadoBuscaProps): ReactNode {
     if (resultado.linhas.length === 0) {
         return <Alert severity="info">Nenhuma descrição encontrada para "{termo}".</Alert>;
     }
@@ -33,7 +37,9 @@ function ListaResultadoBusca({ resultado, termo }: ListaResultadoBuscaProps): Re
             {resultado.linhas.map((linha) => (
                 <Stack key={linha.descricao} spacing={0.5}>
                     <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
-                        <Typography sx={{ fontWeight: 600 }}>{linha.descricao}</Typography>
+                        <Typography sx={{ fontWeight: 600 }}>
+                            <DescricaoComLinkJira descricao={linha.descricao} urlDominioJira={urlDominioJira} />
+                        </Typography>
                         <Typography sx={{ fontWeight: 600 }}>
                             {formatarDuracao(linha.totalSegundosLinha)}
                         </Typography>
@@ -65,13 +71,13 @@ function ListaResultadoBusca({ resultado, termo }: ListaResultadoBuscaProps): Re
     );
 }
 
-export function BuscaPanel({ busca }: BuscaPanelProps): ReactNode {
+export function BuscaPanel({ busca, urlDominioJira }: BuscaPanelProps): ReactNode {
     const { resultado, termoAtivo, buscando, buscar, limpar } = busca;
     const { notificarErro } = useNotificacao();
     const [termo, setTermo] = useState('');
 
     async function executarBusca(): Promise<void> {
-        if (!termo.trim()) return;
+        if (!termo.trim() || buscando) return;
         try {
             await buscar(termo.trim());
         } catch (erro) {
@@ -106,13 +112,15 @@ export function BuscaPanel({ busca }: BuscaPanelProps): ReactNode {
                 </BotaoComCarregamento>
                 <BotaoComCarregamento
                     variant="outlined"
-                    disabled={!termo && !resultado}
+                    disabled={buscando || (!termo && !resultado)}
                     onClick={limparBusca}>
                     Limpar
                 </BotaoComCarregamento>
             </Stack>
 
-            {resultado ? <ListaResultadoBusca resultado={resultado} termo={termoAtivo ?? termo} /> : undefined}
+            {buscando ? <EsqueletoCarregando /> : undefined}
+
+            {!buscando && resultado ? <ListaResultadoBusca resultado={resultado} termo={termoAtivo ?? termo} urlDominioJira={urlDominioJira} /> : undefined}
         </Stack>
     );
 }

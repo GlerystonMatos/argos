@@ -22,6 +22,7 @@ export type AlteracoesConfiguracaoJira = Partial<SalvarConfiguracaoJiraRequest>;
 interface ResultadoUseConfiguracaoJira {
     configuracao: ConfiguracaoJira | null;
     carregando: boolean;
+    carregado: boolean;
     salvando: boolean;
     carregar: () => Promise<ConfiguracaoJira>;
     salvarParcial: (alteracoes: AlteracoesConfiguracaoJira) => Promise<ConfiguracaoJira>;
@@ -55,7 +56,7 @@ function requestDaConfiguracaoSalva(atual: ConfiguracaoJira): SalvarConfiguracao
 }
 
 export function useConfiguracaoJira(): ResultadoUseConfiguracaoJira {
-    const { dados, carregando, salvando, carregar, salvar } = useRecursoEditavel<ConfiguracaoJira, SalvarConfiguracaoJiraRequest>(
+    const { dados, carregando, carregado, salvando, carregar, salvar } = useRecursoEditavel<ConfiguracaoJira, SalvarConfiguracaoJiraRequest>(
         obterConfiguracaoJira,
         salvarConfiguracaoJira,
     );
@@ -78,5 +79,5 @@ export function useConfiguracaoJira(): ResultadoUseConfiguracaoJira {
         [],
     );
 
-    return { configuracao: dados, carregando, salvando, carregar, salvarParcial, testarConexao, listarCampos };
+    return { configuracao: dados, carregando, carregado, salvando, carregar, salvarParcial, testarConexao, listarCampos };
 }

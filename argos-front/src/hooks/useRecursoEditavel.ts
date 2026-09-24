@@ -3,6 +3,7 @@ import { useCallback, useState } from 'react';
 interface EstadoRecurso<T> {
     dados: T | null;
     carregando: boolean;
+    carregado: boolean;
     salvando: boolean;
 }
 
@@ -18,6 +19,7 @@ export function useRecursoEditavel<T, TReq>(
     const [estado, setEstado] = useState<EstadoRecurso<T>>({
         dados: null,
         carregando: false,
+        carregado: false,
         salvando: false,
     });
 
@@ -25,10 +27,10 @@ export function useRecursoEditavel<T, TReq>(
         setEstado((atual) => ({ ...atual, carregando: true }));
         try {
             const dados = await obter();
-            setEstado({ dados, carregando: false, salvando: false });
+            setEstado({ dados, carregando: false, carregado: true, salvando: false });
             return dados;
         } catch (erro) {
-            setEstado((atual) => ({ ...atual, carregando: false }));
+            setEstado((atual) => ({ ...atual, carregando: false, carregado: true }));
             throw erro;
         }
     }, [obter]);
@@ -38,7 +40,7 @@ export function useRecursoEditavel<T, TReq>(
             setEstado((atual) => ({ ...atual, salvando: true }));
             try {
                 const atualizado = await atualizar(dados);
-                setEstado({ dados: atualizado, carregando: false, salvando: false });
+                setEstado({ dados: atualizado, carregando: false, carregado: true, salvando: false });
                 return atualizado;
             } catch (erro) {
                 setEstado((atual) => ({ ...atual, salvando: false }));

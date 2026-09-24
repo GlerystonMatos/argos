@@ -20,6 +20,7 @@ import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import { JiraConexaoView } from './features/jira/JiraConexaoView';
 import { RelatorioView } from './features/relatorio/RelatorioView';
 import type { AbaConfiguracoes } from './features/configuracoes/abas';
+import { EsqueletoCarregando } from './components/EsqueletoCarregando';
 import { useConsultaSprint } from './features/sprint/useConsultaSprint';
 import { ParametrosGantForm } from './features/gant/ParametrosGantForm';
 import { BotaoComCarregamento } from './components/BotaoComCarregamento';
@@ -46,6 +47,7 @@ import {
     CssBaseline,
     useMediaQuery,
     ThemeProvider,
+    CircularProgress,
 } from '@mui/material';
 
 type VisaoConsulta = 'parametros' | 'resultado';
@@ -53,6 +55,8 @@ type VisaoConsulta = 'parametros' | 'resultado';
 type VisaoSprint = 'sprints' | 'acompanhamento' | 'planejamento';
 
 const SECOES_DE_CONFIGURACAO: readonly Secao[] = ['resumo', 'toggl', 'jira', 'configuracoes'];
+
+const SECOES_COM_GATE: readonly Secao[] = ['relatorio', 'gant', 'sprint'];
 
 interface AppInternoProps {
     onSair: () => void;
@@ -256,6 +260,8 @@ function AppInterno({ onSair }: AppInternoProps): ReactNode {
 
                         {secao === 'dados' ? <DadosView /> : undefined}
 
+                        {!resumo.carregado && SECOES_COM_GATE.includes(secao) ? <EsqueletoCarregando /> : undefined}
+
                         {secao === 'relatorio' && configuracaoCompleta ? (
                             visaoRelatorio === 'resultado' && consultaConcluida ? (
                                 <RelatorioView
@@ -264,7 +270,8 @@ function AppInterno({ onSair }: AppInternoProps): ReactNode {
                                     selecionados={selecionados}
                                     onAlternarSelecao={alternarSelecao}
                                     onVoltar={() => setVisaoRelatorio('parametros')}
-                                    veioDoCache={consultaConcluida.veioDoCache} />
+                                    veioDoCache={consultaConcluida.veioDoCache}
+                                    urlDominioJira={resumo.jiraUrlDominio} />
                             ) : (
                                 <ParametrosRelatorioForm
                                     semUsuarios={semUsuariosToggl}
@@ -284,7 +291,8 @@ function AppInterno({ onSair }: AppInternoProps): ReactNode {
                                     dataInicio={consultaGantConcluida.dataInicio}
                                     dataFim={consultaGantConcluida.dataFim}
                                     onVoltar={() => setVisaoGant('parametros')}
-                                    veioDoCache={consultaGantConcluida.veioDoCache} />
+                                    veioDoCache={consultaGantConcluida.veioDoCache}
+                                    urlDominioJira={resumo.jiraUrlDominio} />
                             ) : (
                                 <ParametrosGantForm
                                     semUsuarios={semUsuariosToggl}
@@ -361,10 +369,14 @@ export default function App(): ReactNode {
         <ThemeProvider theme={tema}>
             <CssBaseline />
             <ProvedorNotificacao>
-                {verificando ? undefined : autenticado ? (
+                {verificando ? (
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
+                        <CircularProgress aria-label="verificando acesso" />
+                    </Box>
+                ) : autenticado ? (
                     <AppInterno onSair={sair} />
                 ) : (
-                    <LoginScreen entrando={entrando} erro={erro} onEntrar={(usuario, senha) => void entrar(usuario, senha)} />
+                    <LoginScreen entrando={entrando} erro={erro} onEntrar={(usuario, senha, lembrar) => void entrar(usuario, senha, lembrar)} />
                 )}
             </ProvedorNotificacao>
         </ThemeProvider>

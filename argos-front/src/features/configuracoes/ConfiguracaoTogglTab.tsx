@@ -8,6 +8,7 @@ import type { Agrupamento, CategoriasSprint } from '../../api/tipos';
 import { Box, Alert, Stack, Divider, Typography } from '@mui/material';
 import { SelectAgrupamento } from '../../components/SelectAgrupamento';
 import { SelectListaCacheada } from '../../components/SelectListaCacheada';
+import { EsqueletoCarregando } from '../../components/EsqueletoCarregando';
 import type { AbaConfiguracoesHandle, AbaConfiguracoesProps } from './abas';
 import { useEffect, useState, forwardRef, useImperativeHandle } from 'react';
 import type { RespostaListaCacheada } from '../../components/SelectListaCacheada';
@@ -18,8 +19,8 @@ async function obterOpcoesTags(forcarAtualizacao: boolean): Promise<RespostaList
 }
 
 export const ConfiguracaoTogglTab = forwardRef<AbaConfiguracoesHandle, AbaConfiguracoesProps>(
-    function ConfiguracaoTogglTab({ onAlterado, onValidoChange }, ref): ReactNode {
-        const { carregar, salvar, carregando } = useCategoriasSprint();
+    function ConfiguracaoTogglTab({ onAlterado, onValidoChange, salvando = false }, ref): ReactNode {
+        const { carregar, salvar, carregando, carregado, salvando: salvandoCategorias } = useCategoriasSprint();
         const { notificarErro, notificarSucesso } = useNotificacao();
 
         const [agrupamento, setAgrupamento] = useState<Agrupamento>('ambos');
@@ -82,24 +83,28 @@ export const ConfiguracaoTogglTab = forwardRef<AbaConfiguracoesHandle, AbaConfig
 
         const erroTagsDetalhadas = alterado && tagsDetalhadas.length === 0;
 
+        const bloqueado = carregando || salvando || salvandoCategorias;
+
         const tagsResponsaveis = [
             { label: 'Tags DEV', valor: dev, definir: setDev },
             { label: 'Tags REV', valor: rev, definir: setRev },
             { label: 'Tags QA', valor: qa, definir: setQa },
         ];
 
+        if (!carregado) return <EsqueletoCarregando />;
+
         return (
             <Stack spacing={2}>
                 <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
                     <Box sx={{ flex: 1, minWidth: 0 }}>
-                        <SelectAgrupamento value={agrupamento} onChange={alterando(setAgrupamento)} disabled={carregando} required />
+                        <SelectAgrupamento value={agrupamento} onChange={alterando(setAgrupamento)} disabled={bloqueado} required />
                     </Box>
                     {mostraTagsDetalhadas ? (
                         <Box sx={{ flex: 2, minWidth: 0 }}>
                             <SelectListaCacheada
                                 value={tagsDetalhadas}
                                 onChange={alterando(setTagsDetalhadas)}
-                                disabled={carregando}
+                                disabled={bloqueado}
                                 label="Tags para detalhar por descrição"
                                 required
                                 error={erroTagsDetalhadas}
@@ -125,7 +130,7 @@ export const ConfiguracaoTogglTab = forwardRef<AbaConfiguracoesHandle, AbaConfig
                             <SelectListaCacheada
                                 value={valor}
                                 onChange={alterando(definir)}
-                                disabled={carregando}
+                                disabled={bloqueado}
                                 label={label}
                                 required
                                 error={alterado && valor.length === 0}
@@ -148,7 +153,7 @@ export const ConfiguracaoTogglTab = forwardRef<AbaConfiguracoesHandle, AbaConfig
                     titulo="Cor da tag:"
                     nomes={['Tag']}
                     cores={{ Tag: corTag }}
-                    disabled={carregando}
+                    disabled={bloqueado}
                     onChange={(_, cor) => {
                         setCorTag(cor);
                         onAlterado?.();

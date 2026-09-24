@@ -147,11 +147,13 @@ export const ConfiguracoesView = forwardRef<ConfiguracoesViewHandle, Configuraco
             ref: RefObject<AbaConfiguracoesHandle | null>;
             onAlterado: () => void;
             onValidoChange: (valido: boolean) => void;
+            salvando: boolean;
         } {
             return {
                 ref: refsAbas[chave],
                 onAlterado: callbacksAbas.marcarAlterado[chave],
                 onValidoChange: callbacksAbas.definirValido[chave],
+                salvando,
             };
         }
 
@@ -186,7 +188,7 @@ export const ConfiguracoesView = forwardRef<ConfiguracoesViewHandle, Configuraco
                         {painel('toggl', <ConfiguracaoTogglTab {...propsAba('toggl')} />)}
                         {painel('jira-campos', <JiraCamposPanel {...propsAba('jira-campos')} />)}
                         {painel('jira-status', <ConfiguracaoJiraStatusTab {...propsAba('jira-status')} />)}
-                        {painel('jira-cores', <ConfiguracaoJiraCoresTab ref={refsAbas['jira-cores']} onAlterado={callbacksAbas.marcarAlterado['jira-cores']} />)}
+                        {painel('jira-cores', <ConfiguracaoJiraCoresTab ref={refsAbas['jira-cores']} onAlterado={callbacksAbas.marcarAlterado['jira-cores']} salvando={salvando} />)}
                         {painel('jira-quadro', <ConfiguracaoJiraQuadroTab {...propsAba('jira-quadro')} />)}
                         {painel('jira-toggl', <MapeamentoJiraTogglPanel {...propsAba('jira-toggl')} />)}
                     </Stack>

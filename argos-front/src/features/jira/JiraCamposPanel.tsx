@@ -3,6 +3,7 @@ import { useConfiguracaoJira } from './useConfiguracaoJira';
 import { useNotificacao } from '../../hooks/useNotificacao';
 import type { CampoJira, ConfiguracaoJira } from '../../api/tipos';
 import type { AbaConfiguracoesProps } from '../configuracoes/abas';
+import { EsqueletoCarregando } from '../../components/EsqueletoCarregando';
 import { BotaoComCarregamento } from '../../components/BotaoComCarregamento';
 import { Alert, Stack, TextField, Typography, Autocomplete } from '@mui/material';
 import { useEffect, useMemo, useState, forwardRef, useImperativeHandle } from 'react';
@@ -70,8 +71,8 @@ export interface JiraCamposPanelHandle {
 }
 
 export const JiraCamposPanel = forwardRef<JiraCamposPanelHandle, AbaConfiguracoesProps>(
-    function JiraCamposPanel({ onAlterado, onValidoChange }, ref): ReactNode {
-        const { carregando, carregar, salvarParcial, listarCampos } = useConfiguracaoJira();
+    function JiraCamposPanel({ onAlterado, onValidoChange, salvando = false }, ref): ReactNode {
+        const { carregando, carregado, salvando: salvandoConfiguracao, carregar, salvarParcial, listarCampos } = useConfiguracaoJira();
         const { notificarErro, notificarSucesso } = useNotificacao();
 
         const [selecao, setSelecao] = useState<SelecaoCampos>(SELECAO_VAZIA);
@@ -180,6 +181,10 @@ export const JiraCamposPanel = forwardRef<JiraCamposPanelHandle, AbaConfiguracoe
 
         useImperativeHandle(ref, () => ({ salvar }));
 
+        const bloqueado = carregando || salvando || salvandoConfiguracao;
+
+        if (!carregado) return <EsqueletoCarregando />;
+
         return (
             <Stack spacing={2}>
                 <Typography variant="body2" color="text.secondary">
@@ -204,21 +209,21 @@ export const JiraCamposPanel = forwardRef<JiraCamposPanelHandle, AbaConfiguracoe
                         label="Estimativa do desenvolvimento"
                         valor={selecao.desenvolvimento}
                         opcoes={opcoes}
-                        disabled={carregando}
+                        disabled={bloqueado}
                         exibirErro={alterado}
                         onChange={(valor) => alterarCampo('desenvolvimento', valor)} />
                     <SelectCampoJira
                         label="Estimativa da revisão"
                         valor={selecao.revisao}
                         opcoes={opcoes}
-                        disabled={carregando}
+                        disabled={bloqueado}
                         exibirErro={alterado}
                         onChange={(valor) => alterarCampo('revisao', valor)} />
                     <SelectCampoJira
                         label="Estimativa dos testes"
                         valor={selecao.testes}
                         opcoes={opcoes}
-                        disabled={carregando}
+                        disabled={bloqueado}
                         exibirErro={alterado}
                         onChange={(valor) => alterarCampo('testes', valor)} />
                 </Stack>
@@ -228,27 +233,27 @@ export const JiraCamposPanel = forwardRef<JiraCamposPanelHandle, AbaConfiguracoe
                         label="Revisado por"
                         valor={selecao.revisadoPor}
                         opcoes={opcoes}
-                        disabled={carregando}
+                        disabled={bloqueado}
                         exibirErro={alterado}
                         onChange={(valor) => alterarCampo('revisadoPor', valor)} />
                     <SelectCampoJira
                         label="Analisado por"
                         valor={selecao.analisadoPor}
                         opcoes={opcoes}
-                        disabled={carregando}
+                        disabled={bloqueado}
                         exibirErro={alterado}
                         onChange={(valor) => alterarCampo('analisadoPor', valor)} />
                     <SelectCampoJira
                         label="Time"
                         valor={campoTime}
                         opcoes={opcoes}
-                        disabled={carregando}
+                        disabled={bloqueado}
                         exibirErro={alterado}
                         onChange={alterarCampoTime} />
                     <BotaoComCarregamento
                         variant="outlined"
                         carregando={buscandoCampos}
-                        disabled={conexaoSalva !== true || carregando}
+                        disabled={conexaoSalva !== true || bloqueado}
                         onClick={() => void buscarCampos()}>
                         Buscar campos
                     </BotaoComCarregamento>
@@ -259,7 +264,7 @@ export const JiraCamposPanel = forwardRef<JiraCamposPanelHandle, AbaConfiguracoe
                         label="Previsão de liberação"
                         valor={campoPrevisaoLiberacao}
                         opcoes={opcoes}
-                        disabled={carregando}
+                        disabled={bloqueado}
                         exibirErro={alterado}
                         onChange={alterarCampoPrevisaoLiberacao} />
                     <TextField
@@ -267,7 +272,7 @@ export const JiraCamposPanel = forwardRef<JiraCamposPanelHandle, AbaConfiguracoe
                         type="number"
                         value={janelaAlertaDias}
                         onChange={(evento) => alterarJanelaAlertaDias(evento.target.value)}
-                        disabled={carregando || campoPrevisaoLiberacao === null}
+                        disabled={bloqueado || campoPrevisaoLiberacao === null}
                         helperText="Dias antes do prazo em que o destaque vira laranja (além disso, verde)"
                         sx={{ maxWidth: { sm: 220 } }}
                         slotProps={{ htmlInput: { min: 1 } }} />

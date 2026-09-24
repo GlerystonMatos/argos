@@ -13,6 +13,7 @@ import {
 interface ResultadoUseSprints {
     sprints: Sprint[];
     carregando: boolean;
+    carregado: boolean;
     carregar: () => Promise<Sprint[]>;
     criar: (dados: CriarSprintRequest) => Promise<Sprint>;
     editar: (chave: string, dados: EditarSprintRequest) => Promise<Sprint>;

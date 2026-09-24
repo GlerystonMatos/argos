@@ -1,6 +1,6 @@
 import { CORES } from '../theme';
 import type { ReactNode } from 'react';
-import { Box, Stack, TextField, Tooltip, Typography } from '@mui/material';
+import { Box, Stack, Skeleton, TextField, Tooltip, Typography } from '@mui/material';
 
 interface MapaCoresListaProps {
     titulo: string;
@@ -9,11 +9,21 @@ interface MapaCoresListaProps {
     onChange: (nome: string, cor: string) => void;
     rotulos?: Record<string, string>;
     disabled?: boolean;
+    carregando?: boolean;
 }
 
 const COR_PADRAO: string = CORES.corIndisponivel;
 
-export function MapaCoresLista({ titulo, nomes, cores, onChange, disabled, rotulos }: MapaCoresListaProps): ReactNode {
+export function MapaCoresLista({ titulo, nomes, cores, onChange, disabled, rotulos, carregando = false }: MapaCoresListaProps): ReactNode {
+    if (nomes.length === 0 && carregando) {
+        return (
+            <Stack spacing={1}>
+                <Typography variant="subtitle2">{titulo}</Typography>
+                <Skeleton variant="rounded" height={24} />
+            </Stack>
+        );
+    }
+
     if (nomes.length === 0) {
         return (
             <Stack spacing={1}>
