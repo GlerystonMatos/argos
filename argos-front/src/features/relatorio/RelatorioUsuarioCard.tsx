@@ -3,6 +3,7 @@ import { formatarDuracao } from '../../utils/duracao';
 import { formatarInicioLocal } from '../../utils/datas';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { curarPorDescricao, ordenarPorTag } from './curadoria';
+import { DescricaoComLinkJira } from '../../components/LinkJira';
 import type { Agrupamento, RelatorioUsuarioToggl } from '../../api/tipos';
 
 import {
@@ -29,6 +30,7 @@ interface RelatorioUsuarioCardProps {
     onAlternar: () => void;
     selecionados: Set<string>;
     onAlternarSelecao: (chave: string) => void;
+    urlDominioJira: string;
 }
 
 const CELULA_TAG = {
@@ -45,6 +47,7 @@ export function RelatorioUsuarioCard({
     onAlternar,
     selecionados,
     onAlternarSelecao,
+    urlDominioJira,
 }: RelatorioUsuarioCardProps): ReactNode {
     const mostraPorDescricao = agrupamento === 'descricao' || agrupamento === 'ambos';
     const mostraPorTag = agrupamento === 'tag' || agrupamento === 'ambos';
@@ -103,7 +106,7 @@ export function RelatorioUsuarioCard({
                                                 </TableCell>
                                                 <TableCell
                                                     sx={{ textDecoration: selecionado ? 'line-through' : 'none' }}>
-                                                    {linha.descricao}
+                                                    <DescricaoComLinkJira descricao={linha.descricao} urlDominioJira={urlDominioJira} />
                                                 </TableCell>
                                                 <TableCell sx={CELULA_TAG}>{linha.tag}</TableCell>
                                                 <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>

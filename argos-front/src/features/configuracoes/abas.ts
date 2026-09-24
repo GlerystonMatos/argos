@@ -18,4 +18,5 @@ export interface AbaConfiguracoesHandle {
 export interface AbaConfiguracoesProps {
     onAlterado?: () => void;
     onValidoChange?: (valido: boolean) => void;
+    salvando?: boolean;
 }

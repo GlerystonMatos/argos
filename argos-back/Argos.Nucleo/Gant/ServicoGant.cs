@@ -28,7 +28,7 @@ public static class ServicoGant
 
             foreach (RegistroTempoDto registro in ServicoAgrupamento.ObterConcluidos(usuarioCacheado.Registros))
             {
-                if (!string.IsNullOrWhiteSpace(termo) && !(registro.Descricao?.Contains(termo, StringComparison.OrdinalIgnoreCase) ?? false))
+                if (!string.IsNullOrWhiteSpace(termo) && !(registro.Descricao is not null && NormalizacaoBusca.Contem(registro.Descricao, termo)))
                     continue;
 
                 if (registro.Inicio is not DateTimeOffset inicioRegistro)

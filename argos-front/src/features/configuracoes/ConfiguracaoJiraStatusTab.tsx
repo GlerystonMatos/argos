@@ -4,6 +4,7 @@ import { useNotificacao } from '../../hooks/useNotificacao';
 import { useStatusFinalSprint } from '../sprint/useStatusFinalSprint';
 import { Box, Alert, Stack, Divider, Typography } from '@mui/material';
 import { SelectListaCacheada } from '../../components/SelectListaCacheada';
+import { EsqueletoCarregando } from '../../components/EsqueletoCarregando';
 import type { AbaConfiguracoesHandle, AbaConfiguracoesProps } from './abas';
 import { useEffect, useState, forwardRef, useImperativeHandle } from 'react';
 import { statusFinalCompleto, statusResponsavelCompleto } from './completude';
@@ -22,17 +23,21 @@ function obterOpcoesStatus(): (forcarAtualizacao: boolean) => Promise<RespostaLi
 }
 
 export const ConfiguracaoJiraStatusTab = forwardRef<AbaConfiguracoesHandle, AbaConfiguracoesProps>(
-    function ConfiguracaoJiraStatusTab({ onAlterado, onValidoChange }, ref): ReactNode {
+    function ConfiguracaoJiraStatusTab({ onAlterado, onValidoChange, salvando = false }, ref): ReactNode {
         const {
             carregar: carregarResponsabilidade,
             salvar: salvarResponsabilidade,
             carregando: carregandoResponsabilidade,
+            carregado: responsabilidadeCarregada,
+            salvando: salvandoResponsabilidade,
         } = useResponsabilidadeSprint();
 
         const {
             carregar: carregarStatusFinal,
             salvar: salvarStatusFinal,
             carregando: carregandoStatusFinal,
+            carregado: statusFinalCarregado,
+            salvando: salvandoStatusFinal,
         } = useStatusFinalSprint();
 
         const { notificarErro, notificarSucesso } = useNotificacao();
@@ -113,7 +118,7 @@ export const ConfiguracaoJiraStatusTab = forwardRef<AbaConfiguracoesHandle, AbaC
             };
         }
 
-        const carregando = carregandoResponsabilidade || carregandoStatusFinal;
+        const bloqueado = carregandoResponsabilidade || carregandoStatusFinal || salvando || salvandoResponsabilidade || salvandoStatusFinal;
         const responsaveisCompletos = statusResponsavelCompleto({ statusDev, statusRev, statusQa });
         const finalCompleto = statusFinalCompleto({ statusConcluido, statusIgnorado });
         const statusValido = responsaveisCompletos && finalCompleto;
@@ -133,6 +138,8 @@ export const ConfiguracaoJiraStatusTab = forwardRef<AbaConfiguracoesHandle, AbaC
             { label: 'Status QA', valor: statusQa, definir: setStatusQa },
         ];
 
+        if (!responsabilidadeCarregada || !statusFinalCarregado) return <EsqueletoCarregando />;
+
         return (
             <Stack spacing={2}>
                 <Stack spacing={0.5}>
@@ -149,7 +156,7 @@ export const ConfiguracaoJiraStatusTab = forwardRef<AbaConfiguracoesHandle, AbaC
                             <SelectListaCacheada
                                 value={valor}
                                 onChange={alterando(definir)}
-                                disabled={carregando}
+                                disabled={bloqueado}
                                 label={label}
                                 {...propsObrigatorio(valor)}
                                 obterOpcoes={obterOpcoesStatus()} />
@@ -172,7 +179,7 @@ export const ConfiguracaoJiraStatusTab = forwardRef<AbaConfiguracoesHandle, AbaC
                         <SelectListaCacheada
                             value={statusConcluido}
                             onChange={alterando(setStatusConcluido)}
-                            disabled={carregando}
+                            disabled={bloqueado}
                             label="Status Concluído"
                             {...propsObrigatorio(statusConcluido)}
                             excluir={statusIgnorado}
@@ -182,7 +189,7 @@ export const ConfiguracaoJiraStatusTab = forwardRef<AbaConfiguracoesHandle, AbaC
                         <SelectListaCacheada
                             value={statusIgnorado}
                             onChange={alterando(setStatusIgnorado)}
-                            disabled={carregando}
+                            disabled={bloqueado}
                             label="Status Ignorado"
                             {...propsObrigatorio(statusIgnorado)}
                             excluir={statusConcluido}

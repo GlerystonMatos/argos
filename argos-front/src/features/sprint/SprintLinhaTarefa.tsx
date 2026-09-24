@@ -1,12 +1,18 @@
 import { CORES } from '../../theme';
 import { formatarData } from '../../utils/datas';
 import { Fragment, type ReactNode } from 'react';
+import { LinkJira } from '../../components/LinkJira';
 import { formatarDuracao } from '../../utils/duracao';
 import type { LinhaTarefaSprint } from '../../api/tipos';
 import { BadgeSigla } from '../../components/BadgeSigla';
 import { BadgeTexto, EtiquetaFixa } from './SprintBadges';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutlineOutlined';
-import { corPrevisaoLiberacao, urgenciaPrevisaoLiberacao, ROTULOS_URGENCIA_PREVISAO_LIBERACAO } from '../../utils/previsaoLiberacao';
+
+import {
+    corPrevisaoLiberacao,
+    urgenciaPrevisaoLiberacao,
+    ROTULOS_URGENCIA_PREVISAO_LIBERACAO,
+} from '../../utils/previsaoLiberacao';
 
 import {
     GRUPOS,
@@ -59,23 +65,10 @@ export function SprintLinhaTarefa({
     corTag,
     janelaAlertaPrevisaoLiberacaoDias = 5,
 }: SprintLinhaTarefaProps): ReactNode {
-    const conteudoCodigo = linha.urlJira ? (
-        <Box
-            component="a"
-            href={linha.urlJira}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={(evento) => evento.stopPropagation()}
-            onDoubleClick={(evento) => evento.stopPropagation()}
-            sx={{
-                color: codigoDuplicado ? COR_PENDENTE : 'primary.main',
-                textDecoration: 'underline',
-                fontWeight: codigoDuplicado ? 700 : undefined,
-            }}>
+    const conteudoCodigo = (
+        <LinkJira url={linha.urlJira} destacado={codigoDuplicado}>
             {formatarCodigo(linha.codigo, larguraCodigo)}
-        </Box>
-    ) : (
-        formatarCodigo(linha.codigo, larguraCodigo)
+        </LinkJira>
     );
     const prioridade = infoPrioridade(linha.prioridade, coresPrioridade);
     const urgenciaPrevisao = urgenciaPrevisaoLiberacao(linha.previsaoLiberacao, janelaAlertaPrevisaoLiberacaoDias);

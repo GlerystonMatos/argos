@@ -5,6 +5,7 @@ import RefreshIcon from '@mui/icons-material/Refresh';
 import { useNotificacao } from '../../hooks/useNotificacao';
 import { MapaCoresLista } from '../../components/MapaCoresLista';
 import { Alert, IconButton, Stack, Tooltip } from '@mui/material';
+import { EsqueletoCarregando } from '../../components/EsqueletoCarregando';
 import { useEffect, useState, forwardRef, useImperativeHandle } from 'react';
 
 import {
@@ -21,10 +22,11 @@ export interface CoresJiraPanelHandle {
 
 interface CoresJiraPanelProps {
     onAlterado?: () => void;
+    salvando?: boolean;
 }
 
-export const CoresJiraPanel = forwardRef<CoresJiraPanelHandle, CoresJiraPanelProps>(function CoresJiraPanel({ onAlterado }, ref): ReactNode {
-    const { dados: cores, carregando, salvando, carregar, salvar } = useCoresJira();
+export const CoresJiraPanel = forwardRef<CoresJiraPanelHandle, CoresJiraPanelProps>(function CoresJiraPanel({ onAlterado, salvando: salvandoTudo = false }, ref): ReactNode {
+    const { dados: cores, carregando, carregado, salvando, carregar, salvar } = useCoresJira();
     const { notificarErro } = useNotificacao();
 
     const [statusNomes, setStatusNomes] = useState<string[]>([]);
@@ -33,6 +35,7 @@ export const CoresJiraPanel = forwardRef<CoresJiraPanelHandle, CoresJiraPanelPro
     const [timeNomes, setTimeNomes] = useState<string[]>([]);
     const [epicos, setEpicos] = useState<EpicoJira[]>([]);
     const [carregandoListas, setCarregandoListas] = useState(false);
+    const [listasCarregadas, setListasCarregadas] = useState(false);
     const [erroListas, setErroListas] = useState<string | null>(null);
 
     const [coresStatus, setCoresStatus] = useState<Record<string, string>>({});
@@ -56,10 +59,10 @@ export const CoresJiraPanel = forwardRef<CoresJiraPanelHandle, CoresJiraPanelPro
     async function carregarListas(forcarAtualizacao: boolean): Promise<void> {
         setCarregandoListas(true);
         setErroListas(null);
-        listarTimesJira()
+        const cargaTimes = listarTimesJira()
             .then((times) => setTimeNomes(times.nomes))
             .catch(() => setTimeNomes([]));
-        listarEpicosJira()
+        const cargaEpicos = listarEpicosJira()
             .then((resposta) => setEpicos(resposta.epicos))
             .catch(() => setEpicos([]));
         try {
@@ -74,7 +77,9 @@ export const CoresJiraPanel = forwardRef<CoresJiraPanelHandle, CoresJiraPanelPro
         } catch (erro) {
             setErroListas(erro instanceof Error ? erro.message : 'Não foi possível carregar os status/prioridades/colunas do Jira.');
         } finally {
+            await Promise.all([cargaTimes, cargaEpicos]);
             setCarregandoListas(false);
+            setListasCarregadas(true);
         }
     }
 
@@ -99,7 +104,11 @@ export const CoresJiraPanel = forwardRef<CoresJiraPanelHandle, CoresJiraPanelPro
 
     useImperativeHandle(ref, () => ({ salvar: salvarCores }));
 
+    if (!carregado || !listasCarregadas) return <EsqueletoCarregando />;
+
     if (!cores) return undefined;
+
+    const bloqueado = carregando || salvando || salvandoTudo || carregandoListas;
 
     const nomesTime = [...new Set([...timeNomes, ...Object.keys(coresTime)])].sort((a, b) => a.localeCompare(b, 'pt-BR'));
     const rotulosEpico: Record<string, string> = Object.fromEntries(
@@ -113,7 +122,7 @@ export const CoresJiraPanel = forwardRef<CoresJiraPanelHandle, CoresJiraPanelPro
             <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                 <Tooltip title="Atualizar status, prioridades, colunas, times e épicos reais do Jira">
                     <span>
-                        <IconButton onClick={() => void carregarListas(true)} disabled={carregandoListas} aria-label="Atualizar listas">
+                        <IconButton onClick={() => void carregarListas(true)} disabled={carregandoListas || salvando || salvandoTudo} aria-label="Atualizar listas">
                             <RefreshIcon fontSize="small" />
                         </IconButton>
                     </span>
@@ -129,7 +138,8 @@ export const CoresJiraPanel = forwardRef<CoresJiraPanelHandle, CoresJiraPanelPro
                 titulo="Cores por status:"
                 nomes={statusNomes}
                 cores={coresStatus}
-                disabled={carregando || salvando}
+                disabled={bloqueado}
+                carregando={carregandoListas}
                 onChange={(nome, cor) => {
                     setCoresStatus((atual) => ({ ...atual, [nome]: cor }));
                     onAlterado?.();
@@ -139,7 +149,8 @@ export const CoresJiraPanel = forwardRef<CoresJiraPanelHandle, CoresJiraPanelPro
                 titulo="Cores por prioridade:"
                 nomes={prioridadeNomes}
                 cores={coresPrioridade}
-                disabled={carregando || salvando}
+                disabled={bloqueado}
+                carregando={carregandoListas}
                 onChange={(nome, cor) => {
                     setCoresPrioridade((atual) => ({ ...atual, [nome]: cor }));
                     onAlterado?.();
@@ -149,7 +160,8 @@ export const CoresJiraPanel = forwardRef<CoresJiraPanelHandle, CoresJiraPanelPro
                 titulo="Cores por coluna:"
                 nomes={colunaNomes}
                 cores={coresColuna}
-                disabled={carregando || salvando}
+                disabled={bloqueado}
+                carregando={carregandoListas}
                 onChange={(nome, cor) => {
                     setCoresColuna((atual) => ({ ...atual, [nome]: cor }));
                     onAlterado?.();
@@ -159,7 +171,8 @@ export const CoresJiraPanel = forwardRef<CoresJiraPanelHandle, CoresJiraPanelPro
                 titulo="Cores por time:"
                 nomes={nomesTime}
                 cores={coresTime}
-                disabled={carregando || salvando}
+                disabled={bloqueado}
+                carregando={carregandoListas}
                 onChange={(nome, cor) => {
                     setCoresTime((atual) => ({ ...atual, [nome]: cor }));
                     onAlterado?.();
@@ -170,7 +183,8 @@ export const CoresJiraPanel = forwardRef<CoresJiraPanelHandle, CoresJiraPanelPro
                 nomes={chavesEpico}
                 rotulos={rotulosEpico}
                 cores={coresEpico}
-                disabled={carregando || salvando}
+                disabled={bloqueado}
+                carregando={carregandoListas}
                 onChange={(chave, cor) => {
                     setCoresEpico((atual) => ({ ...atual, [chave]: cor }));
                     onAlterado?.();

@@ -83,7 +83,7 @@ Biblioteca de classes referenciada pelo `Argos.Api`. Contém **tudo que não dep
 |---|---|
 | `Configuracao/` | `IArmazenamentoDados` (contrato) + `ArmazenamentoArquivos` (JSON em `dados/`); modelos e carregadores/salvadores de cada documento JSON (`CarregadorUsuariosToggl`, `CarregadorConfiguracaoCategoriasSprint` para Toggl, `CarregadorConfiguracaoJira`, `CarregadorCache`/`CarregadorCacheSprint`, etc.); `CaminhosDados` (referência de cada documento, `DocumentoDados`); `CriptografiaToken` (AES dos tokens); `ServicoUsuariosToggl`, `ServicoSprints`, `ServicoChaves`, `DiasUteis`, `Agrupamento` (helpers) |
 | `Toggl/` | `ClienteApiToggl` (HTTP Basic contra `api.track.toggl.com/api/v9`; `ObterTagsAsync` resolve o workspace via `GET /me` e, se `default_workspace_id` vier `null`, cai para `GET /workspaces` e usa o primeiro), `RegistroTempoDto`, `ResultadoApiToggl` (Ok/Falha, sem exceptions), `LimitadorRequisicoes` (30 req/hora por usuário, em memória) |
-| `Relatorios/` | `ServicoAgrupamento` (por descrição/tag, normalização "TEL"), `ServicoBuscaDescricao`, `ServicoCodigoTel` (separa Código/Descrição de uma descrição/issue TEL; usado por Sprint e Planejamento), `ComparadorNomes` (ordenação alfabética de nomes que ignora caixa e acento, sem cultura nomeada — ver [Docker](#docker)) — lógica pura, devolve dados, nunca texto formatado |
+| `Relatorios/` | `ServicoAgrupamento` (por descrição/tag, normalização "TEL"), `ServicoBuscaDescricao`, `NormalizacaoBusca` (regra única das buscas por texto: parte do texto, sem caixa, ignorando espaços e hífens — espelhada no front em `utils/buscaTexto.ts`), `ServicoCodigoTel` (separa Código/Descrição de uma descrição/issue TEL; usado por Sprint e Planejamento), `ComparadorNomes` (ordenação alfabética de nomes que ignora caixa e acento, sem cultura nomeada — ver [Docker](#docker)) — lógica pura, devolve dados, nunca texto formatado |
 | `Consultas/` | `ServicoConsulta` — decide cache×API e aplica o rate limiter |
 | `Gant/`, `Sprint/` | `ServicoGant`, `ServicoSprint` e seus modelos de resultado |
 | `Planejamento/` | `ServicoPlanejamento.Montar` (coluna do cartão, contagem por colaborador, resolução das pessoas pelo mapeamento Jira↔Toggl) e modelos de resultado (namespace `Argos.Planejamento`) |
@@ -123,13 +123,13 @@ Grava no Firestore ou em `dados/` ao lado do executável (ver [Armazenamento](#a
 | `GET` | `/api/usuarios-toggl/tags?forcarAtualizacao=` | Tags reais do workspace do Toggl, usando o token do usuário `administrador`; cacheada em `TogglTagsCache` até `forcarAtualizacao=true`; 400 se não há administrador |
 | `POST` | `/api/consultas` | Consulta o Toggl (cache-first, respeita o rate limit) e salva o retorno cru em `RelatorioData` |
 | `GET` | `/api/relatorio?dataInicio=&dataFim=` | Relatório agrupado a partir do cache; 409 se não há cache para esse período exato |
-| `GET` | `/api/busca?termo=` | Busca por descrição sobre o cache do Relatório; 409 sem cache |
+| `GET` | `/api/busca?termo=` | Busca por parte da descrição sobre o cache do Relatório (ignora caixa, espaços e hífens: `tel1535` acha `TEL - 1535 - …`); 409 sem cache |
 | `GET` | `/api/dados/download` | Baixa `dados.zip` com um `<Documento>.json` por documento armazenado; 404 se não há nenhum |
 | `POST` | `/api/dados/restaurar` | Restaura os documentos a partir de um `.zip` de `.json` (`multipart/form-data`, campo `arquivo`); ver [Armazenamento](#armazenamento-dados-ou-firestore) |
 | `GET` | `/api/gant/parametros` | Período do Gant + agrupamento/tags (mesma fonte única do Toggl) |
 | `PUT` | `/api/gant/parametros` | Atualiza período (opcional, como em `/api/configuracao`) e agrupamento/tags; 400 se `agrupamento` inválido |
 | `POST` | `/api/gant/consultas` | Igual a `/api/consultas`, mas grava em `GantData` |
-| `GET` | `/api/gant?dataInicio=&dataFim=&termo=` | Gant por usuário/categoria/descrição, dia a dia (só dias úteis); `termo` filtra por descrição; 409 sem cache |
+| `GET` | `/api/gant?dataInicio=&dataFim=&termo=` | Gant por usuário/categoria/descrição, dia a dia (só dias úteis); `termo` filtra por parte da descrição (mesma regra de `/api/busca`); 409 sem cache |
 | `GET` | `/api/sprints` | Lista os sprints (inclui `Fechado`) |
 | `POST` | `/api/sprints` | Cadastra um sprint (`Nome`, `HorasPorDia`, `MargemPercentual`, `DataInicio`, `DataFim`) — 400 (nome vazio, datas inválidas, `fim < inicio`, `HorasPorDia <= 0`, `MargemPercentual` fora de `[0, 100)`) / 409 (nome em uso); nasce aberto |
 | `PUT` | `/api/sprints/{chave}` | Edita um sprint (campos `null`/vazios não alteram); 409 se estiver fechado |

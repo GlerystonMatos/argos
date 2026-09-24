@@ -1,3 +1,4 @@
+import { contemTermo } from '../../utils/buscaTexto';
 import type { CartaoPlanejamento, PessoaPlanejamento, ResultadoPlanejamento } from '../../api/tipos';
 import { urgenciaPrevisaoLiberacao, type UrgenciaPrevisaoLiberacao } from '../../utils/previsaoLiberacao';
 
@@ -81,6 +82,7 @@ function normalizar(nome: string): string {
 export function filtrarCartoes(
     cartoes: CartaoPlanejamento[],
     filtros: FiltrosPlanejamento,
+    termoBusca: string,
     inverter: boolean,
     janelaAlertaPrevisaoLiberacaoDias: number,
 ): CartaoPlanejamento[] {
@@ -95,6 +97,8 @@ export function filtrarCartoes(
     const selecionado = (pessoa: PessoaPlanejamento | null): boolean => pessoa !== null && colaboradores.has(normalizar(pessoa.nomeJira));
 
     return cartoes.filter((cartao) => {
+        // A busca por texto fica fora da inversão, como no Sprint.
+        if (!contemTermo([`${cartao.codigo} ${cartao.descricao}`, `${cartao.chave} ${cartao.descricao}`], termoBusca)) return false;
         if (colunas.size > 0 && !atende(colunas.has(cartao.coluna))) return false;
         if (status.size > 0 && !atende(status.has(cartao.status))) return false;
         if (colaboradores.size > 0 && !atende(selecionado(cartao.responsavel) || selecionado(cartao.revisadoPor))) return false;

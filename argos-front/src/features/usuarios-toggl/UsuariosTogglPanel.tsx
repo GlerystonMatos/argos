@@ -11,6 +11,7 @@ import { useNotificacao } from '../../hooks/useNotificacao';
 import { CabecalhoView } from '../../components/CabecalhoView';
 import { UsuarioTogglFormDialog } from './UsuarioTogglFormDialog';
 import { DialogoConfirmacao } from '../../components/DialogoConfirmacao';
+import { EsqueletoCarregando } from '../../components/EsqueletoCarregando';
 import { BotaoComCarregamento } from '../../components/BotaoComCarregamento';
 
 import {
@@ -27,6 +28,7 @@ import {
     IconButton,
     CardContent,
     TableContainer,
+    CircularProgress,
 } from '@mui/material';
 
 const CELULA_ACOES_FIXA = {
@@ -48,8 +50,9 @@ export function UsuariosTogglPanel({ onUsuariosAlterados }: UsuariosTogglPanelPr
     const [listaCarregada, setListaCarregada] = useState(false);
     const { notificarErro, notificarSucesso } = useNotificacao();
     const [removendoChave, setRemovendoChave] = useState<string | null>(null);
+    const [alternandoChaves, setAlternandoChaves] = useState<ReadonlySet<string>>(new Set());
     const [usuarioEmEdicao, setUsuarioEmEdicao] = useState<UsuarioTogglResumo | null>(null);
-    const { usuariosToggl: usuarios, carregando, carregar, editar, remover } = useUsuariosToggl();
+    const { usuariosToggl: usuarios, carregando, carregado, carregar, editar, remover } = useUsuariosToggl();
     const [usuarioParaExcluir, setUsuarioParaExcluir] = useState<UsuarioTogglResumo | null>(null);
 
     useEffect(() => {
@@ -73,10 +76,17 @@ export function UsuariosTogglPanel({ onUsuariosAlterados }: UsuariosTogglPanelPr
     }
 
     async function alternarSelecionado(usuario: UsuarioTogglResumo): Promise<void> {
+        setAlternandoChaves((atual) => new Set(atual).add(usuario.chave));
         try {
             await editar(usuario.chave, { selecionado: !usuario.selecionado });
         } catch (erro) {
             notificarErro(erro, 'Não foi possível atualizar a seleção do usuário do Toggl');
+        } finally {
+            setAlternandoChaves((atual) => {
+                const novo = new Set(atual);
+                novo.delete(usuario.chave);
+                return novo;
+            });
         }
     }
 
@@ -107,13 +117,15 @@ export function UsuariosTogglPanel({ onUsuariosAlterados }: UsuariosTogglPanelPr
                         </BotaoComCarregamento>
                     </CabecalhoView>
 
-                    {usuarios.length === 0 && !carregando ? (
+                    {!carregado ? <EsqueletoCarregando /> : undefined}
+
+                    {carregado && usuarios.length === 0 && !carregando ? (
                         <Alert severity="info">
                             Nenhum usuário do Toggl cadastrado ainda. Cadastre pelo menos um para poder consultar o Toggl.
                         </Alert>
                     ) : undefined}
 
-                    {usuarios.length > 0 ? (
+                    {carregado && usuarios.length > 0 ? (
                         <TableContainer sx={{ mt: '0.5rem !important' }}>
                             <Table size="small">
                                 <TableHead>
@@ -132,6 +144,9 @@ export function UsuariosTogglPanel({ onUsuariosAlterados }: UsuariosTogglPanelPr
                                             <TableCell padding="checkbox">
                                                 <Checkbox
                                                     checked={usuario.selecionado}
+                                                    disabled={alternandoChaves.has(usuario.chave)}
+                                                    icon={alternandoChaves.has(usuario.chave) ? <CircularProgress size={16} /> : undefined}
+                                                    checkedIcon={alternandoChaves.has(usuario.chave) ? <CircularProgress size={16} /> : undefined}
                                                     onChange={() => void alternarSelecionado(usuario)}
                                                     aria-label="Incluir nas consultas" />
                                             </TableCell>

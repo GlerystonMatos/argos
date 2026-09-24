@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { useSprint } from './useSprint';
 import { fecharSprint } from '../../api/sprintsApi';
 import { CORES, ALTURA_CONTROLE } from '../../theme';
+import { contemTermo } from '../../utils/buscaTexto';
 import { obterCoresJira } from '../../api/coresJiraApi';
 import { SprintLinhaTarefa } from './SprintLinhaTarefa';
 import { AvisoCache } from '../../components/AvisoCache';
@@ -24,6 +25,7 @@ import {
     GRUPOS,
     contarDigitos,
     situacaoGrupo,
+    formatarCodigo,
     ordemPrioridade,
     calcularColisaoPosicao,
 } from './calculos';
@@ -257,10 +259,14 @@ export function SprintView({ chaveSprint, onVoltar, onPlanejar, quadroConfigurad
     }
 
     const tarefasFiltradas = useMemo(() => {
+        // Casa o código cru ("TEL - 994") e o exibido com zeros à esquerda ("TEL - 0994").
         let lista = termoBusca.trim()
-            ? tarefasComId.filter(({ linha }) =>
-                `${linha.codigo} ${linha.descricao}`.toLowerCase().includes(termoBusca.trim().toLowerCase()),
-            )
+            ? tarefasComId.filter(({ linha }) => contemTermo(
+                linha.codigo
+                    ? [`${linha.codigo} ${linha.descricao}`, `${formatarCodigo(linha.codigo, larguraCodigo)} ${linha.descricao}`]
+                    : linha.descricao,
+                termoBusca,
+            ))
             : tarefasComId;
 
         if (filtroPrioridades.length > 0) {
@@ -316,7 +322,7 @@ export function SprintView({ chaveSprint, onVoltar, onPlanejar, quadroConfigurad
         }
 
         return lista;
-    }, [tarefasComId, termoBusca, filtroPrioridades, filtroSituacoes, filtroColaboradores, filtroSituacaoGrupos, inverterFiltros, ordenacao]);
+    }, [tarefasComId, larguraCodigo, termoBusca, filtroPrioridades, filtroSituacoes, filtroColaboradores, filtroSituacaoGrupos, inverterFiltros, ordenacao]);
 
     const colaboradores = resultado?.colaboradores ?? [];
 

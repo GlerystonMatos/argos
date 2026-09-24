@@ -21,7 +21,7 @@ public static class ServicoBuscaDescricao
                     ? RotuloSemDescricao
                     : registro.Descricao.Trim();
 
-                if (!descricao.Contains(termoBusca, StringComparison.OrdinalIgnoreCase))
+                if (!NormalizacaoBusca.Contem(descricao, termoBusca))
                     continue;
 
                 if (!linhas.TryGetValue(descricao, out Dictionary<string, long>? porUsuario))

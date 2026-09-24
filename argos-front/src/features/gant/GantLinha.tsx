@@ -4,6 +4,7 @@ import { FONTE_MARCA } from '../../utils/tipografia';
 import { formatarDuracao } from '../../utils/duracao';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
+import { DescricaoComLinkJira } from '../../components/LinkJira';
 
 import {
     Box,
@@ -23,6 +24,7 @@ interface GantLinhaProps {
     primeiraDoUsuario: boolean;
     usuarioExpandido: boolean;
     onAlternarUsuario: () => void;
+    urlDominioJira: string;
 }
 
 export function GantLinha({
@@ -33,6 +35,7 @@ export function GantLinha({
     primeiraDoUsuario,
     usuarioExpandido,
     onAlternarUsuario,
+    urlDominioJira,
 }: GantLinhaProps): ReactNode {
     return (
         <Fragment>
@@ -59,7 +62,7 @@ export function GantLinha({
                     <TableCell sx={{ py: 0 }}>
                         <Tooltip title={linha.descricao}>
                             <Box sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                {linha.descricao}
+                                <DescricaoComLinkJira descricao={linha.descricao} urlDominioJira={urlDominioJira} />
                             </Box>
                         </Tooltip>
                     </TableCell>

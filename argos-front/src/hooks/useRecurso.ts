@@ -3,6 +3,7 @@ import { useCallback, useState } from 'react';
 export interface ResultadoUseRecurso<TArgs extends unknown[], TResp> {
     dados: TResp | null;
     carregando: boolean;
+    carregado: boolean;
     carregar: (...args: TArgs) => Promise<TResp>;
 }
 
@@ -11,6 +12,7 @@ export function useRecurso<TArgs extends unknown[], TResp>(
 ): ResultadoUseRecurso<TArgs, TResp> {
     const [dados, setDados] = useState<TResp | null>(null);
     const [carregando, setCarregando] = useState(false);
+    const [carregado, setCarregado] = useState(false);
 
     const carregar = useCallback(
         async (...args: TArgs): Promise<TResp> => {
@@ -21,10 +23,11 @@ export function useRecurso<TArgs extends unknown[], TResp>(
                 return resultado;
             } finally {
                 setCarregando(false);
+                setCarregado(true);
             }
         },
         [fn],
     );
 
-    return { dados, carregando, carregar };
+    return { dados, carregando, carregado, carregar };
 }

@@ -23,6 +23,7 @@ interface RelatorioViewProps {
     onAlternarSelecao: (chave: string) => void;
     onVoltar: () => void;
     veioDoCache: boolean;
+    urlDominioJira: string;
 }
 
 export function RelatorioView({
@@ -32,11 +33,12 @@ export function RelatorioView({
     onAlternarSelecao,
     onVoltar,
     veioDoCache,
+    urlDominioJira,
 }: RelatorioViewProps): ReactNode {
     const busca = useBusca();
     const { notificarErro } = useNotificacao();
     const [buscaAberta, setBuscaAberta] = useState(false);
-    const { relatorio, carregando, carregar } = useRelatorio();
+    const { relatorio, carregando, carregado, carregar } = useRelatorio();
     const { expandido, alternarUm, alternarTodos, todosExpandidos } = useExpansao(
         relatorio ? relatorio.usuarios.map((usuario) => usuario.nomeExibicao) : [],
         relatorio,
@@ -48,6 +50,7 @@ export function RelatorioView({
         );
     }, [dataInicio, dataFim]);
 
+    const pronto = carregado && !carregando;
     const resultadoBuscaVisivel = buscaAberta && busca.resultado !== null;
 
     function alternarBusca(): void {
@@ -73,17 +76,17 @@ export function RelatorioView({
                 <BotaoComCarregamento onClick={onVoltar}>Voltar</BotaoComCarregamento>
             </CabecalhoView>
 
-            {buscaAberta ? <BuscaPanel busca={busca} /> : undefined}
+            {buscaAberta ? <BuscaPanel busca={busca} urlDominioJira={urlDominioJira} /> : undefined}
 
-            {veioDoCache ? <AvisoCache /> : undefined}
+            {pronto && veioDoCache ? <AvisoCache /> : undefined}
 
-            {carregando && !relatorio ? <EsqueletoCarregando /> : undefined}
+            {!pronto ? <EsqueletoCarregando /> : undefined}
 
-            {relatorio && relatorio.usuarios.length === 0 && !resultadoBuscaVisivel ? (
+            {pronto && relatorio && relatorio.usuarios.length === 0 && !resultadoBuscaVisivel ? (
                 <Alert severity="warning">Nenhum usuário do Toggl com dados para este período.</Alert>
             ) : undefined}
 
-            {relatorio && !resultadoBuscaVisivel ? (
+            {pronto && relatorio && !resultadoBuscaVisivel ? (
                 <Box sx={{ mt: '0.5rem !important' }}>
                     {relatorio.usuarios.map((usuario) => (
                         <RelatorioUsuarioCard
@@ -93,7 +96,8 @@ export function RelatorioView({
                             expandido={expandido[usuario.nomeExibicao] ?? false}
                             onAlternar={() => alternarUm(usuario.nomeExibicao)}
                             selecionados={selecionados}
-                            onAlternarSelecao={onAlternarSelecao} />
+                            onAlternarSelecao={onAlternarSelecao}
+                            urlDominioJira={urlDominioJira} />
                     ))}
                 </Box>
             ) : undefined}

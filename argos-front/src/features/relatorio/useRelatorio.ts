@@ -5,10 +5,11 @@ import type { RelatorioResponse } from '../../api/tipos';
 interface ResultadoUseRelatorio {
     relatorio: RelatorioResponse | null;
     carregando: boolean;
+    carregado: boolean;
     carregar: (dataInicio: string, dataFim: string) => Promise<RelatorioResponse>;
 }
 
 export function useRelatorio(): ResultadoUseRelatorio {
-    const { dados, carregando, carregar } = useRecurso(obterRelatorio);
-    return { relatorio: dados, carregando, carregar };
+    const { dados, carregando, carregado, carregar } = useRecurso(obterRelatorio);
+    return { relatorio: dados, carregando, carregado, carregar };
 }

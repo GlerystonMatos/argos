@@ -69,8 +69,8 @@ de informação alinhado à base do texto abre o diálogo **Sobre** (`SobreDialo
 o conceito do nome (Argos Panoptes e o cão de Odisseu) e o mesmo crédito/versão do rodapé (`CreditoApp`). O Resumo mostra o status de
 8 blocos de configuração (Usuários do Toggl; Toggl: Configurações; Jira: Conexão; Jira: Campos;
 Jira: Status; Jira: Cores; Jira: Quadro; Jira ↔ Toggl: Mapeamento), cada um com um botão "Configurar" que
-leva direto à seção/aba correspondente, e um sinal "+/–" para expandir/colapsar seus detalhes (mais os botões
-"Expandir tudo"/"Colapsar tudo" — **todos os blocos começam colapsados**). A conexão mostra o e-mail junto ao
+leva direto à seção/aba correspondente, e um sinal "+/–" para expandir/colapsar seus detalhes (mais um botão
+único "Expandir tudo"/"Colapsar tudo" à direita do título — **todos os blocos começam colapsados**). A conexão mostra o e-mail junto ao
 domínio e o quadro de DEV; Cores traz uma lista compacta por status/prioridade/coluna (chips de cor, sem rolagem
 interna própria — flui com a rolagem da página); Quadro lista as colunas ocultas no Planejamento; Mapeamento traz
 siglas com tooltip "Nome Toggl (Jira: Nome Jira)" ou "Nome Jira (somente no Jira)". O resumo é recarregado a cada
@@ -148,11 +148,14 @@ sprint, voltar ao valor original desabilita o Salvar:
 
 ### Relatório e Gant
 
-Cada um tem sua tela de **parâmetros** (só o período — agrupamento e tags vêm de Configurações) e a opção
-**"Forçar nova consulta à API"** (ignora o cache local; não é persistida). O botão único **Consultar**
-salva os parâmetros, pede confirmação se a consulta for forçada (consome o limite de 30 requisições/hora
-por usuário), consulta e abre a visualização, com botão **Voltar** para os parâmetros. Relatório usa
-`POST /api/consultas`; Gant, `POST /api/gant/consultas` (parâmetros e cache **independentes**).
+Cada um tem sua tela de **parâmetros** (só o período — agrupamento e tags vêm de Configurações) e o botão
+**Consultar**, que abre o mesmo modal do Sprint (`ConsultaDialog` + `SeletorOrigemConsulta`) com
+**"Forçar nova consulta em: Nenhum / Toggl"** — só essas duas, pois Relatório e Gant não consultam o Jira
+(`toggl` = `forcarConsultaApi: true`). Forçar Toggl pede confirmação (limite de 30 requisições/hora por
+usuário); em seguida salva os parâmetros, consulta e abre a visualização, com botão **Voltar** para os
+parâmetros. Relatório usa `POST /api/consultas`; Gant, `POST /api/gant/consultas` (parâmetros e cache
+**independentes**). Em ambos, o código TEL da descrição é **link para o cartão no Jira** (`LinkJira`,
+mesmo componente do Sprint/Planejamento; ver "Link para o Jira" em Decisões técnicas).
 
 - **Relatório** — um acordeão por usuário (sigla, nome, total, indicação de cache) contendo uma tabela
   `[checkbox] · Tag · Descrição · Tempo`, com as linhas por descrição primeiro e depois as por tag;
@@ -239,7 +242,8 @@ sprint ativo do quadro). **Voltar** retorna ao Acompanhamento, que continua mont
   Jira (buscadas à parte) terminam de carregar — até lá, esqueleto de carregamento.
 - **Colunas ocultas**: configuráveis em Configurações → Jira: Quadro — cartões dessas colunas somem da grid, dos
   totais por coluna e das contagens de colaborador.
-- **Filtros**: Coluna, Status, Colaborador (casa Responsável **ou** Revisado por), Time, Épico e **Prazo** (No
+- **Filtros**: busca por **código/descrição** (casa código, chave do Jira e descrição; nunca invertida), Coluna,
+  Status, Colaborador (casa Responsável **ou** Revisado por), Time, Épico e **Prazo** (No
   prazo/Perto do prazo/Prazo vencido — mesma categorização usada na cor da Previsão), **Inverter filtros** e
   **Limpar** — E entre filtros, OU dentro de cada um (mesma multi-seleção compacta do Sprint). Afetam só a grid (o
   card sempre mostra todos) e resetam ao trocar de sprint.
@@ -302,9 +306,13 @@ src/
 - **Multi-seleção compacta** (`AutocompleteMultiCompacto`, usado por `FiltroMultiSelecao` — filtros do Sprint e do Planejamento — e por `SelectListaCacheada` — tags/status das Configurações): altura fixa (40px, `nowrap`, `overflow: hidden`) que **nunca cresce** com muitos itens; mostra 1 chip (com ellipsis) + chip "+N" cujo tooltip lista todos os selecionados (`renderValue` do MUI 9; o `limitTags` nativo só limita sem foco e não tem tooltip). As opções selecionadas **permanecem na lista com o checkbox marcado** (`disableCloseOnSelect`, sem `filterSelectedOptions`), para que qualquer item oculto atrás do "+N" possa ser desmarcado; `SelectListaCacheada` também acrescenta às opções os valores selecionados que sumiram da listagem carregada.
 - **Relatório e Gant compartilham a base de parâmetros/consulta** (`ParametrosFormBase`, `useConsultaGenerica`) e a base de hooks (`useRecurso`/`useRecursoEditavel`/`useColecaoCrud`); antes de duplicar um hook ou componente, procurar em `components`/`hooks`/`utils`.
 - **Planejamento sobre o Acompanhamento**: enquanto o Planejamento está aberto, o `SprintView` fica montado e oculto (preserva filtros e ordenação; o custo é alternar levar cerca de 1,5 s em dev, pelo re-render das linhas). A atualização forçada em segundo plano (`atualizacoesPlanejamento.ts`) guarda as promessas em andamento por sprint, para que abrir o Planejamento durante ela espere o dado novo em vez de mostrar o antigo.
+- **Carregamento "tudo ou nada"**: nenhuma tela mostra formulário, tabela ou aviso de validação antes de **todas** as suas leituras terminarem — até lá, `EsqueletoCarregando` (padrão `pronto` do Sprint/Planejamento; os hooks base expõem `carregado`, que vira `true` após a 1ª carga, com sucesso ou erro). Durante gravações os controles ficam desabilitados (inclusive as abas de Configurações durante o **Salvar** global) e recargas (busca do Gant/Relatório, Atualizar do Planejamento) trocam o dado antigo pelo esqueleto.
+- **Busca por código/descrição** (`utils/buscaTexto.ts`, espelhada em `Argos.Nucleo/Relatorios/NormalizacaoBusca.cs` para `/api/busca` e o `termo` do Gant): casa por **parte** do texto, sem diferenciar maiúsculas e **ignorando espaços e hífens** — "TEL-1535", "tel1535" e "1535" acham "TEL - 1535 - …"; no Sprint também casa o código com zeros ("TEL-0994"). Termo vazio (ou só espaços/hífens) casa tudo.
+- **Link para o Jira** (`components/LinkJira.tsx` + `utils/codigoTel.ts`): Sprint/Planejamento usam a URL que vem da API (só issue encontrada); Relatório, busca e Gant montam no front, sem chamada extra, `{urlDominio normalizado}/browse/TEL-<n>` (zeros à esquerda removidos) a partir de `jiraUrlDominio` do resumo — por isso linkam qualquer código TEL, mesmo sem issue no Jira. Só o trecho do código é clicável; sem Jira configurado ou sem código (linhas de tag), texto puro.
 - **Login sem popup nativo do navegador**: a API nunca manda `WWW-Authenticate` no 401, então o app trata o 401 e mostra a própria tela de login; a credencial fica em `sessionStorage` (some ao fechar a aba).
 - **Download e upload de `dados/` via `fetch` autenticado + blob** (`http.getArquivo`/`http.postArquivo`), nunca `<a href>` direto: um link de navegação não carrega a credencial Basic, e o wrapper padrão só serializa JSON.
 - **`localStorage` com um único uso**: o tachado do Sprint (`features/sprint/tachados.ts`, isolado por sprint). O menu lateral não persiste estado — sempre abre expandido. Não usar para mais nada sem necessidade equivalente.
+- **"Lembrar login"** (`api/loginLembrado.ts`): marcado no login, a credencial é cifrada com AES-GCM 256 (Web Crypto) e guardada no IndexedDB junto com uma chave gerada no navegador e **não exportável** — o JavaScript nunca acessa os bytes da chave, então o dado não é decifrável fora deste navegador. Validade de 30 dias; apagada ao **Sair**, em qualquer 401 (ex.: senha trocada) e ao entrar sem marcar a opção. Ao abrir o app sem sessão, o login lembrado é tentado antes da tela de login. Só aparece em contexto seguro (`localhost`/https). Proteção contra leitura do armazenamento, não contra script malicioso rodando na própria página (que usaria a chave sem extraí-la).
 
 ## Contrato consumido
 

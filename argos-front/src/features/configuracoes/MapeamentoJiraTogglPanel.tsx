@@ -10,6 +10,7 @@ import { listarUsuariosJira } from '../../api/jiraListasApi';
 import { useMapeamentoJiraToggl } from './useMapeamentoJiraToggl';
 import type { EntradaMapeamentoJiraToggl } from '../../api/tipos';
 import { useUsuariosToggl } from '../usuarios-toggl/useUsuariosToggl';
+import { EsqueletoCarregando } from '../../components/EsqueletoCarregando';
 
 import {
     Fragment,
@@ -52,13 +53,14 @@ const ENTRADA_VAZIA: EntradaMapeamentoJiraToggl = { chaveToggl: null, sigla: nul
 const COR_PADRAO_EXCLUSIVO: string = CORES.corIndisponivel;
 
 export const MapeamentoJiraTogglPanel = forwardRef<MapeamentoJiraTogglPanelHandle, AbaConfiguracoesProps>(
-    function MapeamentoJiraTogglPanel({ onAlterado, onValidoChange }, ref): ReactNode {
-        const { dados: mapeamentoSalvo, carregando, salvando, carregar, salvar } = useMapeamentoJiraToggl();
-        const { usuariosToggl, carregar: carregarUsuariosToggl } = useUsuariosToggl();
+    function MapeamentoJiraTogglPanel({ onAlterado, onValidoChange, salvando: salvandoTudo = false }, ref): ReactNode {
+        const { dados: mapeamentoSalvo, carregando, carregado, salvando, carregar, salvar } = useMapeamentoJiraToggl();
+        const { usuariosToggl, carregado: usuariosTogglCarregados, carregar: carregarUsuariosToggl } = useUsuariosToggl();
         const { notificarErro, notificarSucesso } = useNotificacao();
 
         const [nomesJira, setNomesJira] = useState<string[]>([]);
         const [carregandoLista, setCarregandoLista] = useState(false);
+        const [listaJiraCarregada, setListaJiraCarregada] = useState(false);
         const [erroLista, setErroLista] = useState<string | null>(null);
         const [mapeamento, setMapeamento] = useState<Record<string, EntradaMapeamentoJiraToggl>>({});
         const [nomeEmEdicao, setNomeEmEdicao] = useState<string | null>(null);
@@ -92,6 +94,7 @@ export const MapeamentoJiraTogglPanel = forwardRef<MapeamentoJiraTogglPanelHandl
                 setErroLista(erro instanceof Error ? erro.message : 'Não foi possível carregar os usuários do Jira.');
             } finally {
                 setCarregandoLista(false);
+                setListaJiraCarregada(true);
             }
         }
 
@@ -135,7 +138,11 @@ export const MapeamentoJiraTogglPanel = forwardRef<MapeamentoJiraTogglPanelHandl
             setNomeEmEdicao(null);
         }
 
+        if (!carregado || !usuariosTogglCarregados || !listaJiraCarregada) return <EsqueletoCarregando />;
+
         if (!mapeamentoSalvo) return undefined;
+
+        const bloqueado = carregando || salvando || salvandoTudo;
 
         const nomesForaDaLista = Object.keys(mapeamento).filter((nome) => !nomesJira.includes(nome));
         const nomesTabela = [...nomesJira, ...nomesForaDaLista];
@@ -145,7 +152,7 @@ export const MapeamentoJiraTogglPanel = forwardRef<MapeamentoJiraTogglPanelHandl
                 <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                     <Tooltip title="Atualizar usuários reais do Jira">
                         <span>
-                            <IconButton onClick={() => void carregarListaJira(true)} disabled={carregandoLista} aria-label="Atualizar lista">
+                            <IconButton onClick={() => void carregarListaJira(true)} disabled={carregandoLista || bloqueado} aria-label="Atualizar lista">
                                 <RefreshIcon fontSize="small" />
                             </IconButton>
                         </span>
@@ -202,7 +209,7 @@ export const MapeamentoJiraTogglPanel = forwardRef<MapeamentoJiraTogglPanelHandl
                                                 '& .MuiSelect-select.MuiSelect-select': { display: 'flex', alignItems: 'center', boxSizing: 'border-box', height: ALTURA_CONTROLE, py: 0 },
                                             }}
                                             value={chaveSelecionada}
-                                            disabled={carregando || salvando}
+                                            disabled={bloqueado}
                                             onChange={(evento) => {
                                                 const valor = evento.target.value;
                                                 onAlterado?.();
@@ -246,7 +253,7 @@ export const MapeamentoJiraTogglPanel = forwardRef<MapeamentoJiraTogglPanelHandl
                                             <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                                                 <BadgeSigla sigla={entrada.sigla ?? ''} cor={entrada.cor ?? undefined} sx={{ borderRadius: 1 }} />
                                                 <Tooltip title="Definir Sigla/Cor deste usuário exclusivo do Jira">
-                                                    <IconButton size="small" onClick={() => abrirEdicaoExclusivo(nome)} disabled={salvando}>
+                                                    <IconButton size="small" onClick={() => abrirEdicaoExclusivo(nome)} disabled={bloqueado}>
                                                         <EditIcon fontSize="inherit" />
                                                     </IconButton>
                                                 </Tooltip>

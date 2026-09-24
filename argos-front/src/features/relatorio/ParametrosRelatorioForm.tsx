@@ -16,6 +16,7 @@ export function ParametrosRelatorioForm({ semUsuarios, onConcluida }: Parametros
     return (
         <ParametrosFormBase
             titulo="Parâmetros do Relatório"
+            tituloConsulta="Consultar Relatório"
             semUsuarios={semUsuarios}
             mensagemErroCarregar="Não foi possível carregar os parâmetros do Relatório salvos"
             carregarInicial={async () => {

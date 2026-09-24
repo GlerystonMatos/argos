@@ -34,11 +34,12 @@ interface GantViewProps {
     dataFim: string;
     onVoltar: () => void;
     veioDoCache: boolean;
+    urlDominioJira: string;
 }
 
-export function GantView({ dataInicio, dataFim, onVoltar, veioDoCache }: GantViewProps): ReactNode {
+export function GantView({ dataInicio, dataFim, onVoltar, veioDoCache, urlDominioJira }: GantViewProps): ReactNode {
     const { notificarErro } = useNotificacao();
-    const { gant, carregando, carregar } = useGant();
+    const { gant, carregando, carregado, carregar } = useGant();
     const [termoBusca, setTermoBusca] = useState('');
     const [buscaAberta, setBuscaAberta] = useState(false);
     const [termoAtivo, setTermoAtivo] = useState<string | undefined>(undefined);
@@ -57,6 +58,7 @@ export function GantView({ dataInicio, dataFim, onVoltar, veioDoCache }: GantVie
     );
 
     const totalColunas = 3 + (gant?.dias.length ?? 0);
+    const pronto = carregado && !carregando;
 
     const refTabela = useRef<HTMLTableElement>(null);
     const { medindo, larguras, somaFixas } = useLargurasColunasGant(refTabela, gant, INDICE_COLUNA_DESCRICAO);
@@ -78,7 +80,7 @@ export function GantView({ dataInicio, dataFim, onVoltar, veioDoCache }: GantVie
                 <BotaoComCarregamento
                     startIcon={todosExpandidos ? <UnfoldLessIcon /> : <UnfoldMoreIcon />}
                     onClick={alternarTodos}
-                    disabled={usuariosDistintos.length === 0}>
+                    disabled={!pronto || usuariosDistintos.length === 0}>
                     {todosExpandidos ? 'Colapsar tudo' : 'Expandir tudo'}
                 </BotaoComCarregamento>
                 <BotaoComCarregamento onClick={onVoltar}>Voltar</BotaoComCarregamento>
@@ -91,20 +93,21 @@ export function GantView({ dataInicio, dataFim, onVoltar, veioDoCache }: GantVie
                         value={termoBusca}
                         onChange={(evento) => setTermoBusca(evento.target.value)}
                         onKeyDown={(evento) => {
-                            if (evento.key === 'Enter') setTermoAtivo(termoBusca.trim() || undefined);
+                            if (evento.key === 'Enter' && !carregando) setTermoAtivo(termoBusca.trim() || undefined);
                         }}
                         size="small"
                         fullWidth
                         autoFocus />
                     <BotaoComCarregamento
                         variant="contained"
+                        carregando={carregando}
                         disabled={!termoBusca.trim()}
                         onClick={() => setTermoAtivo(termoBusca.trim() || undefined)}>
                         Buscar
                     </BotaoComCarregamento>
                     <BotaoComCarregamento
                         variant="outlined"
-                        disabled={!termoBusca && termoAtivo === undefined}
+                        disabled={carregando || (!termoBusca && termoAtivo === undefined)}
                         onClick={() => {
                             setTermoBusca('');
                             setTermoAtivo(undefined);
@@ -114,11 +117,11 @@ export function GantView({ dataInicio, dataFim, onVoltar, veioDoCache }: GantVie
                 </Stack>
             ) : undefined}
 
-            {veioDoCache ? <AvisoCache /> : undefined}
+            {pronto && veioDoCache ? <AvisoCache /> : undefined}
 
-            {carregando && !gant ? <EsqueletoCarregando /> : undefined}
+            {!pronto ? <EsqueletoCarregando /> : undefined}
 
-            {gant && gant.linhas.length === 0 ? (
+            {pronto && gant && gant.linhas.length === 0 ? (
                 <Alert severity="warning">
                     {termoAtivo !== undefined
                         ? 'Nenhuma descrição encontrada para esse termo.'
@@ -126,7 +129,7 @@ export function GantView({ dataInicio, dataFim, onVoltar, veioDoCache }: GantVie
                 </Alert>
             ) : undefined}
 
-            {gant && gant.linhas.length > 0 ? (
+            {pronto && gant && gant.linhas.length > 0 ? (
                 <TableContainer sx={{ overflowX: 'auto', mt: '0.5rem !important' }}>
                     <Table
                         size="small"
@@ -173,7 +176,8 @@ export function GantView({ dataInicio, dataFim, onVoltar, veioDoCache }: GantVie
                                         medindo={medindo}
                                         primeiraDoUsuario={primeiraDoUsuario}
                                         usuarioExpandido={usuarioExpandido}
-                                        onAlternarUsuario={() => alternarUm(linha.usuarioChave)} />
+                                        onAlternarUsuario={() => alternarUm(linha.usuarioChave)}
+                                        urlDominioJira={urlDominioJira} />
                                 );
                             })}
                         </TableBody>
