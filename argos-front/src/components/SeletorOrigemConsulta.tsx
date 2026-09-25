@@ -3,6 +3,8 @@ import { ROTULO_OPCAO } from './origemConsulta';
 import type { OrigemConsulta } from './origemConsulta';
 import { Stack, Typography, ToggleButton, ToggleButtonGroup } from '@mui/material';
 
+const ESTILO_OPCAO_COMPACTA = { height: 30, px: 1.25, fontSize: '0.75rem' } as const;
+
 interface SeletorOrigemConsultaProps<T extends OrigemConsulta> {
     opcoes: readonly T[];
     valor: T;
@@ -30,7 +32,7 @@ export function SeletorOrigemConsulta<T extends OrigemConsulta>({
                     if (novo) onChange(novo);
                 }}>
                 {opcoes.map((opcao) => (
-                    <ToggleButton key={opcao} value={opcao}>{ROTULO_OPCAO[opcao]}</ToggleButton>
+                    <ToggleButton key={opcao} value={opcao} sx={ESTILO_OPCAO_COMPACTA}>{ROTULO_OPCAO[opcao]}</ToggleButton>
                 ))}
             </ToggleButtonGroup>
             <Typography variant="caption" color="text.secondary">

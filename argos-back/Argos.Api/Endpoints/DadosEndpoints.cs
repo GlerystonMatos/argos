@@ -11,15 +11,21 @@ public static class DadosEndpoints
 
     private static readonly UTF8Encoding Codificacao = new(encoderShouldEmitUTF8Identifier: false);
 
-    public static void MapDadosEndpoints(this WebApplication app, IArmazenamentoDados armazenamento)
+    public static void MapDadosEndpoints(this WebApplication app, CaminhosDados caminhos)
     {
+        IArmazenamentoDados armazenamento = caminhos.Armazenamento;
         RouteGroupBuilder grupo = app.MapGroup("/api/dados").WithTags("Dados");
 
         grupo.MapGet("/download", () => BaixarPastaDados(armazenamento))
             .WithSummary("Baixa todos os documentos de dados (um .json por documento), compactados em .zip");
 
-        grupo.MapPost("/restaurar", (IFormFile arquivo) => RestaurarPastaDados(arquivo, armazenamento))
-            .WithSummary("Restaura os dados a partir de um .zip enviado (um .json por documento; sobrescreve documentos de mesmo nome)")
+        grupo.MapPost("/restaurar", (IFormFile arquivo, ILogger<CaminhosDados> logger) =>
+            {
+                IResult resultado = RestaurarPastaDados(arquivo, armazenamento);
+                ExecucaoMigracaoDados.Executar(logger, caminhos);
+                return resultado;
+            })
+            .WithSummary("Restaura os dados a partir de um .zip enviado (um .json por documento; sobrescreve documentos de mesmo nome) e migra formatos antigos")
             .DisableAntiforgery();
     }
 

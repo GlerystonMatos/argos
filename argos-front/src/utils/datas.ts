@@ -20,6 +20,19 @@ export function periodoEhValido(dataInicio: string, dataFim: string): boolean {
     return dataEhValida(dataInicio) && dataEhValida(dataFim) && dataInicio <= dataFim;
 }
 
+export function contarDiasUteis(dataInicio: string, dataFim: string): number {
+    if (!periodoEhValido(dataInicio, dataFim)) return 0;
+    const [anoFim, mesFim, diaFim] = dataFim.split('-').map(Number);
+    const fim = new Date(anoFim, mesFim - 1, diaFim);
+    const [ano, mes, dia] = dataInicio.split('-').map(Number);
+    let total = 0;
+    for (const data = new Date(ano, mes - 1, dia); data <= fim; data.setDate(data.getDate() + 1)) {
+        const diaSemana = data.getDay();
+        if (diaSemana !== 0 && diaSemana !== 6) total++;
+    }
+    return total;
+}
+
 export function formatarData(iso: string): string {
     const [ano, mes, dia] = iso.split('-');
     return `${dia}/${mes}/${ano}`;

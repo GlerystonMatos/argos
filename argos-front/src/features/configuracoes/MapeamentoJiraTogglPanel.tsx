@@ -307,7 +307,7 @@ export const MapeamentoJiraTogglPanel = forwardRef<MapeamentoJiraTogglPanelHandl
                         <Stack spacing={0.5}>
                             <Typography variant="body2">
                                 Associe todo usuário cadastrado no Toggl a um usuário do Jira e defina Sigla/Cor dos usuários
-                                exclusivos do Jira para liberar Relatório, Gant e Sprint.
+                                exclusivos do Jira para liberar Relatório, Gant, Sprint e Planejamento.
                             </Typography>
                             {avaliacao.usuariosTogglSemPar.length > 0 ? (
                                 <Stack direction="row" useFlexGap sx={{ flexWrap: 'wrap', gap: 1, alignItems: 'center' }}>

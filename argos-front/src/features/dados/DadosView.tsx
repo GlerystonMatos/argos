@@ -58,7 +58,7 @@ export function DadosView(): ReactNode {
                     <Typography variant="body2" color="text.secondary">
                         Os dados da aplicação ficam em documentos <code>.json</code> (pasta <code>dados/</code> ou Firestore): cadastro
                         de usuários do Toggl, configurações (Toggl e Jira), sprints, parâmetros e caches das consultas
-                        de Relatório, Gant e Sprint.
+                        de Relatório, Gant, Sprint e Planejamento.
                     </Typography>
 
                     <Typography variant="body2" color="text.secondary">

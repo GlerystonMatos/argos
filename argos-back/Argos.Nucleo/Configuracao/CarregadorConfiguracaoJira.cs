@@ -10,9 +10,13 @@ public static class CarregadorConfiguracaoJira
 
     private const string PropriedadeApiToken = "apiToken";
 
-    private const string PropriedadeQuadroId = "quadroId";
+    internal const string PropriedadeQuadroDevId = "quadroDevId";
 
-    private const string PropriedadeQuadroNome = "quadroNome";
+    internal const string PropriedadeQuadroDevNome = "quadroDevNome";
+
+    private const string PropriedadeQuadroAnaliseId = "quadroAnaliseId";
+
+    private const string PropriedadeQuadroAnaliseNome = "quadroAnaliseNome";
 
     private const string PropriedadeCampos = "campos";
 
@@ -44,8 +48,10 @@ public static class CarregadorConfiguracaoJira
             configuracao.UrlDominio = DocumentoJson.ObterTexto(conexao, PropriedadeUrlDominio, "");
             configuracao.Email = DocumentoJson.ObterTexto(conexao, PropriedadeEmail, "");
             configuracao.ApiToken = CriptografiaToken.Descriptografar(DocumentoJson.ObterTexto(conexao, PropriedadeApiToken, ""));
-            configuracao.QuadroId = DocumentoJson.Obter<long?>(conexao, PropriedadeQuadroId);
-            configuracao.QuadroNome = DocumentoJson.ObterTexto(conexao, PropriedadeQuadroNome, "");
+            configuracao.QuadroDevId = DocumentoJson.Obter<long?>(conexao, PropriedadeQuadroDevId);
+            configuracao.QuadroDevNome = DocumentoJson.ObterTexto(conexao, PropriedadeQuadroDevNome, "");
+            configuracao.QuadroAnaliseId = DocumentoJson.Obter<long?>(conexao, PropriedadeQuadroAnaliseId);
+            configuracao.QuadroAnaliseNome = DocumentoJson.ObterTexto(conexao, PropriedadeQuadroAnaliseNome, "");
         }
 
         JsonObject? documentoCampos = DocumentoJson.Ler(caminhos.JiraCampos);
@@ -81,10 +87,15 @@ public static class CarregadorConfiguracaoJira
             [PropriedadeApiToken] = apiTokenArmazenado
         };
 
-        if (configuracao.QuadroId is not null)
-            conexao[PropriedadeQuadroId] = configuracao.QuadroId.Value;
+        if (configuracao.QuadroDevId is not null)
+            conexao[PropriedadeQuadroDevId] = configuracao.QuadroDevId.Value;
 
-        conexao[PropriedadeQuadroNome] = configuracao.QuadroNome;
+        conexao[PropriedadeQuadroDevNome] = configuracao.QuadroDevNome;
+
+        if (configuracao.QuadroAnaliseId is not null)
+            conexao[PropriedadeQuadroAnaliseId] = configuracao.QuadroAnaliseId.Value;
+
+        conexao[PropriedadeQuadroAnaliseNome] = configuracao.QuadroAnaliseNome;
         return conexao;
     }
 

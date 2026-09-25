@@ -1,13 +1,12 @@
 import type { ReactNode } from 'react';
-import type { Sprint } from '../../api/tipos';
 import { ALTURA_CONTROLE } from '../../theme';
-import { usePlanejamento } from './usePlanejamento';
 import { useEffect, useMemo, useState } from 'react';
 import type { FiltrosPlanejamento } from './filtros';
 import RefreshIcon from '@mui/icons-material/Refresh';
-import { obterCoresJira } from '../../api/coresJiraApi';
+import type { TipoQuadroJira } from '../../api/tipos';
 import { AvisoCache } from '../../components/AvisoCache';
 import { CabecalhoView } from '../../components/CabecalhoView';
+import type { EstadoPlanejamentoQuadro } from './usePlanejamento';
 import { PlanejamentoGridCartoes } from './PlanejamentoGridCartoes';
 import { DialogoConfirmacao } from '../../components/DialogoConfirmacao';
 import { FiltroMultiSelecao } from '../../components/FiltroMultiSelecao';
@@ -28,6 +27,7 @@ import {
 } from './filtros';
 
 import {
+    Box,
     Alert,
     Stack,
     Button,
@@ -35,50 +35,58 @@ import {
     Checkbox,
     TextField,
     Typography,
+    ToggleButton,
     FormControlLabel,
+    ToggleButtonGroup,
 } from '@mui/material';
 
 interface PlanejamentoViewProps {
-    sprint: Sprint;
-    onVoltar: () => void;
-    janelaAlertaPrevisaoLiberacaoDias?: number;
+    titulo: string;
+    quadro: TipoQuadroJira;
+    analiseConfigurada: boolean;
+    estado: EstadoPlanejamentoQuadro;
+    coresStatus: Record<string, string>;
+    coresPrioridade: Record<string, string>;
+    coresColuna: Record<string, string>;
+    coresTime: Record<string, string>;
+    coresEpico: Record<string, string>;
+    janelaAlertaPrevisaoLiberacaoDias: number;
+    onTrocarQuadro: (quadro: TipoQuadroJira) => void;
+    onAtualizar: () => void;
+    onVoltar?: () => void;
 }
 
-export function PlanejamentoView({ sprint, onVoltar, janelaAlertaPrevisaoLiberacaoDias = 5 }: PlanejamentoViewProps): ReactNode {
-    const { resultado, carregando, atualizando, erro, veioDoCache, atualizadoEm, semCache, atualizar } = usePlanejamento(sprint.chave);
-    const [coresStatus, setCoresStatus] = useState<Record<string, string>>({});
-    const [coresPrioridade, setCoresPrioridade] = useState<Record<string, string>>({});
-    const [coresColuna, setCoresColuna] = useState<Record<string, string>>({});
-    const [coresTime, setCoresTime] = useState<Record<string, string>>({});
-    const [coresEpico, setCoresEpico] = useState<Record<string, string>>({});
-    const [carregandoCores, setCarregandoCores] = useState(true);
+export function PlanejamentoView({
+    titulo,
+    quadro,
+    analiseConfigurada,
+    estado,
+    coresStatus,
+    coresPrioridade,
+    coresColuna,
+    coresTime,
+    coresEpico,
+    janelaAlertaPrevisaoLiberacaoDias,
+    onTrocarQuadro,
+    onAtualizar,
+    onVoltar,
+}: PlanejamentoViewProps): ReactNode {
+    const { resultado, carregando, erro, veioDoCache } = estado;
+    const atualizadoEm = resultado?.atualizadoEm ?? null;
     const [filtrosAbertos, setFiltrosAbertos] = useState(false);
     const [filtros, setFiltros] = useState<FiltrosPlanejamento>(FILTROS_VAZIOS);
     const [termoBusca, setTermoBusca] = useState('');
     const [inverterFiltros, setInverterFiltros] = useState(false);
     const [confirmandoAtualizar, setConfirmandoAtualizar] = useState(false);
 
-    useEffect(() => {
-        obterCoresJira()
-            .then((dados) => {
-                setCoresStatus(dados.coresStatus);
-                setCoresPrioridade(dados.coresPrioridade);
-                setCoresColuna(dados.coresColuna);
-                setCoresTime(dados.coresTime);
-                setCoresEpico(dados.coresEpico);
-            })
-            .catch(() => { })
-            .finally(() => setCarregandoCores(false));
-    }, []);
-
-    const carregandoTudo = carregando || carregandoCores || atualizando;
-    const pronto = !carregandoTudo && resultado !== null;
+    const pronto = !carregando && resultado !== null;
+    const exibeCartoes = resultado !== null && (resultado.kanban || resultado.sprintJiraNome !== null);
 
     useEffect(() => {
         setFiltros(FILTROS_VAZIOS);
         setTermoBusca('');
         setInverterFiltros(false);
-    }, [sprint.chave]);
+    }, [quadro]);
 
     const opcoes = useMemo(
         () => (resultado ? calcularOpcoes(resultado, janelaAlertaPrevisaoLiberacaoDias) : null),
@@ -118,26 +126,45 @@ export function PlanejamentoView({ sprint, onVoltar, janelaAlertaPrevisaoLiberac
 
     return (
         <Stack spacing={2}>
-            <CabecalhoView titulo={`Planejamento — ${sprint.nome}`}>
-                <Tooltip title={sprint.fechado ? 'Sprint fechado: o planejamento não é atualizado no Jira. Reabra o sprint para atualizar.' : 'Busca os cartões ao vivo no Jira'}>
+            <CabecalhoView titulo={titulo}>
+                <ToggleButtonGroup
+                    size="small"
+                    exclusive
+                    value={quadro}
+                    aria-label="Quadro do Jira"
+                    onChange={(_evento, novo: TipoQuadroJira | null) => {
+                        if (novo) onTrocarQuadro(novo);
+                    }}>
+                    <ToggleButton value="dev">Dev</ToggleButton>
+                    <Tooltip title={analiseConfigurada ? '' : 'Quadro de Análise não configurado (Jira → Conexão).'}>
+                        <Box component="span" sx={{ display: 'inline-flex' }}>
+                            <ToggleButton
+                                value="analise"
+                                disabled={!analiseConfigurada}>
+                                Análise
+                            </ToggleButton>
+                        </Box>
+                    </Tooltip>
+                </ToggleButtonGroup>
+                <Tooltip title="Busca os cartões do quadro selecionado ao vivo no Jira">
                     <span>
                         <BotaoComCarregamento
                             variant="outlined"
                             startIcon={<RefreshIcon />}
-                            carregando={atualizando}
-                            disabled={sprint.fechado || carregando}
+                            carregando={carregando && resultado !== null}
+                            disabled={carregando}
                             onClick={() => setConfirmandoAtualizar(true)}>
                             Atualizar
                         </BotaoComCarregamento>
                     </span>
                 </Tooltip>
-                <BotaoComCarregamento onClick={() => setFiltrosAbertos((aberto) => !aberto)} disabled={!resultado?.sprintJiraNome}>
+                <BotaoComCarregamento onClick={() => setFiltrosAbertos((aberto) => !aberto)} disabled={!exibeCartoes}>
                     {filtrosAbertos ? 'Fechar filtros' : 'Filtros'}
                 </BotaoComCarregamento>
-                <BotaoComCarregamento onClick={onVoltar}>Voltar</BotaoComCarregamento>
+                {onVoltar ? <BotaoComCarregamento onClick={onVoltar}>Voltar</BotaoComCarregamento> : undefined}
             </CabecalhoView>
 
-            {filtrosAbertos && opcoes && resultado?.sprintJiraNome ? (
+            {filtrosAbertos && opcoes && exibeCartoes ? (
                 <Stack
                     direction={{ xs: 'column', sm: 'row' }}
                     sx={{ flexWrap: { sm: 'wrap' }, gap: 1, alignItems: { xs: 'stretch', sm: 'flex-start' }, mt: '0.5rem !important', mb: '0.5rem !important' }}>
@@ -199,17 +226,13 @@ export function PlanejamentoView({ sprint, onVoltar, janelaAlertaPrevisaoLiberac
 
             {erro ? <Alert severity="error">{erro}</Alert> : undefined}
 
-            {semCache ? (
-                <Alert severity="warning">Este sprint está fechado e não tem planejamento salvo.</Alert>
-            ) : undefined}
-
-            {carregandoTudo && !erro && !semCache ? <EsqueletoCarregando /> : undefined}
+            {carregando && !erro ? <EsqueletoCarregando /> : undefined}
 
             {pronto ? (
                 <Stack spacing={0.5} sx={{ mt: '0.25rem !important' }}>
                     <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                         {`Quadro ${resultado.nomeQuadro}`}
-                        {resultado.sprintJiraNome ? ` · Sprint do Jira: ${resultado.sprintJiraNome}${periodoJira}` : undefined}
+                        {resultado.kanban ? ' · Quadro Kanban: todos os cartões do quadro' : resultado.sprintJiraNome ? ` · Sprint do Jira: ${resultado.sprintJiraNome}${periodoJira}` : undefined}
                     </Typography>
                     {atualizadoEm ? (
                         <Typography variant="caption" sx={{ color: 'text.secondary' }}>
@@ -219,7 +242,7 @@ export function PlanejamentoView({ sprint, onVoltar, janelaAlertaPrevisaoLiberac
                 </Stack>
             ) : undefined}
 
-            {pronto && !resultado.sprintJiraNome ? (
+            {pronto && !exibeCartoes ? (
                 <Alert severity="warning">{`Nenhum sprint ativo no quadro ${resultado.nomeQuadro}.`}</Alert>
             ) : undefined}
 
@@ -227,7 +250,7 @@ export function PlanejamentoView({ sprint, onVoltar, janelaAlertaPrevisaoLiberac
 
             {pronto && resultado.colaboradores.length > 0 ? <PlanejamentoCardColaboradores resultado={resultado} /> : undefined}
 
-            {pronto && resultado.sprintJiraNome ? (
+            {pronto && exibeCartoes ? (
                 <PlanejamentoGridCartoes
                     cartoes={cartoesFiltrados}
                     totalCartoes={resultado.cartoes.length}
@@ -242,13 +265,13 @@ export function PlanejamentoView({ sprint, onVoltar, janelaAlertaPrevisaoLiberac
             <DialogoConfirmacao
                 aberto={confirmandoAtualizar}
                 titulo="Atualizar planejamento?"
-                mensagem="Isso busca os cartões de novo, em tempo real, no Jira. Deseja continuar?"
+                mensagem={`Isso busca os cartões do quadro de ${quadro === 'dev' ? 'DEV' : 'Análise'} de novo, em tempo real, no Jira. Deseja continuar?`}
                 textoConfirmar="Atualizar"
                 textoCancelar="Cancelar"
                 focoNoCancelar
                 onConfirmar={() => {
                     setConfirmandoAtualizar(false);
-                    void atualizar();
+                    onAtualizar();
                 }}
                 onCancelar={() => setConfirmandoAtualizar(false)}
             />

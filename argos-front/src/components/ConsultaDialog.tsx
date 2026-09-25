@@ -9,19 +9,24 @@ interface ConsultaDialogProps {
     titulo: ReactNode;
     consultando: boolean;
     rotuloConsultar: string;
-    vaiForcarToggl: boolean;
+    pedirConfirmacao: boolean;
+    mensagemConfirmacao?: string;
     semDadoAproveitavel: boolean;
     children: ReactNode;
     onConsultar: () => void;
     onCancelar: () => void;
 }
 
+const MENSAGEM_CONFIRMACAO_TOGGL =
+    'Isso ignora o cache local e consulta o Toggl de novo, consumindo o limite de 30 requisições/hora por usuário. Deseja continuar?';
+
 export function ConsultaDialog({
     aberto,
     titulo,
     consultando,
     rotuloConsultar,
-    vaiForcarToggl,
+    pedirConfirmacao,
+    mensagemConfirmacao = MENSAGEM_CONFIRMACAO_TOGGL,
     semDadoAproveitavel,
     children,
     onConsultar,
@@ -30,7 +35,7 @@ export function ConsultaDialog({
     const [confirmandoConsultaForcada, setConfirmandoConsultaForcada] = useState(false);
 
     function aoClicarConsultar(): void {
-        if (vaiForcarToggl) {
+        if (pedirConfirmacao) {
             setConfirmandoConsultaForcada(true);
             return;
         }
@@ -71,7 +76,7 @@ export function ConsultaDialog({
             <DialogoConfirmacao
                 aberto={confirmandoConsultaForcada}
                 titulo="Forçar nova consulta à API?"
-                mensagem="Isso ignora o cache local e consulta o Toggl de novo, consumindo o limite de 30 requisições/hora por usuário. Deseja continuar?"
+                mensagem={mensagemConfirmacao}
                 textoConfirmar="Consultar mesmo assim"
                 textoCancelar="Não"
                 focoNoCancelar

@@ -28,7 +28,9 @@ public sealed class CaminhosDados
 
     internal const string NomeJiraPrioridades = "JiraPrioridades";
 
-    internal const string NomeJiraColunas = "JiraColunas";
+    internal const string NomeJiraColunasDev = "JiraColunasDev";
+
+    internal const string NomeJiraColunasAnalise = "JiraColunasAnalise";
 
     internal const string NomeJiraTimes = "JiraTimes";
 
@@ -42,7 +44,9 @@ public sealed class CaminhosDados
 
     internal const string NomeJiraPrioridadesCache = "JiraPrioridadesCache";
 
-    internal const string NomeJiraColunasCache = "JiraColunasCache";
+    internal const string NomeJiraColunasDevCache = "JiraColunasDevCache";
+
+    internal const string NomeJiraColunasAnaliseCache = "JiraColunasAnaliseCache";
 
     internal const string NomeJiraUsuariosCache = "JiraUsuariosCache";
 
@@ -52,7 +56,9 @@ public sealed class CaminhosDados
 
     internal const string PrefixoCacheJiraSprint = "JiraSprintData_";
 
-    internal const string PrefixoCacheJiraPlanejamento = "JiraPlanejamentoData_";
+    internal const string NomeJiraPlanejamentoGlobalDev = "JiraPlanejamentoGlobalDev";
+
+    internal const string NomeJiraPlanejamentoGlobalAnalise = "JiraPlanejamentoGlobalAnalise";
 
     private const int TamanhoMaximoChaveSprint = 100;
 
@@ -89,7 +95,8 @@ public sealed class CaminhosDados
 
     public DocumentoDados JiraPrioridades => Documento(NomeJiraPrioridades);
 
-    public DocumentoDados JiraColunas => Documento(NomeJiraColunas);
+    public DocumentoDados JiraColunas(TipoQuadroJira quadro) =>
+        Documento(quadro == TipoQuadroJira.Dev ? NomeJiraColunasDev : NomeJiraColunasAnalise);
 
     public DocumentoDados JiraTimes => Documento(NomeJiraTimes);
 
@@ -103,7 +110,8 @@ public sealed class CaminhosDados
 
     public DocumentoDados JiraPrioridadesCache => Documento(NomeJiraPrioridadesCache);
 
-    public DocumentoDados JiraColunasCache => Documento(NomeJiraColunasCache);
+    public DocumentoDados JiraColunasCache(TipoQuadroJira quadro) =>
+        Documento(quadro == TipoQuadroJira.Dev ? NomeJiraColunasDevCache : NomeJiraColunasAnaliseCache);
 
     public DocumentoDados JiraUsuariosCache => Documento(NomeJiraUsuariosCache);
 
@@ -113,14 +121,15 @@ public sealed class CaminhosDados
 
     public DocumentoDados? CacheJiraSprint(DadosSprint sprint) => DocumentoPorSprint(PrefixoCacheJiraSprint, sprint);
 
-    public DocumentoDados? CacheJiraPlanejamento(DadosSprint sprint) => DocumentoPorSprint(PrefixoCacheJiraPlanejamento, sprint);
+    public DocumentoDados CacheJiraPlanejamento(TipoQuadroJira quadro) =>
+        Documento(quadro == TipoQuadroJira.Dev ? NomeJiraPlanejamentoGlobalDev : NomeJiraPlanejamentoGlobalAnalise);
 
     public static bool EhCacheToggl(string nome) =>
         nome.Equals(NomeRelatorioData, StringComparison.OrdinalIgnoreCase)
         || nome.Equals(NomeGantData, StringComparison.OrdinalIgnoreCase)
         || nome.StartsWith(PrefixoCacheSprint, StringComparison.OrdinalIgnoreCase);
 
-    private DocumentoDados Documento(string nome) => new(Armazenamento, nome);
+    internal DocumentoDados Documento(string nome) => new(Armazenamento, nome);
 
     private DocumentoDados? DocumentoPorSprint(string prefixo, DadosSprint sprint) =>
         ChaveSprintValida(sprint.Chave) ? Documento($"{prefixo}{sprint.Chave}") : null;

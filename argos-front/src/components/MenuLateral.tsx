@@ -1,11 +1,13 @@
 import type { ReactNode } from 'react';
-import SpeedIcon from '@mui/icons-material/Speed';
-import StorageIcon from '@mui/icons-material/Storage';
-import SettingsIcon from '@mui/icons-material/Settings';
-import ViewKanbanIcon from '@mui/icons-material/ViewKanban';
-import AssessmentIcon from '@mui/icons-material/Assessment';
-import AccessTimeIcon from '@mui/icons-material/AccessTime';
-import ViewTimelineIcon from '@mui/icons-material/ViewTimeline';
+import { ALTURA_CONTROLE } from '../theme';
+import TuneIcon from '@mui/icons-material/TuneOutlined';
+import TimerIcon from '@mui/icons-material/TimerOutlined';
+import SpeedIcon from '@mui/icons-material/SpeedOutlined';
+import BackupIcon from '@mui/icons-material/BackupOutlined';
+import AssignmentIcon from '@mui/icons-material/AssignmentOutlined';
+import AssessmentIcon from '@mui/icons-material/AssessmentOutlined';
+import ViewKanbanIcon from '@mui/icons-material/ViewKanbanOutlined';
+import ViewTimelineIcon from '@mui/icons-material/ViewTimelineOutlined';
 
 import {
     Box,
@@ -14,10 +16,11 @@ import {
     Tooltip,
     ListItemIcon,
     ListItemText,
+    ListSubheader,
     ListItemButton,
 } from '@mui/material';
 
-export type Secao = 'resumo' | 'toggl' | 'jira' | 'configuracoes' | 'relatorio' | 'gant' | 'sprint' | 'dados';
+export type Secao = 'resumo' | 'toggl' | 'jira' | 'configuracoes' | 'relatorio' | 'gant' | 'sprint' | 'planejamento' | 'dados';
 
 interface ItemMenu {
     secao: Exclude<Secao, 'resumo'>;
@@ -26,14 +29,35 @@ interface ItemMenu {
     exigeConfiguracaoCompleta?: boolean;
 }
 
-const ITENS_MENU: readonly ItemMenu[] = [
-    { secao: 'toggl', rotulo: 'Toggl', icone: <AccessTimeIcon /> },
-    { secao: 'jira', rotulo: 'Jira', icone: <ViewKanbanIcon /> },
-    { secao: 'configuracoes', rotulo: 'Configurações', icone: <SettingsIcon /> },
-    { secao: 'relatorio', rotulo: 'Relatório', icone: <AssessmentIcon />, exigeConfiguracaoCompleta: true },
-    { secao: 'gant', rotulo: 'Gant', icone: <ViewTimelineIcon />, exigeConfiguracaoCompleta: true },
-    { secao: 'sprint', rotulo: 'Sprint', icone: <SpeedIcon />, exigeConfiguracaoCompleta: true },
-    { secao: 'dados', rotulo: 'Dados', icone: <StorageIcon /> },
+interface GrupoMenu {
+    titulo: string;
+    itens: readonly ItemMenu[];
+}
+
+const GRUPOS_MENU: readonly GrupoMenu[] = [
+    {
+        titulo: 'Visualizações',
+        itens: [
+            { secao: 'relatorio', rotulo: 'Relatório', icone: <AssessmentIcon />, exigeConfiguracaoCompleta: true },
+            { secao: 'gant', rotulo: 'Gant', icone: <ViewTimelineIcon />, exigeConfiguracaoCompleta: true },
+        ],
+    },
+    {
+        titulo: 'Sprint',
+        itens: [
+            { secao: 'sprint', rotulo: 'Acompanhamento', icone: <SpeedIcon />, exigeConfiguracaoCompleta: true },
+            { secao: 'planejamento', rotulo: 'Planejamento', icone: <ViewKanbanIcon />, exigeConfiguracaoCompleta: true },
+        ],
+    },
+    {
+        titulo: 'Configuração',
+        itens: [
+            { secao: 'toggl', rotulo: 'Toggl', icone: <TimerIcon /> },
+            { secao: 'jira', rotulo: 'Jira', icone: <AssignmentIcon /> },
+            { secao: 'configuracoes', rotulo: 'Configurações', icone: <TuneIcon /> },
+            { secao: 'dados', rotulo: 'Dados', icone: <BackupIcon /> },
+        ],
+    },
 ];
 
 const LARGURA_MENU = 200;
@@ -57,27 +81,43 @@ export function MenuLateral({
     onFecharMobile,
 }: MenuLateralProps): ReactNode {
     const lista = (
-        <List component="nav" aria-label="Navegação principal" sx={{ py: 1 }}>
-            {ITENS_MENU.map((item) => {
-                const bloqueado = item.exigeConfiguracaoCompleta === true && !configuracaoCompleta;
-                return (
-                    <Tooltip
-                        key={item.secao}
-                        title={bloqueado ? AVISO_CONFIGURACAO_INCOMPLETA : ''}
-                        placement="right">
-                        <Box component="span" sx={{ display: 'block' }}>
-                            <ListItemButton
-                                selected={secaoAtiva === item.secao}
-                                disabled={bloqueado}
-                                onClick={() => onSelecionar(item.secao)}>
-                                <ListItemIcon sx={{ minWidth: 40 }}>{item.icone}</ListItemIcon>
-                                <ListItemText primary={item.rotulo} />
-                            </ListItemButton>
-                        </Box>
-                    </Tooltip>
-                );
-            })}
-        </List>
+        <Box component="nav" aria-label="Navegação principal" sx={{ py: 0.5 }}>
+            {GRUPOS_MENU.map((grupo) => (
+                <List
+                    key={grupo.titulo}
+                    dense
+                    aria-label={grupo.titulo}
+                    subheader={
+                        <ListSubheader
+                            disableSticky
+                            sx={{ lineHeight: 2.5, mt: 0.5, fontSize: '0.7rem', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'text.secondary', bgcolor: 'transparent' }}>
+                            {grupo.titulo}
+                        </ListSubheader>
+                    }
+                    sx={{ py: 0 }}>
+                    {grupo.itens.map((item) => {
+                        const bloqueado = item.exigeConfiguracaoCompleta === true && !configuracaoCompleta;
+                        return (
+                            <Tooltip
+                                key={item.secao}
+                                title={bloqueado ? AVISO_CONFIGURACAO_INCOMPLETA : ''}
+                                placement="right">
+                                <Box component="span" sx={{ display: 'block' }}>
+                                    <ListItemButton
+                                        selected={secaoAtiva === item.secao}
+                                        disabled={bloqueado}
+                                        onClick={() => onSelecionar(item.secao)}
+                                        sx={{ minHeight: ALTURA_CONTROLE }}>
+                                        <ListItemIcon sx={{ minWidth: 32 }}>{item.icone}</ListItemIcon>
+                                        <ListItemText primary={item.rotulo} slotProps={{ primary: { variant: 'body1' } }} />
+                                    </ListItemButton>
+                                </Box>
+                            </Tooltip>
+                        );
+                    })}
+                </List>
+            ))}
+        </Box>
     );
 
     return (

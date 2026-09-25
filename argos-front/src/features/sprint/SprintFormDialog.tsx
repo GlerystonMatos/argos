@@ -2,8 +2,8 @@ import type { ReactNode } from 'react';
 import { useSprints } from './useSprints';
 import { useEffect, useState } from 'react';
 import type { Sprint } from '../../api/tipos';
-import { periodoEhValido } from '../../utils/datas';
 import { useNotificacao } from '../../hooks/useNotificacao';
+import { periodoEhValido, contarDiasUteis } from '../../utils/datas';
 import { BotaoComCarregamento } from '../../components/BotaoComCarregamento';
 
 import {
@@ -33,6 +33,7 @@ export function SprintFormDialog({ aberto, sprintEmEdicao, onFechar, onSalvo }: 
     const [margemPercentual, setMargemPercentual] = useState('');
     const [dataInicio, setDataInicio] = useState('');
     const [dataFim, setDataFim] = useState('');
+    const [diasNaoUteis, setDiasNaoUteis] = useState('');
     const [salvando, setSalvando] = useState(false);
 
     useEffect(() => {
@@ -42,6 +43,7 @@ export function SprintFormDialog({ aberto, sprintEmEdicao, onFechar, onSalvo }: 
             setMargemPercentual(sprintEmEdicao ? String(sprintEmEdicao.margemPercentual) : '');
             setDataInicio(sprintEmEdicao?.dataInicio ?? '');
             setDataFim(sprintEmEdicao?.dataFim ?? '');
+            setDiasNaoUteis(sprintEmEdicao && sprintEmEdicao.diasNaoUteis > 0 ? String(sprintEmEdicao.diasNaoUteis) : '');
         }
     }, [aberto, sprintEmEdicao]);
 
@@ -51,6 +53,7 @@ export function SprintFormDialog({ aberto, sprintEmEdicao, onFechar, onSalvo }: 
         setMargemPercentual('');
         setDataInicio('');
         setDataFim('');
+        setDiasNaoUteis('');
         onFechar();
     }
 
@@ -60,27 +63,41 @@ export function SprintFormDialog({ aberto, sprintEmEdicao, onFechar, onSalvo }: 
     const margemValida = margemPercentual.trim() !== '' && Number.isFinite(margemNumero) && margemNumero >= 0 && margemNumero < 100;
     const datasPreenchidas = dataInicio !== '' && dataFim !== '';
     const periodoValido = datasPreenchidas && periodoEhValido(dataInicio, dataFim);
-    const formValido = nome.trim() !== '' && horasValidas && margemValida && periodoValido;
+    const diasUteisPeriodo = periodoValido ? contarDiasUteis(dataInicio, dataFim) : 0;
+    const diasNaoUteisNumero = diasNaoUteis.trim() === '' ? 0 : Number(diasNaoUteis);
+    const diasNaoUteisValidos =
+        Number.isInteger(diasNaoUteisNumero) && diasNaoUteisNumero >= 0 && (!periodoValido || diasNaoUteisNumero <= diasUteisPeriodo);
+    const formValido = nome.trim() !== '' && horasValidas && margemValida && periodoValido && diasNaoUteisValidos;
     const houveAlteracao =
         sprintEmEdicao === null ||
         nome.trim() !== sprintEmEdicao.nome ||
         horasNumero !== sprintEmEdicao.horasPorDia ||
         margemNumero !== sprintEmEdicao.margemPercentual ||
         dataInicio !== sprintEmEdicao.dataInicio ||
-        dataFim !== sprintEmEdicao.dataFim;
+        dataFim !== sprintEmEdicao.dataFim ||
+        diasNaoUteisNumero !== sprintEmEdicao.diasNaoUteis;
 
     async function salvar(): Promise<void> {
         if (!formValido) {
-            notificarErro(new Error('Preencha nome, horas por dia (maior que zero), margem (0 a 99,9%) e um período válido.'));
+            notificarErro(new Error('Preencha nome, horas por dia (maior que zero), margem (0 a 99,9%), um período válido e, se informar, dias não úteis dentro dos dias úteis do período.'));
             return;
         }
+
+        const dados = {
+            nome: nome.trim(),
+            horasPorDia: horasNumero,
+            margemPercentual: margemNumero,
+            dataInicio,
+            dataFim,
+            diasNaoUteis: diasNaoUteisNumero,
+        };
 
         setSalvando(true);
         try {
             if (emEdicao && sprintEmEdicao) {
-                await editar(sprintEmEdicao.chave, { nome: nome.trim(), horasPorDia: horasNumero, margemPercentual: margemNumero, dataInicio, dataFim });
+                await editar(sprintEmEdicao.chave, dados);
             } else {
-                await criar({ nome: nome.trim(), horasPorDia: horasNumero, margemPercentual: margemNumero, dataInicio, dataFim });
+                await criar(dados);
             }
             onSalvo(emEdicao ? 'Sprint atualizado com sucesso.' : 'Sprint criado com sucesso.');
             fecharEResetar();
@@ -163,6 +180,21 @@ export function SprintFormDialog({ aberto, sprintEmEdicao, onFechar, onSalvo }: 
                             fullWidth
                             disabled={salvando || somenteLeitura} />
                     </Stack>
+
+                    <TextField
+                        label="Dias não úteis (opcional)"
+                        type="number"
+                        value={diasNaoUteis}
+                        onChange={(evento) => setDiasNaoUteis(evento.target.value)}
+                        error={!diasNaoUteisValidos}
+                        helperText={
+                            !diasNaoUteisValidos
+                                ? `Informe um número inteiro entre 0 e ${diasUteisPeriodo} (dias úteis do período).`
+                                : 'Feriados ou outros dias sem trabalho, descontados dos dias úteis do sprint.'
+                        }
+                        slotProps={{ htmlInput: { min: 0, max: periodoValido ? diasUteisPeriodo : undefined, step: 1 } }}
+                        fullWidth
+                        disabled={salvando || somenteLeitura} />
                 </Stack>
             </DialogContent>
             <DialogActions>

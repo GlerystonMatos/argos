@@ -14,5 +14,9 @@ public class DadosSprint
 
     public string DataFim { get; set; } = "";
 
+    public int DiasNaoUteis { get; set; }
+
+    public Dictionary<string, int> HorasDeduzidas { get; set; } = new();
+
     public bool Fechado { get; set; }
 }

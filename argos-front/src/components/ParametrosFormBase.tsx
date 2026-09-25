@@ -219,7 +219,7 @@ export function ParametrosFormBase({
                 titulo={tituloConsulta}
                 consultando={consultando}
                 rotuloConsultar={ROTULO_CONSULTAR[origem]}
-                vaiForcarToggl={origem === 'toggl'}
+                pedirConfirmacao={origem === 'toggl'}
                 semDadoAproveitavel={semDados}
                 onConsultar={() => void salvarEConsultar(origem === 'toggl')}
                 onCancelar={cancelarConsulta}>

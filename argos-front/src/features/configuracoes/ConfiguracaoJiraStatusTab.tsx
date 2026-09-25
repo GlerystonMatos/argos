@@ -200,7 +200,7 @@ export const ConfiguracaoJiraStatusTab = forwardRef<AbaConfiguracoesHandle, AbaC
                 {!statusValido ? (
                     <Alert severity="info">
                         Preencha os Status para identificar responsáveis (DEV / REV / QA), Status Concluído e Status Ignorado
-                        para liberar Relatório, Gant e Sprint.
+                        para liberar Relatório, Gant, Sprint e Planejamento.
                     </Alert>
                 ) : undefined}
             </Stack>

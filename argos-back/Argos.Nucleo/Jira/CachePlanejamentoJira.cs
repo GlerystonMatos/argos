@@ -6,4 +6,5 @@ public sealed record CachePlanejamentoJira(
     SprintQuadroJira? SprintJira,
     List<ColunaQuadroJira> Colunas,
     List<CartaoQuadroJira> Cartoes,
-    string AtualizadoEm);
+    string AtualizadoEm,
+    bool Kanban = false);

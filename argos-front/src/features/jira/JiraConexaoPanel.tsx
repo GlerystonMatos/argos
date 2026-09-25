@@ -34,8 +34,10 @@ export const JiraConexaoPanel = forwardRef<JiraConexaoPanelHandle, JiraConexaoPa
         const [alterado, setAlterado] = useState(false);
         const [salvoUrl, setSalvoUrl] = useState('');
         const [salvoEmail, setSalvoEmail] = useState('');
-        const [quadro, setQuadro] = useState<QuadroJira | null>(null);
-        const [salvoQuadroId, setSalvoQuadroId] = useState<number | null>(null);
+        const [quadroDev, setQuadroDev] = useState<QuadroJira | null>(null);
+        const [quadroAnalise, setQuadroAnalise] = useState<QuadroJira | null>(null);
+        const [salvoQuadroDevId, setSalvoQuadroDevId] = useState<number | null>(null);
+        const [salvoQuadroAnaliseId, setSalvoQuadroAnaliseId] = useState<number | null>(null);
         const [versaoConexao, setVersaoConexao] = useState(0);
 
         const [testando, setTestando] = useState(false);
@@ -49,12 +51,14 @@ export const JiraConexaoPanel = forwardRef<JiraConexaoPanelHandle, JiraConexaoPa
                     setEmail(dados.email);
                     setSalvoUrl(dados.urlDominio.trim());
                     setSalvoEmail(dados.email.trim());
-                    setQuadro(dados.quadroId !== null ? { id: dados.quadroId, nome: dados.quadroNome, projeto: null } : null);
-                    setSalvoQuadroId(dados.quadroId);
+                    setQuadroDev(dados.quadroDevId !== null ? { id: dados.quadroDevId, nome: dados.quadroDevNome, projeto: null } : null);
+                    setQuadroAnalise(dados.quadroAnaliseId !== null ? { id: dados.quadroAnaliseId, nome: dados.quadroAnaliseNome, projeto: null } : null);
+                    setSalvoQuadroDevId(dados.quadroDevId);
+                    setSalvoQuadroAnaliseId(dados.quadroAnaliseId);
                     setTokenMascarado(dados.tokenMascarado);
                 })
                 .catch((erro: unknown) => notificarErro(erro, 'Não foi possível carregar a configuração do Jira'));
-        }, []);
+        }, [carregar, notificarErro]);
 
         async function testar(): Promise<void> {
             setTestando(true);
@@ -76,13 +80,16 @@ export const JiraConexaoPanel = forwardRef<JiraConexaoPanelHandle, JiraConexaoPa
                     urlDominio: urlDominio.trim(),
                     email: email.trim(),
                     apiToken: apiToken.trim() !== '' ? apiToken.trim() : null,
-                    quadroId: quadro?.id ?? null,
-                    quadroNome: quadro?.nome ?? null,
+                    quadroDevId: quadroDev?.id ?? null,
+                    quadroDevNome: quadroDev?.nome ?? null,
+                    quadroAnaliseId: quadroAnalise?.id ?? null,
+                    quadroAnaliseNome: quadroAnalise?.nome ?? null,
                 });
                 setTokenMascarado(atualizado.tokenMascarado);
                 setSalvoUrl(urlDominio.trim());
                 setSalvoEmail(email.trim());
-                setSalvoQuadroId(atualizado.quadroId);
+                setSalvoQuadroDevId(atualizado.quadroDevId);
+                setSalvoQuadroAnaliseId(atualizado.quadroAnaliseId);
                 setVersaoConexao((atual) => atual + 1);
                 setApiToken('');
                 notificarSucesso('Dados da conexão com o Jira salvos com sucesso.');
@@ -102,15 +109,18 @@ export const JiraConexaoPanel = forwardRef<JiraConexaoPanelHandle, JiraConexaoPa
         const emailPreenchido = email.trim().length > 0;
         const tokenPreenchido = apiToken.trim().length > 0;
         const podeTestar = urlPreenchida && emailPreenchido && tokenPreenchido;
-        const quadroPreenchido = quadro !== null;
-        const conexaoValida = urlPreenchida && emailPreenchido && (tokenPreenchido || tokenJaSalvo) && quadroPreenchido;
+        const quadroDevPreenchido = quadroDev !== null;
+        const quadroAnalisePreenchido = quadroAnalise !== null;
+        const conexaoValida = urlPreenchida && emailPreenchido && (tokenPreenchido || tokenJaSalvo) && quadroDevPreenchido && quadroAnalisePreenchido;
         const erroToken = alterado && !tokenPreenchido && !tokenJaSalvo;
 
         useEffect(() => {
             onValidoChange?.(conexaoValida);
         }, [conexaoValida]);
 
-        const sujo = urlDominio.trim() !== salvoUrl || email.trim() !== salvoEmail || tokenPreenchido || (quadro?.id ?? null) !== salvoQuadroId;
+        const sujo = urlDominio.trim() !== salvoUrl || email.trim() !== salvoEmail || tokenPreenchido
+            || (quadroDev?.id ?? null) !== salvoQuadroDevId
+            || (quadroAnalise?.id ?? null) !== salvoQuadroAnaliseId;
 
         useEffect(() => {
             onSujoChange?.(sujo);
@@ -122,8 +132,8 @@ export const JiraConexaoPanel = forwardRef<JiraConexaoPanelHandle, JiraConexaoPa
             setResultadoTeste(null);
         }
 
-        function alterarQuadro(valor: QuadroJira | null): void {
-            setQuadro(valor);
+        function alterarQuadro(definir: (valor: QuadroJira | null) => void, valor: QuadroJira | null): void {
+            definir(valor);
             setAlterado(true);
         }
 
@@ -203,16 +213,28 @@ export const JiraConexaoPanel = forwardRef<JiraConexaoPanelHandle, JiraConexaoPa
                         fullWidth />
                 </Stack>
 
-                <SelectQuadroJira
-                    key={versaoConexao}
-                    label="Quadro de DEV"
-                    value={quadro}
-                    onChange={alterarQuadro}
-                    required
-                    error={alterado && !quadroPreenchido}
-                    helperText={alterado && !quadroPreenchido ? 'Selecione o quadro de DEV.' : undefined}
-                    ajuda="Quadro Scrum do Jira usado pelo Planejamento (cartões do sprint ativo). A lista usa a conexão já salva: salve a conexão antes de listar os quadros."
-                    disabled={bloqueado} />
+                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mt: '0.75rem !important' }}>
+                    <SelectQuadroJira
+                        key={`dev-${versaoConexao}`}
+                        label="Quadro de DEV"
+                        value={quadroDev}
+                        onChange={(valor) => alterarQuadro(setQuadroDev, valor)}
+                        required
+                        error={alterado && !quadroDevPreenchido}
+                        helperText={alterado && !quadroDevPreenchido ? 'Selecione o quadro de DEV.' : undefined}
+                        ajuda="Quadro Scrum do Jira usado pelo Planejamento no quadro DEV (cartões do sprint ativo). A lista usa a conexão já salva: salve a conexão antes de listar os quadros."
+                        disabled={bloqueado} />
+                    <SelectQuadroJira
+                        key={`analise-${versaoConexao}`}
+                        label="Quadro de Análise"
+                        value={quadroAnalise}
+                        onChange={(valor) => alterarQuadro(setQuadroAnalise, valor)}
+                        required
+                        error={alterado && !quadroAnalisePreenchido}
+                        helperText={alterado && !quadroAnalisePreenchido ? 'Selecione o quadro de Análise.' : undefined}
+                        ajuda="Quadro Scrum do Jira usado pelo Planejamento no quadro Análise (cartões do sprint ativo). A lista usa a conexão já salva: salve a conexão antes de listar os quadros."
+                        disabled={bloqueado} />
+                </Stack>
 
                 <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mt: '0.8rem !important' }}>
                     <BotaoComCarregamento
@@ -236,7 +258,7 @@ export const JiraConexaoPanel = forwardRef<JiraConexaoPanelHandle, JiraConexaoPa
 
                 {!conexaoValida ? (
                     <Alert severity="info">
-                        Preencha a URL do domínio, o e-mail, o API Token (obrigatório na primeira configuração) e o quadro de DEV para salvar a conexão.
+                        Preencha a URL do domínio, o e-mail, o API Token (obrigatório na primeira configuração) e os quadros de DEV e de Análise para salvar a conexão.
                     </Alert>
                 ) : undefined}
             </Stack>

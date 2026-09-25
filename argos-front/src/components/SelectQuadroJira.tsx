@@ -1,10 +1,10 @@
 import type { ReactNode } from 'react';
 import { IconeAjuda } from './IconeAjuda';
 import { ALTURA_CONTROLE } from '../theme';
-import { useEffect, useState } from 'react';
 import type { QuadroJira } from '../api/tipos';
 import { rotularQuadroJira } from '../utils/rotulos';
 import RefreshIcon from '@mui/icons-material/Refresh';
+import { useCallback, useEffect, useState } from 'react';
 import { listarQuadrosJira } from '../api/jiraListasApi';
 import { useNotificacao } from '../hooks/useNotificacao';
 
@@ -35,7 +35,7 @@ export function SelectQuadroJira({ value, onChange, label, ajuda, helperText, di
     const [erroListagem, setErroListagem] = useState<string | null>(null);
     const { notificarSucesso } = useNotificacao();
 
-    async function carregar(forcarAtualizacao: boolean): Promise<void> {
+    const carregar = useCallback(async (forcarAtualizacao: boolean): Promise<void> => {
         setCarregando(true);
         setErroListagem(null);
         try {
@@ -49,11 +49,11 @@ export function SelectQuadroJira({ value, onChange, label, ajuda, helperText, di
         } finally {
             setCarregando(false);
         }
-    }
+    }, [notificarSucesso]);
 
     useEffect(() => {
         carregar(false).catch(() => { });
-    }, []);
+    }, [carregar]);
 
     const opcoes = value !== null && !quadros.some((quadro) => quadro.id === value.id) ? [value, ...quadros] : quadros;
     const selecionado = value !== null ? (opcoes.find((quadro) => quadro.id === value.id) ?? value) : null;
@@ -71,7 +71,7 @@ export function SelectQuadroJira({ value, onChange, label, ajuda, helperText, di
     }
 
     return (
-        <Stack spacing={0.5} sx={{ mt: '0.5rem !important' }}>
+        <Stack spacing={0.5} sx={{ flex: 1, minWidth: 0 }}>
             <Stack direction="row" spacing={0.25} sx={{ alignItems: 'flex-start' }}>
                 {erroListagem === null ? (
                     <Autocomplete
@@ -79,11 +79,11 @@ export function SelectQuadroJira({ value, onChange, label, ajuda, helperText, di
                         options={opcoes}
                         value={selecionado}
                         onChange={(_evento, novo) => onChange(novo)}
-                        getOptionLabel={(quadro) => rotularQuadroJira(quadro.id, quadro.nome)}
+                        getOptionLabel={(quadro) => rotularQuadroJira(quadro.id, quadro.nome, quadro.tipo)}
                         isOptionEqualToValue={(a, b) => a.id === b.id}
                         disabled={disabled || carregando}
                         loading={carregando}
-                        noOptionsText='Nenhum quadro Scrum encontrado. Clique em "Atualizar lista"'
+                        noOptionsText='Nenhum quadro Scrum ou Kanban encontrado. Clique em "Atualizar lista"'
                         renderInput={(parametros) => (
                             <TextField
                                 {...parametros}

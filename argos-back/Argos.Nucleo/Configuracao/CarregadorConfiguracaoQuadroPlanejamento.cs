@@ -4,7 +4,9 @@ namespace Argos.Nucleo.Configuracao;
 
 public static class CarregadorConfiguracaoQuadroPlanejamento
 {
-    private const string PropriedadeColunasOcultas = "colunasOcultas";
+    internal const string PropriedadeColunasOcultasDev = "colunasOcultasDev";
+
+    private const string PropriedadeColunasOcultasAnalise = "colunasOcultasAnalise";
 
     public static ConfiguracaoQuadroPlanejamento Padrao() => new();
 
@@ -16,13 +18,17 @@ public static class CarregadorConfiguracaoQuadroPlanejamento
 
         return new ConfiguracaoQuadroPlanejamento
         {
-            ColunasOcultas = DocumentoJson.ObterLista<string>(conteudo, PropriedadeColunasOcultas)
+            ColunasOcultasDev = DocumentoJson.ObterLista<string>(conteudo, PropriedadeColunasOcultasDev),
+            ColunasOcultasAnalise = DocumentoJson.ObterLista<string>(conteudo, PropriedadeColunasOcultasAnalise)
         };
     }
 
     public static void Salvar(DocumentoDados documento, ConfiguracaoQuadroPlanejamento configuracao) =>
         DocumentoJson.Gravar(documento, MontarDocumento(configuracao));
 
-    internal static JsonObject MontarDocumento(ConfiguracaoQuadroPlanejamento configuracao) =>
-        new() { [PropriedadeColunasOcultas] = DocumentoJson.ParaNo(configuracao.ColunasOcultas) };
+    internal static JsonObject MontarDocumento(ConfiguracaoQuadroPlanejamento configuracao) => new()
+    {
+        [PropriedadeColunasOcultasDev] = DocumentoJson.ParaNo(configuracao.ColunasOcultasDev),
+        [PropriedadeColunasOcultasAnalise] = DocumentoJson.ParaNo(configuracao.ColunasOcultasAnalise)
+    };
 }

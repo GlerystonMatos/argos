@@ -31,7 +31,8 @@ export const CoresJiraPanel = forwardRef<CoresJiraPanelHandle, CoresJiraPanelPro
 
     const [statusNomes, setStatusNomes] = useState<string[]>([]);
     const [prioridadeNomes, setPrioridadeNomes] = useState<string[]>([]);
-    const [colunaNomes, setColunaNomes] = useState<string[]>([]);
+    const [colunaNomesDev, setColunaNomesDev] = useState<string[]>([]);
+    const [colunaNomesAnalise, setColunaNomesAnalise] = useState<string[]>([]);
     const [timeNomes, setTimeNomes] = useState<string[]>([]);
     const [epicos, setEpicos] = useState<EpicoJira[]>([]);
     const [carregandoListas, setCarregandoListas] = useState(false);
@@ -40,7 +41,8 @@ export const CoresJiraPanel = forwardRef<CoresJiraPanelHandle, CoresJiraPanelPro
 
     const [coresStatus, setCoresStatus] = useState<Record<string, string>>({});
     const [coresPrioridade, setCoresPrioridade] = useState<Record<string, string>>({});
-    const [coresColuna, setCoresColuna] = useState<Record<string, string>>({});
+    const [coresColunaDev, setCoresColunaDev] = useState<Record<string, string>>({});
+    const [coresColunaAnalise, setCoresColunaAnalise] = useState<Record<string, string>>({});
     const [coresTime, setCoresTime] = useState<Record<string, string>>({});
     const [coresEpico, setCoresEpico] = useState<Record<string, string>>({});
 
@@ -49,7 +51,8 @@ export const CoresJiraPanel = forwardRef<CoresJiraPanelHandle, CoresJiraPanelPro
             .then((dados) => {
                 setCoresStatus(dados.coresStatus);
                 setCoresPrioridade(dados.coresPrioridade);
-                setCoresColuna(dados.coresColuna);
+                setCoresColunaDev(dados.coresColunaDev);
+                setCoresColunaAnalise(dados.coresColunaAnalise);
                 setCoresTime(dados.coresTime);
                 setCoresEpico(dados.coresEpico);
             })
@@ -65,19 +68,23 @@ export const CoresJiraPanel = forwardRef<CoresJiraPanelHandle, CoresJiraPanelPro
         const cargaEpicos = listarEpicosJira()
             .then((resposta) => setEpicos(resposta.epicos))
             .catch(() => setEpicos([]));
+        const cargaColunasDev = listarColunasJira('dev', forcarAtualizacao)
+            .then((colunas) => setColunaNomesDev(colunas.nomes))
+            .catch(() => setColunaNomesDev([]));
+        const cargaColunasAnalise = listarColunasJira('analise', forcarAtualizacao)
+            .then((colunas) => setColunaNomesAnalise(colunas.nomes))
+            .catch(() => setColunaNomesAnalise([]));
         try {
-            const [status, prioridades, colunas] = await Promise.all([
+            const [status, prioridades] = await Promise.all([
                 listarStatusJira(forcarAtualizacao),
                 listarPrioridadesJira(forcarAtualizacao),
-                listarColunasJira(forcarAtualizacao),
             ]);
             setStatusNomes(status.nomes);
             setPrioridadeNomes(prioridades.nomes);
-            setColunaNomes(colunas.nomes);
         } catch (erro) {
-            setErroListas(erro instanceof Error ? erro.message : 'Não foi possível carregar os status/prioridades/colunas do Jira.');
+            setErroListas(erro instanceof Error ? erro.message : 'Não foi possível carregar os status/prioridades do Jira.');
         } finally {
-            await Promise.all([cargaTimes, cargaEpicos]);
+            await Promise.all([cargaTimes, cargaEpicos, cargaColunasDev, cargaColunasAnalise]);
             setCarregandoListas(false);
             setListasCarregadas(true);
         }
@@ -89,10 +96,11 @@ export const CoresJiraPanel = forwardRef<CoresJiraPanelHandle, CoresJiraPanelPro
 
     async function salvarCores(): Promise<boolean> {
         try {
-            const atualizado = await salvar({ coresStatus, coresPrioridade, coresColuna, coresTime, coresEpico });
+            const atualizado = await salvar({ coresStatus, coresPrioridade, coresColunaDev, coresColunaAnalise, coresTime, coresEpico });
             setCoresStatus(atualizado.coresStatus);
             setCoresPrioridade(atualizado.coresPrioridade);
-            setCoresColuna(atualizado.coresColuna);
+            setCoresColunaDev(atualizado.coresColunaDev);
+            setCoresColunaAnalise(atualizado.coresColunaAnalise);
             setCoresTime(atualizado.coresTime);
             setCoresEpico(atualizado.coresEpico);
             return true;
@@ -157,13 +165,24 @@ export const CoresJiraPanel = forwardRef<CoresJiraPanelHandle, CoresJiraPanelPro
                 }} />
 
             <MapaCoresLista
-                titulo="Cores por coluna:"
-                nomes={colunaNomes}
-                cores={coresColuna}
+                titulo="Cores por coluna — quadro de DEV:"
+                nomes={colunaNomesDev}
+                cores={coresColunaDev}
                 disabled={bloqueado}
                 carregando={carregandoListas}
                 onChange={(nome, cor) => {
-                    setCoresColuna((atual) => ({ ...atual, [nome]: cor }));
+                    setCoresColunaDev((atual) => ({ ...atual, [nome]: cor }));
+                    onAlterado?.();
+                }} />
+
+            <MapaCoresLista
+                titulo="Cores por coluna — quadro de Análise:"
+                nomes={colunaNomesAnalise}
+                cores={coresColunaAnalise}
+                disabled={bloqueado}
+                carregando={carregandoListas}
+                onChange={(nome, cor) => {
+                    setCoresColunaAnalise((atual) => ({ ...atual, [nome]: cor }));
                     onAlterado?.();
                 }} />
 

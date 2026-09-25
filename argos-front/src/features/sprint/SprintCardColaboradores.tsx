@@ -4,11 +4,14 @@ import type { ReactNode } from 'react';
 import { formatarDisponivel } from './calculos';
 import { formatarDuracao } from '../../utils/duracao';
 import { BadgeSigla } from '../../components/BadgeSigla';
+import { IconeAjuda } from '../../components/IconeAjuda';
 import type { LinhaColaboradorSprint } from '../../api/tipos';
 
 import {
+    Box,
     Table,
     Stack,
+    Tooltip,
     TableRow,
     TableBody,
     TableCell,
@@ -24,9 +27,10 @@ const COR_CONCLUIDO = CORES.corConcluido;
 
 interface SprintCardColaboradoresProps {
     colaboradores: LinhaColaboradorSprint[];
+    onDuploClique: (colaborador: LinhaColaboradorSprint) => void;
 }
 
-export function SprintCardColaboradores({ colaboradores }: SprintCardColaboradoresProps): ReactNode {
+export function SprintCardColaboradores({ colaboradores, onDuploClique }: SprintCardColaboradoresProps): ReactNode {
     const [expandido, setExpandido] = useState(true);
     const totalPendentes = colaboradores.reduce((soma, colaborador) => soma + colaborador.tarefasPendentes, 0);
     const totalConcluidas = colaboradores.reduce((soma, colaborador) => soma + colaborador.tarefasConcluidas, 0);
@@ -37,6 +41,7 @@ export function SprintCardColaboradores({ colaboradores }: SprintCardColaborador
                 <Typography variant="subtitle2" sx={{ color: 'text.secondary' }}>
                     Colaboradores
                 </Typography>
+                <IconeAjuda titulo="Duplo clique em um colaborador para informar horas a deduzir da capacidade dele (férias, folga, atestado)." />
                 <IconButton
                     size="small"
                     onClick={() => setExpandido((atual) => !atual)}
@@ -62,7 +67,7 @@ export function SprintCardColaboradores({ colaboradores }: SprintCardColaborador
                             {colaboradores.map((colaborador) => {
                                 const disponivel = formatarDisponivel(colaborador.td, colaborador.segundosRealizados);
                                 return (
-                                    <TableRow key={colaborador.nomeExibicao} hover>
+                                    <TableRow key={colaborador.chave} hover onDoubleClick={() => onDuploClique(colaborador)} sx={{ cursor: 'pointer', userSelect: 'none' }}>
                                         <TableCell sx={{ py: 0.25, whiteSpace: 'nowrap' }}>
                                             {colaborador.nomeExibicao}
                                         </TableCell>
@@ -70,7 +75,11 @@ export function SprintCardColaboradores({ colaboradores }: SprintCardColaborador
                                             <BadgeSigla sigla={colaborador.sigla} cor={colaborador.cor} nome={colaborador.nomeExibicao} sx={{ borderRadius: 1 }} />
                                         </TableCell>
                                         <TableCell sx={{ py: 0.25, whiteSpace: 'nowrap' }} align="right">
-                                            {`${colaborador.td} h`}
+                                            {colaborador.horasDeduzidas > 0 ? (
+                                                <Tooltip title={`${colaborador.td + colaborador.horasDeduzidas} h − ${colaborador.horasDeduzidas} h deduzidas`}>
+                                                    <Box component="span" sx={{ textDecoration: 'underline dotted' }}>{`${colaborador.td} h`}</Box>
+                                                </Tooltip>
+                                            ) : `${colaborador.td} h`}
                                         </TableCell>
                                         <TableCell sx={{ py: 0.25, whiteSpace: 'nowrap' }} align="right">
                                             {formatarDuracao(colaborador.segundosRealizados)}

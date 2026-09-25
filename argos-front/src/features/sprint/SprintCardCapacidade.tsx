@@ -41,7 +41,15 @@ export function SprintCardCapacidade({ cabecalho, statusFinal }: SprintCardCapac
             }}>
             <ParInfo rotulo="Sprint" valor={cabecalho.nome} />
             <ParInfo rotulo="Horas/dia" valor={String(cabecalho.horasPorDia)} />
-            <ParInfo rotulo="Dias úteis" valor={String(cabecalho.diasUteis)} />
+            {cabecalho.diasNaoUteis > 0 ? (
+                <Tooltip title={`${cabecalho.diasUteis + cabecalho.diasNaoUteis} dias de segunda a sexta − ${cabecalho.diasNaoUteis} não úteis`}>
+                    <Box>
+                        <ParInfo rotulo="Dias úteis" valor={String(cabecalho.diasUteis)} />
+                    </Box>
+                </Tooltip>
+            ) : (
+                <ParInfo rotulo="Dias úteis" valor={String(cabecalho.diasUteis)} />
+            )}
             <ParInfo rotulo="Margem" valor={`${cabecalho.margem} h`} />
             <ParInfo rotulo="Início" valor={formatarData(cabecalho.dataInicio)} />
             <ParInfo rotulo="Fim" valor={formatarData(cabecalho.dataFim)} />

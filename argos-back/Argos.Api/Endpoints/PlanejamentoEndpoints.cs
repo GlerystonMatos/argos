@@ -5,71 +5,46 @@ using Argos.Nucleo.Planejamento;
 
 namespace Argos.Api.Endpoints;
 
-public static class SprintPlanejamentoEndpoints
+public static class PlanejamentoEndpoints
 {
-    public static void MapSprintPlanejamentoEndpoints(this WebApplication app, CaminhosDados caminhos)
+    public static void MapPlanejamentoEndpoints(this WebApplication app, CaminhosDados caminhos)
     {
-        RouteGroupBuilder grupo = app.MapGroup("/api/sprint/planejamento").WithTags("Sprint");
+        RouteGroupBuilder grupo = app.MapGroup("/api/planejamento").WithTags("Planejamento");
 
-        grupo.MapGet("/", (string? chaveSprint) =>
+        grupo.MapGet("/", (string? quadro) =>
         {
-            if (string.IsNullOrWhiteSpace(chaveSprint))
-                return Results.BadRequest("A chave do sprint é obrigatória.");
+            if (!TiposQuadroJira.TentarLer(quadro, out TipoQuadroJira tipoQuadro))
+                return Results.BadRequest("Quadro inválido: use \"dev\" ou \"analise\".");
 
-            DadosSprint? sprint = CarregadorSprints.Carregar(caminhos.Sprints)
-                .FirstOrDefault(s => s.Chave == chaveSprint);
-            if (sprint is null)
-                return Results.NotFound("Sprint não encontrado.");
-
-            DocumentoDados? caminhoCache = caminhos.CacheJiraPlanejamento(sprint);
-            if (caminhoCache is null)
-                return Results.BadRequest("A chave do sprint é inválida para nome de arquivo de cache.");
-
-            CachePlanejamentoJira? cache = CarregadorCachePlanejamentoJira.Ler(caminhoCache);
-            if (cache is null)
-                return Results.Conflict("Não há planejamento salvo para esse sprint. Chame POST /api/sprint/planejamento/consultas primeiro.");
+            ConfiguracaoJira configuracao = CarregadorConfiguracaoJira.Carregar(caminhos);
+            CachePlanejamentoJira? cache = CarregadorCachePlanejamentoJira.Ler(caminhos.CacheJiraPlanejamento(tipoQuadro));
+            if (cache is null || cache.QuadroId != configuracao.QuadroId(tipoQuadro))
+                return Results.Conflict($"Não há planejamento salvo para o quadro de {TiposQuadroJira.Rotulo(tipoQuadro)} configurado. Chame POST /api/planejamento/consultas primeiro.");
 
             ConfiguracaoMapeamentoJiraToggl mapeamento = CarregadorConfiguracaoMapeamentoJiraToggl.Carregar(caminhos.JiraTogglMapeamento);
             List<ConfiguracaoUsuarioToggl> usuariosToggl = CarregadorUsuariosToggl.Carregar(caminhos.Usuarios);
             ConfiguracaoQuadroPlanejamento configuracaoQuadro = CarregadorConfiguracaoQuadroPlanejamento.Carregar(caminhos.JiraQuadro);
 
-            ResultadoPlanejamento resultado = ServicoPlanejamento.Montar(cache, mapeamento, usuariosToggl, configuracaoQuadro.ColunasOcultas);
+            ResultadoPlanejamento resultado = ServicoPlanejamento.Montar(cache, mapeamento, usuariosToggl, configuracaoQuadro.ColunasOcultas(tipoQuadro));
             return Results.Ok(ParaDto(resultado));
         })
-        .WithSummary("Devolve o planejamento do sprint (cartões do quadro de DEV por coluna, colaboradores e contagens) montado a partir do cache do Jira; nunca chama o Jira. 409 sem cache.");
+        .WithSummary("Devolve o planejamento global do quadro (dev|analise): cartões do sprint ativo do quadro por coluna, colaboradores e contagens, montado a partir do cache; nunca chama o Jira. 409 sem cache do quadro configurado.");
 
         grupo.MapPost("/consultas", async (ConsultarPlanejamentoRequest request) =>
         {
-            if (string.IsNullOrWhiteSpace(request.ChaveSprint))
-                return Results.BadRequest("A chave do sprint é obrigatória.");
-
-            DadosSprint? sprint = CarregadorSprints.Carregar(caminhos.Sprints)
-                .FirstOrDefault(s => s.Chave == request.ChaveSprint);
-            if (sprint is null)
-                return Results.NotFound("Sprint não encontrado.");
-
-            DocumentoDados? caminhoCache = caminhos.CacheJiraPlanejamento(sprint);
-            if (caminhoCache is null)
-                return Results.BadRequest("A chave do sprint é inválida para nome de arquivo de cache.");
-
-            CachePlanejamentoJira? cache = CarregadorCachePlanejamentoJira.Ler(caminhoCache);
-
-            if (sprint.Fechado)
-            {
-                if (cache is null)
-                    return Results.Conflict("Este sprint está fechado e não tem planejamento salvo. Reabra o sprint para consultar o Jira.");
-
-                return Results.Ok(ParaResposta(cache, veioDoCache: true));
-            }
+            if (!TiposQuadroJira.TentarLer(request.Quadro, out TipoQuadroJira tipoQuadro))
+                return Results.BadRequest("Quadro inválido: use \"dev\" ou \"analise\".");
 
             ConfiguracaoJira configuracao = CarregadorConfiguracaoJira.Carregar(caminhos);
-            string? erroConfiguracao = ValidarConfiguracao(configuracao);
+            string? erroConfiguracao = ValidarConfiguracao(configuracao, tipoQuadro);
             if (erroConfiguracao is not null)
                 return Results.BadRequest(erroConfiguracao);
 
-            long quadroId = configuracao.QuadroId!.Value;
+            long quadroId = configuracao.QuadroId(tipoQuadro)!.Value;
+            DocumentoDados documentoCache = caminhos.CacheJiraPlanejamento(tipoQuadro);
+            CachePlanejamentoJira? cache = CarregadorCachePlanejamentoJira.Ler(documentoCache);
 
-            if (!request.Forcar && cache is not null && cache.QuadroId == quadroId && cache.SprintJira is not null)
+            if (!request.Forcar && cache is not null && cache.QuadroId == quadroId && (cache.SprintJira is not null || cache.Kanban))
                 return Results.Ok(ParaResposta(cache, veioDoCache: true));
 
             ClienteApiJira cliente;
@@ -86,15 +61,25 @@ public static class SprintPlanejamentoEndpoints
             if (!resultadoColunas.Sucesso)
                 return Results.Problem(resultadoColunas.MensagemErro, statusCode: StatusCodes.Status502BadGateway);
 
-            ResultadoApiJira<List<SprintQuadroJira>> resultadoSprints = await cliente.ObterSprintsAtivosQuadroAsync(quadroId);
-            if (!resultadoSprints.Sucesso)
-                return Results.Problem(resultadoSprints.MensagemErro, statusCode: StatusCodes.Status502BadGateway);
+            ResultadoApiJira<string> resultadoTipo = await cliente.ObterTipoQuadroAsync(quadroId);
+            if (!resultadoTipo.Sucesso)
+                return Results.Problem(resultadoTipo.MensagemErro, statusCode: StatusCodes.Status502BadGateway);
 
-            List<SprintQuadroJira> sprintsAtivos = resultadoSprints.Dados!;
+            bool kanban = resultadoTipo.Dados!.Equals(ClienteApiJira.TipoQuadroKanban, StringComparison.OrdinalIgnoreCase);
 
-            ResultadoApiJira<List<CartaoQuadroJira>> resultadoCartoes = await cliente.BuscarCartoesSprintAsync(
+            List<SprintQuadroJira> sprintsAtivos = new();
+            if (!kanban)
+            {
+                ResultadoApiJira<List<SprintQuadroJira>> resultadoSprints = await cliente.ObterSprintsAtivosQuadroAsync(quadroId);
+                if (!resultadoSprints.Sucesso)
+                    return Results.Problem(resultadoSprints.MensagemErro, statusCode: StatusCodes.Status502BadGateway);
+
+                sprintsAtivos = resultadoSprints.Dados!;
+            }
+
+            ResultadoApiJira<List<CartaoQuadroJira>> resultadoCartoes = await cliente.BuscarCartoesQuadroAsync(
                 quadroId,
-                sprintsAtivos.Select(s => s.Id).ToList(),
+                kanban ? null : sprintsAtivos.Select(s => s.Id).ToList(),
                 configuracao.CampoAnalisadoPorId,
                 configuracao.CampoRevisadoPorId,
                 configuracao.CampoTimeId,
@@ -106,32 +91,33 @@ public static class SprintPlanejamentoEndpoints
 
             CachePlanejamentoJira novoCache = new(
                 quadroId,
-                configuracao.QuadroNome,
+                configuracao.QuadroNome(tipoQuadro),
                 sprintsAtivos.FirstOrDefault(),
                 resultadoColunas.Dados!,
                 resultadoCartoes.Dados!,
-                DateTime.UtcNow.ToString("O"));
+                DateTime.UtcNow.ToString("O"),
+                kanban);
 
             IResult? erroPersistencia = TratamentoIo.Executar(
-                () => CarregadorCachePlanejamentoJira.Salvar(caminhoCache, novoCache),
-                "Não foi possível salvar o cache do planejamento do sprint.");
+                () => CarregadorCachePlanejamentoJira.Salvar(documentoCache, novoCache),
+                "Não foi possível salvar o cache do planejamento.");
             if (erroPersistencia is not null)
                 return erroPersistencia;
 
             return Results.Ok(ParaResposta(novoCache, veioDoCache: false));
         })
-        .WithSummary("Consulta os cartões do sprint ativo do quadro de DEV no Jira (colunas, sprint ativo e cartões) e grava JiraPlanejamentoData_<chave>; sem forçar reaproveita o cache do mesmo quadro. Sprint fechado nunca chama o Jira: devolve o cache salvo ou 409.");
+        .WithSummary("Consulta no Jira os cartões do quadro (dev|analise) — sprint ativo se Scrum, tudo o que está no quadro se Kanban — e grava JiraPlanejamentoGlobalDev/JiraPlanejamentoGlobalAnalise; sem forçar reaproveita o cache do mesmo quadro.");
     }
 
-    private static string? ValidarConfiguracao(ConfiguracaoJira configuracao)
+    private static string? ValidarConfiguracao(ConfiguracaoJira configuracao, TipoQuadroJira tipoQuadro)
     {
         if (string.IsNullOrWhiteSpace(configuracao.UrlDominio)
             || string.IsNullOrWhiteSpace(configuracao.Email)
             || string.IsNullOrWhiteSpace(configuracao.ApiToken))
             return "Configure a conexão com o Jira (URL, e-mail e API Token) em Jira.";
 
-        if (configuracao.QuadroId is null)
-            return "Selecione o quadro de DEV do Jira nas configurações.";
+        if (configuracao.QuadroId(tipoQuadro) is null)
+            return $"Selecione o quadro de {TiposQuadroJira.Rotulo(tipoQuadro)} do Jira nas configurações.";
 
         if (string.IsNullOrWhiteSpace(configuracao.CampoAnalisadoPorId) || string.IsNullOrWhiteSpace(configuracao.CampoRevisadoPorId))
             return "Configure os campos \"Analisado por\" e \"Revisado por\" do Jira nas configurações.";
@@ -150,7 +136,8 @@ public static class SprintPlanejamentoEndpoints
         resultado.Cartoes.Select(ParaDto).ToList(),
         resultado.Colaboradores
             .Select(c => new ColaboradorPlanejamentoDto(ParaDto(c.Pessoa)!, c.Contagens, c.Total))
-            .ToList());
+            .ToList(),
+        resultado.Kanban);
 
     private static CartaoPlanejamentoDto ParaDto(CartaoPlanejamento cartao) => new(
         cartao.Chave,

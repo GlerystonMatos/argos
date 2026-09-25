@@ -9,4 +9,5 @@ public record ResultadoPlanejamentoDto(
     List<string> Colunas,
     List<int> TotaisPorColuna,
     List<CartaoPlanejamentoDto> Cartoes,
-    List<ColaboradorPlanejamentoDto> Colaboradores);
+    List<ColaboradorPlanejamentoDto> Colaboradores,
+    bool Kanban);

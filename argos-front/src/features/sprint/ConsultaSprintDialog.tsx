@@ -57,15 +57,15 @@ export function ConsultaSprintDialog({
             titulo={`Consultar sprint — ${sprint.nome}`}
             consultando={consultando}
             rotuloConsultar={ROTULO_CONSULTAR[origemEfetiva]}
-            vaiForcarToggl={forcaToggl(origemEfetiva)}
+            pedirConfirmacao={forcaToggl(origemEfetiva)}
             semDadoAproveitavel={semDadoAproveitavel}
             onConsultar={() => void consultarAgora()}
             onCancelar={cancelar}>
             {sprint.fechado ? (
                 <Alert severity="info">
                     Sprint fechado: os dados ficam travados no que foi salvo ao fechar. A consulta sempre usa
-                    o cache do Toggl, do Jira e do Planejamento, sem chamar a API de novo. Reabra o sprint
-                    na listagem para liberar edição e novas consultas.
+                    o cache do Toggl e do Jira, sem chamar a API de novo. Reabra o sprint na listagem para
+                    liberar edição e novas consultas.
                 </Alert>
             ) : (
                 <SeletorOrigemConsulta
@@ -75,9 +75,9 @@ export function ConsultaSprintDialog({
                     onChange={setOrigem}
                     descricao={
                         <>
-                            Nenhum: usa o cache do Toggl, do Jira e do Planejamento quando disponível. Toggl:
-                            força nova consulta ao Toggl (Jira e Planejamento do cache). Jira: atualiza as
-                            informações do Jira e o Planejamento do sprint (Toggl do cache). Ambos: força tudo.
+                            Nenhum: usa o cache do Toggl e do Jira quando disponível. Toggl: força nova
+                            consulta ao Toggl (Jira do cache). Jira: atualiza as informações do Jira (Toggl
+                            do cache). Ambos: força os dois.
                         </>
                     } />
             )}

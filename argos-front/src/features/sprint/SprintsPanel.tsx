@@ -10,6 +10,7 @@ import { SprintFormDialog } from './SprintFormDialog';
 import LockOpenIcon from '@mui/icons-material/LockOpen';
 import { useNotificacao } from '../../hooks/useNotificacao';
 import { CabecalhoView } from '../../components/CabecalhoView';
+import ViewKanbanIcon from '@mui/icons-material/ViewKanbanOutlined';
 import { DialogoConfirmacao } from '../../components/DialogoConfirmacao';
 import { EsqueletoCarregando } from '../../components/EsqueletoCarregando';
 import { BotaoComCarregamento } from '../../components/BotaoComCarregamento';
@@ -32,13 +33,27 @@ interface SprintsPanelProps {
     sprintSelecionadoChave: string | null;
     onSelecionar: (sprint: Sprint) => void;
     onConfirmarSelecao: () => void;
+    onPlanejar: () => void;
     semUsuarios?: boolean;
+}
+
+function descreverSprint(sprint: Sprint): string {
+    const partes = [
+        formatarPeriodo(sprint.dataInicio, sprint.dataFim),
+        `${sprint.horasPorDia}h/dia`,
+        `margem ${sprint.margemPercentual}%`,
+    ];
+    if (sprint.diasNaoUteis > 0) {
+        partes.push(`${sprint.diasNaoUteis} ${sprint.diasNaoUteis === 1 ? 'dia não útil' : 'dias não úteis'}`);
+    }
+    return partes.join(' · ');
 }
 
 export function SprintsPanel({
     sprintSelecionadoChave,
     onSelecionar,
     onConfirmarSelecao,
+    onPlanejar,
     semUsuarios = false,
 }: SprintsPanelProps): ReactNode {
     const { notificarErro, notificarSucesso } = useNotificacao();
@@ -64,7 +79,7 @@ export function SprintsPanel({
 
     useEffect(() => {
         carregar().catch((erro: unknown) => notificarErro(erro, 'Não foi possível listar os sprints'));
-    }, []);
+    }, [carregar, notificarErro]);
 
     function abrirParaCriar(): void {
         setSprintEmEdicao(null);
@@ -112,6 +127,9 @@ export function SprintsPanel({
             <CardContent>
                 <Stack spacing={2}>
                     <CabecalhoView titulo="Sprints">
+                        <BotaoComCarregamento variant="outlined" startIcon={<ViewKanbanIcon />} onClick={onPlanejar}>
+                            Planejar
+                        </BotaoComCarregamento>
                         <BotaoComCarregamento
                             variant="outlined"
                             startIcon={<AddIcon />}
@@ -175,7 +193,7 @@ export function SprintsPanel({
                                                         {sprint.fechado ? <Chip label="Fechado" size="small" /> : undefined}
                                                     </Stack>
                                                 }
-                                                secondary={`${formatarPeriodo(sprint.dataInicio, sprint.dataFim)} · ${sprint.horasPorDia}h/dia · margem ${sprint.margemPercentual}%`} />
+                                                secondary={descreverSprint(sprint)} />
                                         </ListItemButton>
                                     </ListItem>
                                 ))}

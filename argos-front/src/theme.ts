@@ -21,6 +21,8 @@ export const CORES = {
     corPrioridadeMuitoBaixa: '#88D5FC',
 } as const;
 
+export const CORES_GRAFICO = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#4a3aa7'] as const;
+
 export const ALTURA_CONTROLE = 40;
 
 export const tema = createTheme({
@@ -110,6 +112,9 @@ export const tema = createTheme({
                     height: ALTURA_CONTROLE,
                     paddingTop: 0,
                     paddingBottom: 0,
+                    paddingLeft: 16,
+                    paddingRight: 16,
+                    fontSize: '0.875rem',
                 },
             },
         },

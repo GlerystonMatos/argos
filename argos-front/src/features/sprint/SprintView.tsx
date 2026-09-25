@@ -3,22 +3,23 @@ import { useSprint } from './useSprint';
 import { fecharSprint } from '../../api/sprintsApi';
 import { CORES, ALTURA_CONTROLE } from '../../theme';
 import { contemTermo } from '../../utils/buscaTexto';
-import { obterCoresJira } from '../../api/coresJiraApi';
+import RefreshIcon from '@mui/icons-material/Refresh';
 import { SprintLinhaTarefa } from './SprintLinhaTarefa';
 import { AvisoCache } from '../../components/AvisoCache';
 import { useNotificacao } from '../../hooks/useNotificacao';
-import { useEffect, useMemo, useRef, useState } from 'react';
 import { SprintCardCapacidade } from './SprintCardCapacidade';
 import { CabecalhoView } from '../../components/CabecalhoView';
 import { SprintCardColaboradores } from './SprintCardColaboradores';
+import ViewKanbanIcon from '@mui/icons-material/ViewKanbanOutlined';
 import { SprintDialogDetalheLinha } from './SprintDialogDetalheLinha';
-import { obterStatusFinalSprint } from '../../api/statusFinalSprintApi';
 import { lerTachados, gravarTachados, idLinhaTarefa } from './tachados';
 import { DialogoConfirmacao } from '../../components/DialogoConfirmacao';
 import { FiltroMultiSelecao } from '../../components/FiltroMultiSelecao';
-import EventNoteOutlinedIcon from '@mui/icons-material/EventNoteOutlined';
+import { SprintDialogHorasDeduzidas } from './SprintDialogHorasDeduzidas';
 import { EsqueletoCarregando } from '../../components/EsqueletoCarregando';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { BotaoComCarregamento } from '../../components/BotaoComCarregamento';
+import InsertChartOutlinedIcon from '@mui/icons-material/InsertChartOutlined';
 import { useLarguraColunaRestante } from '../../hooks/useLarguraColunaRestante';
 
 import {
@@ -35,6 +36,7 @@ import type {
     CategoriasSprint,
     LinhaTarefaSprint,
     StatusFinalSprint,
+    LinhaColaboradorSprint,
 } from '../../api/tipos';
 
 import {
@@ -50,25 +52,29 @@ import {
     TableBody,
     TableCell,
     TableHead,
-    TableSortLabel,
     TableContainer,
     FormControlLabel,
 } from '@mui/material';
 
-type CampoOrdenacao = 'prioridade' | 'situacao';
 const NENHUMA = 'Nenhuma';
 
+const SprintDialogGraficos = lazy(() =>
+    import('./SprintDialogGraficos').then((modulo) => ({ default: modulo.SprintDialogGraficos })),
+);
+
 interface SprintViewProps {
-    chaveSprint: string;
-    onVoltar: () => void;
+    sprint: Sprint;
+    versaoConsulta: number;
+    veioDoCache: boolean;
+    categorias: CategoriasSprint;
+    statusFinal: StatusFinalSprint;
+    coresStatus: Record<string, string>;
+    coresPrioridade: Record<string, string>;
+    janelaAlertaPrevisaoLiberacaoDias: number;
+    onAtualizar: () => void;
     onPlanejar: () => void;
-    quadroConfigurado: boolean;
-    onConfigurarQuadro: () => void;
-    veioDoCache?: boolean;
-    categorias?: CategoriasSprint | null;
-    janelaAlertaPrevisaoLiberacaoDias?: number;
-    fechado?: boolean;
-    onFechado?: (sprint: Sprint) => void;
+    onVoltar: () => void;
+    onSprintAtualizado: (sprint: Sprint) => void;
 }
 
 const LARGURA_CELULA = '2.5rem';
@@ -76,53 +82,50 @@ const INDICE_COLUNA_DESCRICAO = 4;
 const LARGURA_MINIMA_DESCRICAO = 100;
 const MARGEM_SEGURANCA_DESCRICAO = 4;
 
-export function SprintView({ chaveSprint, onVoltar, onPlanejar, quadroConfigurado, onConfigurarQuadro, veioDoCache = false, categorias, janelaAlertaPrevisaoLiberacaoDias = 5, fechado = false, onFechado }: SprintViewProps): ReactNode {
+export function SprintView({
+    sprint,
+    versaoConsulta,
+    veioDoCache,
+    categorias,
+    statusFinal,
+    coresStatus,
+    coresPrioridade,
+    janelaAlertaPrevisaoLiberacaoDias,
+    onAtualizar,
+    onPlanejar,
+    onVoltar,
+    onSprintAtualizado,
+}: SprintViewProps): ReactNode {
+    const chaveSprint = sprint.chave;
+    const fechado = sprint.fechado;
     const [fechando, setFechando] = useState(false);
     const [termoBusca, setTermoBusca] = useState('');
     const { resultado, carregando, carregar } = useSprint();
-    const corTag = categorias?.corTag || CORES.corIndisponivel;
+    const corTag = categorias.corTag || CORES.corIndisponivel;
     const [filtrosAbertos, setFiltrosAbertos] = useState(false);
     const { notificarErro, notificarSucesso } = useNotificacao();
+    const [graficosAbertos, setGraficosAbertos] = useState(false);
     const [inverterFiltros, setInverterFiltros] = useState(false);
     const [confirmandoFechar, setConfirmandoFechar] = useState(false);
-    const [quadroPendente, setQuadroPendente] = useState(false);
     const [destacadas, setDestacadas] = useState<Set<string>>(new Set());
     const [filtroSituacoes, setFiltroSituacoes] = useState<string[]>([]);
     const [filtroPrioridades, setFiltroPrioridades] = useState<string[]>([]);
-    const [coresStatus, setCoresStatus] = useState<Record<string, string>>({});
     const [filtroColaboradores, setFiltroColaboradores] = useState<string[]>([]);
     const [filtroSituacaoGrupos, setFiltroSituacaoGrupos] = useState<string[]>([]);
-    const [coresPrioridade, setCoresPrioridade] = useState<Record<string, string>>({});
-    const [statusFinal, setStatusFinal] = useState<StatusFinalSprint | null>(null);
-    const [carregandoConfiguracoes, setCarregandoConfiguracoes] = useState(true);
     const [tachados, setTachados] = useState<Set<string>>(() => lerTachados(chaveSprint));
-    const [ordenacao, setOrdenacao] = useState<{ campo: CampoOrdenacao; direcao: 'asc' | 'desc' } | null>(null);
+    const [colaboradorDeducao, setColaboradorDeducao] = useState<LinhaColaboradorSprint | null>(null);
     const [linhaDetalhe, setLinhaDetalhe] = useState<{ linha: LinhaTarefaSprint; codigoDuplicado: boolean } | null>(null);
     const refTabela = useRef<HTMLTableElement>(null);
-
-    useEffect(() => {
-        Promise.all([
-            obterCoresJira()
-                .then((dados) => {
-                    setCoresStatus(dados.coresStatus);
-                    setCoresPrioridade(dados.coresPrioridade);
-                })
-                .catch(() => { }),
-            obterStatusFinalSprint()
-                .then(setStatusFinal)
-                .catch(() => { }),
-        ]).finally(() => setCarregandoConfiguracoes(false));
-    }, []);
 
     useEffect(() => {
         carregar(chaveSprint).catch((erro: unknown) =>
             notificarErro(erro, 'Não foi possível carregar o acompanhamento do sprint'),
         );
-    }, [chaveSprint]);
+    }, [chaveSprint, versaoConsulta, carregar, notificarErro]);
 
     useEffect(() => {
         setTachados(lerTachados(chaveSprint));
-    }, [chaveSprint]);
+    }, [chaveSprint, versaoConsulta]);
 
     function alternarTachado(id: string): void {
         setTachados((atual) => {
@@ -154,7 +157,7 @@ export function SprintView({ chaveSprint, onVoltar, onPlanejar, quadroConfigurad
         try {
             const sprintAtualizado = await fecharSprint(chaveSprint);
             notificarSucesso('Sprint fechado. Os dados ficam travados e a consulta sempre usará o cache.');
-            onFechado?.(sprintAtualizado);
+            onSprintAtualizado(sprintAtualizado);
         } catch (erro) {
             notificarErro(erro, 'Não foi possível fechar o sprint');
         } finally {
@@ -163,17 +166,12 @@ export function SprintView({ chaveSprint, onVoltar, onPlanejar, quadroConfigurad
         }
     }
 
-    function aoClicarPlanejar(): void {
-        if (quadroConfigurado) {
-            onPlanejar();
-            return;
-        }
-        setQuadroPendente(true);
-    }
-
-    function irConfigurarQuadro(): void {
-        setQuadroPendente(false);
-        onConfigurarQuadro();
+    function aoSalvarDeducao(sprintAtualizado: Sprint): void {
+        setColaboradorDeducao(null);
+        onSprintAtualizado(sprintAtualizado);
+        carregar(chaveSprint).catch((erro: unknown) =>
+            notificarErro(erro, 'Não foi possível recalcular o acompanhamento do sprint'),
+        );
     }
 
     const cabecalho = resultado?.cabecalho;
@@ -246,18 +244,6 @@ export function SprintView({ chaveSprint, onVoltar, onPlanejar, quadroConfigurad
         setInverterFiltros(false);
     }
 
-    function limparOrdenacao(): void {
-        setOrdenacao(null);
-    }
-
-    function alternarOrdenacao(campo: CampoOrdenacao): void {
-        setOrdenacao((atual) => {
-            if (!atual || atual.campo !== campo) return { campo, direcao: 'asc' };
-            if (atual.direcao === 'asc') return { campo, direcao: 'desc' };
-            return null;
-        });
-    }
-
     const tarefasFiltradas = useMemo(() => {
         // Casa o código cru ("TEL - 994") e o exibido com zeros à esquerda ("TEL - 0994").
         let lista = termoBusca.trim()
@@ -314,21 +300,12 @@ export function SprintView({ chaveSprint, onVoltar, onPlanejar, quadroConfigurad
                 );
         }
 
-        if (ordenacao) {
-            const sinal = ordenacao.direcao === 'asc' ? 1 : -1;
-            lista = [...lista].sort((a, b) => ordenacao.campo === 'prioridade'
-                ? sinal * (ordemPrioridade(a.linha.prioridade) - ordemPrioridade(b.linha.prioridade))
-                : sinal * (a.linha.situacao ?? '').localeCompare(b.linha.situacao ?? '', 'pt-BR'));
-        }
-
         return lista;
-    }, [tarefasComId, larguraCodigo, termoBusca, filtroPrioridades, filtroSituacoes, filtroColaboradores, filtroSituacaoGrupos, inverterFiltros, ordenacao]);
+    }, [tarefasComId, larguraCodigo, termoBusca, filtroPrioridades, filtroSituacoes, filtroColaboradores, filtroSituacaoGrupos, inverterFiltros]);
 
     const colaboradores = resultado?.colaboradores ?? [];
 
-    // "Pronto" combina a consulta principal com as configurações buscadas à parte (cores,
-    // status final) — evita mostrar cabeçalho/cards/grid antes desses dados chegarem.
-    const carregandoTudo = carregando || carregandoConfiguracoes;
+    const carregandoTudo = carregando;
     const pronto = !carregandoTudo && resultado !== null;
 
     const larguraDescricao = useLarguraColunaRestante(
@@ -353,11 +330,18 @@ export function SprintView({ chaveSprint, onVoltar, onPlanejar, quadroConfigurad
                         Fechar
                     </BotaoComCarregamento>
                 ) : undefined}
-                <Button variant="outlined" startIcon={<EventNoteOutlinedIcon />} onClick={aoClicarPlanejar}>
-                    Planejar
+                <Tooltip title={fechado ? 'Sprint fechado: reabra na listagem de sprints para atualizar.' : ''}>
+                    <Box component="span">
+                        <Button variant="outlined" startIcon={<RefreshIcon />} onClick={onAtualizar} disabled={fechado}>
+                            Atualizar
+                        </Button>
+                    </Box>
+                </Tooltip>
+                <Button variant="outlined" startIcon={<InsertChartOutlinedIcon />} onClick={() => setGraficosAbertos(true)} disabled={!pronto}>
+                    Gráficos
                 </Button>
-                <Button variant="outlined" onClick={limparOrdenacao} disabled={ordenacao === null}>
-                    Limpar ordenação
+                <Button variant="outlined" startIcon={<ViewKanbanIcon />} onClick={onPlanejar}>
+                    Planejar
                 </Button>
                 <BotaoComCarregamento onClick={() => setFiltrosAbertos((a) => !a)}>
                     {filtrosAbertos ? 'Fechar filtros' : 'Filtros'}
@@ -427,7 +411,9 @@ export function SprintView({ chaveSprint, onVoltar, onPlanejar, quadroConfigurad
 
             {carregandoTudo ? <EsqueletoCarregando /> : undefined}
 
-            {pronto && colaboradores.length > 0 ? <SprintCardColaboradores colaboradores={colaboradores} /> : undefined}
+            {pronto && colaboradores.length > 0 ? (
+                <SprintCardColaboradores colaboradores={colaboradores} onDuploClique={setColaboradorDeducao} />
+            ) : undefined}
 
             {pronto && tarefas.length === 0 ? (
                 <Alert severity="warning">Nenhum apontamento encontrado para este sprint.</Alert>
@@ -451,20 +437,10 @@ export function SprintView({ chaveSprint, onVoltar, onPlanejar, quadroConfigurad
                             <TableRow>
                                 <TableCell rowSpan={2} sx={{ py: 0.25, width: '1%', px: 0.5 }} />
                                 <TableCell rowSpan={2} sx={{ py: 0.25, width: '1%', px: 0.5, whiteSpace: 'nowrap', verticalAlign: 'bottom' }}>
-                                    <TableSortLabel
-                                        active={ordenacao?.campo === 'prioridade'}
-                                        direction={ordenacao?.campo === 'prioridade' ? ordenacao.direcao : 'asc'}
-                                        onClick={() => alternarOrdenacao('prioridade')}>
-                                        Prioridade
-                                    </TableSortLabel>
+                                    Prioridade
                                 </TableCell>
                                 <TableCell rowSpan={2} align="center" sx={{ py: 0.25, width: '1%', px: 0.5, whiteSpace: 'nowrap', verticalAlign: 'bottom' }}>
-                                    <TableSortLabel
-                                        active={ordenacao?.campo === 'situacao'}
-                                        direction={ordenacao?.campo === 'situacao' ? ordenacao.direcao : 'asc'}
-                                        onClick={() => alternarOrdenacao('situacao')}>
-                                        Status
-                                    </TableSortLabel>
+                                    Status
                                 </TableCell>
                                 <TableCell rowSpan={2} align="center" sx={{ py: 0.25, width: '1%', px: 0.5, whiteSpace: 'nowrap', verticalAlign: 'bottom' }}>Código</TableCell>
                                 <TableCell rowSpan={2} sx={{ py: 0.25, px: 0.8, verticalAlign: 'bottom' }}>Descrição</TableCell>
@@ -533,6 +509,20 @@ export function SprintView({ chaveSprint, onVoltar, onPlanejar, quadroConfigurad
                 coresPrioridade={coresPrioridade}
                 corTag={corTag} />
 
+            <SprintDialogHorasDeduzidas
+                colaborador={colaboradorDeducao}
+                chaveSprint={sprint.chave}
+                horasDeduzidas={sprint.horasDeduzidas}
+                somenteLeitura={fechado}
+                onFechar={() => setColaboradorDeducao(null)}
+                onSalvo={aoSalvarDeducao} />
+
+            {graficosAbertos && resultado ? (
+                <Suspense fallback={undefined}>
+                    <SprintDialogGraficos resultado={resultado} onFechar={() => setGraficosAbertos(false)} />
+                </Suspense>
+            ) : undefined}
+
             <DialogoConfirmacao
                 aberto={confirmandoFechar}
                 titulo="Fechar sprint"
@@ -543,15 +533,6 @@ export function SprintView({ chaveSprint, onVoltar, onPlanejar, quadroConfigurad
                 carregando={fechando}
                 onConfirmar={() => void confirmarFechar()}
                 onCancelar={() => setConfirmandoFechar(false)} />
-
-            <DialogoConfirmacao
-                aberto={quadroPendente}
-                titulo="Quadro de DEV não configurado"
-                mensagem="O quadro de DEV do Jira ainda não foi configurado. Ir para Jira → Conexão para configurá-lo?"
-                textoConfirmar="Ir para Jira"
-                textoCancelar="Agora não"
-                onConfirmar={irConfigurarQuadro}
-                onCancelar={() => setQuadroPendente(false)} />
         </Stack>
     );
 }

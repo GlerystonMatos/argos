@@ -162,7 +162,7 @@ export const ConfiguracaoTogglTab = forwardRef<AbaConfiguracoesHandle, AbaConfig
                 {!togglCompleto ? (
                     <Alert severity="info">
                         Preencha Agrupamento, Tags para detalhar por descrição (quando aplicável) e Tags DEV/REV/QA para
-                        liberar Relatório, Gant e Sprint.
+                        liberar Relatório, Gant, Sprint e Planejamento.
                     </Alert>
                 ) : undefined}
             </Stack>

@@ -1,25 +1,23 @@
 import { ErroApi } from '../../api/http';
-import type { ResultadoPlanejamento } from '../../api/tipos';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
+import type { ResultadoPlanejamento, TipoQuadroJira } from '../../api/tipos';
 import { consultarPlanejamento, obterPlanejamento } from '../../api/planejamentoApi';
-import { aguardarAtualizacaoPlanejamento, atualizarPlanejamentoAoVivo } from './atualizacoesPlanejamento';
 
-export interface ResultadoUsePlanejamento {
+export interface EstadoPlanejamentoQuadro {
     resultado: ResultadoPlanejamento | null;
     carregando: boolean;
-    atualizando: boolean;
     erro: string | null;
     veioDoCache: boolean | null;
-    atualizadoEm: string | null;
-    semCache: boolean;
-    atualizar: () => Promise<void>;
 }
 
-interface Carga {
-    resultado: ResultadoPlanejamento | null;
-    veioDoCache: boolean;
-    semCache: boolean;
+export interface ResultadoUsePlanejamento {
+    quadros: Record<TipoQuadroJira, EstadoPlanejamentoQuadro>;
+
+    consultar: (forcar: boolean, principal: TipoQuadroJira, emSegundoPlano: readonly TipoQuadroJira[]) => Promise<void>;
+    atualizar: (quadro: TipoQuadroJira) => Promise<void>;
 }
+
+const ESTADO_INICIAL: EstadoPlanejamentoQuadro = { resultado: null, carregando: false, erro: null, veioDoCache: null };
 
 function ehConflito(erro: unknown): boolean {
     return erro instanceof ErroApi && erro.status === 409;
@@ -29,110 +27,59 @@ function mensagemDe(erro: unknown): string {
     return erro instanceof Error ? erro.message : 'Não foi possível carregar o planejamento.';
 }
 
-// Cache-first: o GET nunca chama o Jira; sem cache (409) o POST com forcar=false busca ao vivo
-// (sprint aberto) ou devolve 409 de novo (sprint fechado sem planejamento salvo).
-async function carregarCacheFirst(chaveSprint: string): Promise<Carga> {
-    await aguardarAtualizacaoPlanejamento(chaveSprint);
+async function carregarQuadro(quadro: TipoQuadroJira, forcar: boolean): Promise<{ resultado: ResultadoPlanejamento; veioDoCache: boolean }> {
+    if (forcar) {
+        await consultarPlanejamento({ quadro, forcar: true });
+        return { resultado: await obterPlanejamento(quadro), veioDoCache: false };
+    }
 
     try {
-        return { resultado: await obterPlanejamento(chaveSprint), veioDoCache: true, semCache: false };
+        return { resultado: await obterPlanejamento(quadro), veioDoCache: true };
     } catch (erro) {
         if (!ehConflito(erro)) throw erro;
     }
 
-    try {
-        const consulta = await consultarPlanejamento({ chaveSprint, forcar: false });
-        const resultado = await obterPlanejamento(chaveSprint);
-        return { resultado, veioDoCache: consulta.veioDoCache, semCache: false };
-    } catch (erro) {
-        if (ehConflito(erro)) return { resultado: null, veioDoCache: false, semCache: true };
-        throw erro;
-    }
+    const consulta = await consultarPlanejamento({ quadro, forcar: false });
+    return { resultado: await obterPlanejamento(quadro), veioDoCache: consulta.veioDoCache };
 }
 
-export function usePlanejamento(chaveSprint: string): ResultadoUsePlanejamento {
-    const [resultado, setResultado] = useState<ResultadoPlanejamento | null>(null);
-    const [carregando, setCarregando] = useState(true);
-    const [atualizando, setAtualizando] = useState(false);
-    const [erro, setErro] = useState<string | null>(null);
-    const [veioDoCache, setVeioDoCache] = useState<boolean | null>(null);
-    const [semCache, setSemCache] = useState(false);
+export function usePlanejamento(): ResultadoUsePlanejamento {
+    const [quadros, setQuadros] = useState<Record<TipoQuadroJira, EstadoPlanejamentoQuadro>>({
+        dev: ESTADO_INICIAL,
+        analise: ESTADO_INICIAL,
+    });
+    const sequencias = useRef<Record<TipoQuadroJira, number>>({ dev: 0, analise: 0 });
 
-    const sequencia = useRef(0);
-    const emAndamento = useRef<{ chave: string; promessa: Promise<Carga> } | null>(null);
+    const alterar = useCallback((quadro: TipoQuadroJira, parcial: Partial<EstadoPlanejamentoQuadro>) => {
+        setQuadros((atual) => ({ ...atual, [quadro]: { ...atual[quadro], ...parcial } }));
+    }, []);
 
-    useEffect(() => {
-        const minha = ++sequencia.current;
-        setResultado(null);
-        setErro(null);
-        setSemCache(false);
-        setVeioDoCache(null);
-        setAtualizando(false);
-        setCarregando(true);
-
-        let promessa: Promise<Carga>;
-        if (emAndamento.current?.chave === chaveSprint) {
-            promessa = emAndamento.current.promessa;
-        } else {
-            promessa = carregarCacheFirst(chaveSprint);
-            const registro = { chave: chaveSprint, promessa };
-            emAndamento.current = registro;
-            const limpar = (): void => {
-                if (emAndamento.current === registro) emAndamento.current = null;
-            };
-            promessa.then(limpar, limpar);
-        }
-
-        promessa
-            .then((carga) => {
-                if (minha !== sequencia.current) return;
-                setResultado(carga.resultado);
-                setVeioDoCache(carga.veioDoCache);
-                setSemCache(carga.semCache);
-            })
-            .catch((falha: unknown) => {
-                if (minha !== sequencia.current) return;
-                setErro(mensagemDe(falha));
-            })
-            .finally(() => {
-                if (minha === sequencia.current) setCarregando(false);
-            });
-
-        return () => {
-            sequencia.current++;
-        };
-    }, [chaveSprint]);
-
-    const atualizar = useCallback(async (): Promise<void> => {
-        const minha = ++sequencia.current;
-        setAtualizando(true);
-        setErro(null);
-        try {
-            const consulta = await atualizarPlanejamentoAoVivo(chaveSprint);
-            const novo = await obterPlanejamento(chaveSprint);
-            if (minha !== sequencia.current) return;
-            setResultado(novo);
-            setVeioDoCache(consulta.veioDoCache);
-            setSemCache(false);
-        } catch (falha) {
-            if (minha !== sequencia.current) return;
-            setErro(mensagemDe(falha));
-        } finally {
-            if (minha === sequencia.current) {
-                setAtualizando(false);
-                setCarregando(false);
+    const carregar = useCallback(
+        async (quadro: TipoQuadroJira, forcar: boolean): Promise<void> => {
+            const minha = ++sequencias.current[quadro];
+            alterar(quadro, { carregando: true, erro: null });
+            try {
+                const { resultado, veioDoCache } = await carregarQuadro(quadro, forcar);
+                if (minha !== sequencias.current[quadro]) return;
+                alterar(quadro, { resultado, veioDoCache, carregando: false });
+            } catch (falha) {
+                if (minha !== sequencias.current[quadro]) return;
+                alterar(quadro, { erro: mensagemDe(falha), carregando: false });
+                throw falha;
             }
-        }
-    }, [chaveSprint]);
+        },
+        [alterar],
+    );
 
-    return {
-        resultado,
-        carregando,
-        atualizando,
-        erro,
-        veioDoCache,
-        atualizadoEm: resultado?.atualizadoEm ?? null,
-        semCache,
-        atualizar,
-    };
+    const consultar = useCallback(
+        async (forcar: boolean, principal: TipoQuadroJira, emSegundoPlano: readonly TipoQuadroJira[]): Promise<void> => {
+            emSegundoPlano.forEach((quadro) => carregar(quadro, forcar).catch(() => { }));
+            await carregar(principal, forcar);
+        },
+        [carregar],
+    );
+
+    const atualizar = useCallback((quadro: TipoQuadroJira) => carregar(quadro, true).catch(() => { }), [carregar]);
+
+    return { quadros, consultar, atualizar };
 }

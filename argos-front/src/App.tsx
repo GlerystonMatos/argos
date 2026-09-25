@@ -15,26 +15,29 @@ import { ResumoView } from './features/resumo/ResumoView';
 import { LoginScreen } from './features/auth/LoginScreen';
 import { SprintView } from './features/sprint/SprintView';
 import { limparTachados } from './features/sprint/tachados';
+import { ProvedorNotificacao } from './hooks/useNotificacao';
 import { SprintsPanel } from './features/sprint/SprintsPanel';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import { JiraConexaoView } from './features/jira/JiraConexaoView';
 import { RelatorioView } from './features/relatorio/RelatorioView';
+import { DialogoConfirmacao } from './components/DialogoConfirmacao';
 import type { AbaConfiguracoes } from './features/configuracoes/abas';
 import { EsqueletoCarregando } from './components/EsqueletoCarregando';
 import { useConsultaSprint } from './features/sprint/useConsultaSprint';
 import { ParametrosGantForm } from './features/gant/ParametrosGantForm';
 import { BotaoComCarregamento } from './components/BotaoComCarregamento';
+import { usePlanejamento } from './features/planejamento/usePlanejamento';
 import { ImportarDadosDialog } from './features/dados/ImportarDadosDialog';
 import { PlanejamentoView } from './features/planejamento/PlanejamentoView';
+import type { Sprint, ConsultarResponse, TipoQuadroJira } from './api/tipos';
 import { ConsultaSprintDialog } from './features/sprint/ConsultaSprintDialog';
+import type { OrigemConsultaPlanejamento } from './components/origemConsulta';
 import { ConfiguracoesView } from './features/configuracoes/ConfiguracoesView';
 import { UsuariosTogglView } from './features/usuarios-toggl/UsuariosTogglView';
 import { useResumoConfiguracao } from './features/resumo/useResumoConfiguracao';
-import type { Sprint, ConsultarResponse, OrigemConsultaSprint } from './api/tipos';
 import { ParametrosRelatorioForm } from './features/relatorio/ParametrosRelatorioForm';
 import type { ConfiguracoesViewHandle } from './features/configuracoes/ConfiguracoesView';
-import { ProvedorNotificacao, useNotificacao, mensagemDeErro } from './hooks/useNotificacao';
-import { atualizarPlanejamentoAoVivo } from './features/planejamento/atualizacoesPlanejamento';
+import { ConsultaPlanejamentoDialog } from './features/planejamento/ConsultaPlanejamentoDialog';
 
 import {
     Box,
@@ -52,11 +55,13 @@ import {
 
 type VisaoConsulta = 'parametros' | 'resultado';
 
-type VisaoSprint = 'sprints' | 'acompanhamento' | 'planejamento';
+type VisaoSprint = 'sprints' | 'acompanhamento' | 'planejamento' | 'planejamentoListagem';
+
+type EntradaPlanejamento = 'sprint' | 'listagem' | 'menu';
 
 const SECOES_DE_CONFIGURACAO: readonly Secao[] = ['resumo', 'toggl', 'jira', 'configuracoes'];
 
-const SECOES_COM_GATE: readonly Secao[] = ['relatorio', 'gant', 'sprint'];
+const SECOES_COM_GATE: readonly Secao[] = ['relatorio', 'gant', 'sprint', 'planejamento'];
 
 interface AppInternoProps {
     onSair: () => void;
@@ -82,9 +87,17 @@ function AppInterno({ onSair }: AppInternoProps): ReactNode {
     const [sprintSelecionado, setSprintSelecionado] = useState<Sprint | null>(null);
     const [consultaSprintConcluida, setConsultaSprintConcluida] = useState<ConsultarResponse | null>(null);
 
+    const [versaoConsultaSprint, setVersaoConsultaSprint] = useState(0);
+
     const consultaSprint = useConsultaSprint(sprintSelecionado?.chave ?? '');
 
-    const { notificarAviso } = useNotificacao();
+    const planejamento = usePlanejamento();
+    const [origemPlanejamento, setOrigemPlanejamento] = useState<OrigemConsultaPlanejamento>('nenhum');
+    const [entradaPlanejamento, setEntradaPlanejamento] = useState<EntradaPlanejamento | null>(null);
+    const [consultaPlanejamentoAberta, setConsultaPlanejamentoAberta] = useState(false);
+    const [quadroPlanejamento, setQuadroPlanejamento] = useState<TipoQuadroJira>('dev');
+    const [quadroDevPendente, setQuadroDevPendente] = useState(false);
+
     const resumo = useResumoConfiguracao();
     const { recarregar, configuracaoCompleta, semUsuarios: semUsuariosToggl } = resumo;
 
@@ -127,6 +140,55 @@ function AppInterno({ onSair }: AppInternoProps): ReactNode {
         void navegarComSalvamento(destino, aba);
     }
 
+    function selecionarNoMenu(destino: Secao): void {
+        if (destino === 'planejamento') {
+            abrirPlanejamento('menu');
+            return;
+        }
+        navegarPara(destino);
+    }
+
+    function abrirPlanejamento(entrada: EntradaPlanejamento): void {
+        if (resumo.jiraQuadroDev === null) {
+            setQuadroDevPendente(true);
+            return;
+        }
+        setEntradaPlanejamento(entrada);
+        setConsultaPlanejamentoAberta(true);
+    }
+
+    function consultarPlanejamento(forcar: boolean): Promise<void> {
+        const emSegundoPlano: TipoQuadroJira[] = resumo.jiraQuadroAnalise !== null ? ['analise'] : [];
+        return planejamento.consultar(forcar, 'dev', emSegundoPlano);
+    }
+
+    function concluirConsultaPlanejamento(): void {
+        setConsultaPlanejamentoAberta(false);
+        setQuadroPlanejamento('dev');
+        if (entradaPlanejamento === 'sprint') setVisaoSprint('planejamento');
+        if (entradaPlanejamento === 'listagem') setVisaoSprint('planejamentoListagem');
+        if (entradaPlanejamento === 'menu') navegarPara('planejamento');
+    }
+
+    function renderizarPlanejamento(titulo: string, onVoltar?: () => void): ReactNode {
+        return (
+            <PlanejamentoView
+                titulo={titulo}
+                quadro={quadroPlanejamento}
+                analiseConfigurada={resumo.jiraQuadroAnalise !== null}
+                estado={planejamento.quadros[quadroPlanejamento]}
+                coresStatus={resumo.coresStatus}
+                coresPrioridade={resumo.coresPrioridade}
+                coresColuna={quadroPlanejamento === 'dev' ? resumo.coresColunaDev : resumo.coresColunaAnalise}
+                coresTime={resumo.coresTime}
+                coresEpico={resumo.coresEpico}
+                janelaAlertaPrevisaoLiberacaoDias={resumo.janelaAlertaPrevisaoLiberacaoDias}
+                onTrocarQuadro={setQuadroPlanejamento}
+                onAtualizar={() => void planejamento.atualizar(quadroPlanejamento)}
+                onVoltar={onVoltar} />
+        );
+    }
+
     function alternarSelecao(chave: string): void {
         setSelecionados((atual) => {
             const novo = new Set(atual);
@@ -147,24 +209,15 @@ function AppInterno({ onSair }: AppInternoProps): ReactNode {
         setSprintSelecionado(sprint);
     }
 
-    function concluirConsultaSprint(resposta: ConsultarResponse, origemEfetiva: OrigemConsultaSprint): void {
+    function concluirConsultaSprint(resposta: ConsultarResponse): void {
         if (!sprintSelecionado) return;
         setConsultaSprintConcluida(resposta);
+        setVersaoConsultaSprint((atual) => atual + 1);
         if (!resposta.veioDoCache) {
             limparTachados(sprintSelecionado.chave);
         }
         setConsultaSprintAberta(false);
         setVisaoSprint('acompanhamento');
-        if (!sprintSelecionado.fechado && (origemEfetiva === 'jira' || origemEfetiva === 'ambos')) {
-            atualizarPlanejamentoEmSegundoPlano(sprintSelecionado.chave);
-        }
-    }
-
-    function atualizarPlanejamentoEmSegundoPlano(chaveSprint: string): void {
-        if (resumo.jiraQuadro === null) return;
-        atualizarPlanejamentoAoVivo(chaveSprint).catch((erro: unknown) =>
-            notificarAviso(`Não foi possível atualizar o Planejamento: ${mensagemDeErro(erro)}`),
-        );
     }
 
     return (
@@ -208,7 +261,7 @@ function AppInterno({ onSair }: AppInternoProps): ReactNode {
                     configuracaoCompleta={configuracaoCompleta}
                     mobileAberto={menuMobileAberto}
                     visivelDesktop={menuVisivel}
-                    onSelecionar={navegarPara}
+                    onSelecionar={selecionarNoMenu}
                     onFecharMobile={() => setMenuMobileAberto(false)} />
 
                 <Box component="main" sx={{ display: 'flex', flexDirection: 'column', flexGrow: 1, minWidth: 0 }}>
@@ -237,7 +290,7 @@ function AppInterno({ onSair }: AppInternoProps): ReactNode {
                                         Ir para Configurações
                                     </BotaoComCarregamento>
                                 }>
-                                Complete as configurações obrigatórias para liberar Relatório, Gant e Sprint.
+                                Complete as configurações obrigatórias para liberar Relatório, Gant, Sprint e Planejamento.
                             </Alert>
                         ) : undefined}
 
@@ -309,29 +362,31 @@ function AppInterno({ onSair }: AppInternoProps): ReactNode {
                                     <>
                                         <Box sx={visaoSprint === 'planejamento' ? { height: 0, overflow: 'hidden', visibility: 'hidden' } : undefined}>
                                             <SprintView
-                                                chaveSprint={sprintSelecionado.chave}
+                                                sprint={sprintSelecionado}
+                                                versaoConsulta={versaoConsultaSprint}
                                                 veioDoCache={consultaSprintConcluida.veioDoCache}
                                                 categorias={resumo.categorias}
+                                                statusFinal={resumo.statusFinal}
+                                                coresStatus={resumo.coresStatus}
+                                                coresPrioridade={resumo.coresPrioridade}
                                                 janelaAlertaPrevisaoLiberacaoDias={resumo.janelaAlertaPrevisaoLiberacaoDias}
-                                                fechado={sprintSelecionado.fechado}
-                                                onFechado={setSprintSelecionado}
-                                                onPlanejar={() => setVisaoSprint('planejamento')}
-                                                quadroConfigurado={resumo.jiraQuadro !== null}
-                                                onConfigurarQuadro={() => navegarPara('jira')}
-                                                onVoltar={() => setVisaoSprint('sprints')} />
+                                                onAtualizar={() => setConsultaSprintAberta(true)}
+                                                onPlanejar={() => abrirPlanejamento('sprint')}
+                                                onVoltar={() => setVisaoSprint('sprints')}
+                                                onSprintAtualizado={setSprintSelecionado} />
                                         </Box>
-                                        {visaoSprint === 'planejamento' ? (
-                                            <PlanejamentoView
-                                                sprint={sprintSelecionado}
-                                                janelaAlertaPrevisaoLiberacaoDias={resumo.janelaAlertaPrevisaoLiberacaoDias}
-                                                onVoltar={() => setVisaoSprint('acompanhamento')} />
-                                        ) : undefined}
+                                        {visaoSprint === 'planejamento'
+                                            ? renderizarPlanejamento(`Planejamento — ${sprintSelecionado.nome}`, () => setVisaoSprint('acompanhamento'))
+                                            : undefined}
                                     </>
+                                ) : visaoSprint === 'planejamentoListagem' ? (
+                                    renderizarPlanejamento('Planejamento', () => setVisaoSprint('sprints'))
                                 ) : (
                                     <SprintsPanel
                                         sprintSelecionadoChave={sprintSelecionado?.chave ?? null}
                                         onSelecionar={escolherSprint}
                                         onConfirmarSelecao={() => setConsultaSprintAberta(true)}
+                                        onPlanejar={() => abrirPlanejamento('listagem')}
                                         semUsuarios={semUsuariosToggl} />
                                 )}
 
@@ -345,6 +400,28 @@ function AppInterno({ onSair }: AppInternoProps): ReactNode {
                                 ) : undefined}
                             </>
                         ) : undefined}
+
+                        {secao === 'planejamento' && configuracaoCompleta ? renderizarPlanejamento('Planejamento') : undefined}
+
+                        <ConsultaPlanejamentoDialog
+                            aberto={consultaPlanejamentoAberta}
+                            origem={origemPlanejamento}
+                            onOrigemChange={setOrigemPlanejamento}
+                            consultar={consultarPlanejamento}
+                            onCancelar={() => setConsultaPlanejamentoAberta(false)}
+                            onConcluida={concluirConsultaPlanejamento} />
+
+                        <DialogoConfirmacao
+                            aberto={quadroDevPendente}
+                            titulo="Quadro de DEV não configurado"
+                            mensagem="O quadro de DEV do Jira ainda não foi configurado. Ir para Jira → Conexão para configurá-lo?"
+                            textoConfirmar="Ir para Jira"
+                            textoCancelar="Agora não"
+                            onConfirmar={() => {
+                                setQuadroDevPendente(false);
+                                navegarPara('jira');
+                            }}
+                            onCancelar={() => setQuadroDevPendente(false)} />
                     </Container>
 
                     <RodapeApp />

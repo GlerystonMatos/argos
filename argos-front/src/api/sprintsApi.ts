@@ -1,6 +1,11 @@
 import { http } from './http';
 
-import type { Sprint, CriarSprintRequest, EditarSprintRequest } from './tipos';
+import type {
+    Sprint,
+    CriarSprintRequest,
+    EditarSprintRequest,
+    AtualizarHorasDeduzidasRequest,
+} from './tipos';
 
 export function listarSprints(): Promise<Sprint[]> {
     return http.get<Sprint[]>('/api/sprints');
@@ -12,6 +17,10 @@ export function criarSprint(dados: CriarSprintRequest): Promise<Sprint> {
 
 export function editarSprint(chave: string, dados: EditarSprintRequest): Promise<Sprint> {
     return http.put<Sprint>(`/api/sprints/${encodeURIComponent(chave)}`, dados);
+}
+
+export function atualizarHorasDeduzidas(chave: string, dados: AtualizarHorasDeduzidasRequest): Promise<Sprint> {
+    return http.put<Sprint>(`/api/sprints/${encodeURIComponent(chave)}/deducoes`, dados);
 }
 
 export function removerSprint(chave: string): Promise<void> {

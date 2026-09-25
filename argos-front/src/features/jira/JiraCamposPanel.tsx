@@ -280,7 +280,7 @@ export const JiraCamposPanel = forwardRef<JiraCamposPanelHandle, AbaConfiguracoe
 
                 {!todosPreenchidos ? (
                     <Alert severity="info">
-                        Preencha os campos do Jira para liberar Relatório, Gant e Sprint.
+                        Preencha os campos do Jira para liberar Relatório, Gant, Sprint e Planejamento.
                     </Alert>
                 ) : undefined}
             </Stack>

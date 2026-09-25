@@ -6,8 +6,10 @@ export const OPCOES_AGRUPAMENTO: { valor: Agrupamento; rotulo: string }[] = [
     { valor: 'ambos', rotulo: 'Ambos' },
 ];
 
-export function rotularQuadroJira(id: number, nome: string): string {
-    return nome.trim() !== '' ? `${nome} (#${id})` : `#${id}`;
+export function rotularQuadroJira(id: number, nome: string, tipo?: string | null): string {
+    const rotulo = nome.trim() !== '' ? `${nome} (#${id})` : `#${id}`;
+    const tipoExibido = tipo === 'kanban' ? 'Kanban' : tipo === 'scrum' ? 'Scrum' : null;
+    return tipoExibido ? `${rotulo} · ${tipoExibido}` : rotulo;
 }
 
 export function rotularAgrupamento(valor: Agrupamento): string {

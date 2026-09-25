@@ -69,6 +69,7 @@ export interface QuadroJira {
     id: number;
     nome: string;
     projeto: string | null;
+    tipo?: string | null;
 }
 
 export interface QuadrosJiraResponse {
@@ -80,7 +81,8 @@ export interface QuadrosJiraResponse {
 export interface CoresJira {
     coresStatus: Record<string, string>;
     coresPrioridade: Record<string, string>;
-    coresColuna: Record<string, string>;
+    coresColunaDev: Record<string, string>;
+    coresColunaAnalise: Record<string, string>;
     coresTime: Record<string, string>;
     coresEpico: Record<string, string>;
 }
@@ -88,17 +90,20 @@ export interface CoresJira {
 export interface AtualizarCoresJiraRequest {
     coresStatus?: Record<string, string> | null;
     coresPrioridade?: Record<string, string> | null;
-    coresColuna?: Record<string, string> | null;
+    coresColunaDev?: Record<string, string> | null;
+    coresColunaAnalise?: Record<string, string> | null;
     coresTime?: Record<string, string> | null;
     coresEpico?: Record<string, string> | null;
 }
 
 export interface ConfiguracaoQuadroPlanejamento {
-    colunasOcultas: string[];
+    colunasOcultasDev: string[];
+    colunasOcultasAnalise: string[];
 }
 
 export interface AtualizarConfiguracaoQuadroPlanejamentoRequest {
-    colunasOcultas?: string[] | null;
+    colunasOcultasDev?: string[] | null;
+    colunasOcultasAnalise?: string[] | null;
 }
 
 export interface ValidarTokenResponse {
@@ -148,8 +153,10 @@ export interface ConfiguracaoJira {
     urlDominio: string;
     email: string;
     tokenMascarado: string;
-    quadroId: number | null;
-    quadroNome: string;
+    quadroDevId: number | null;
+    quadroAnaliseId: number | null;
+    quadroDevNome: string;
+    quadroAnaliseNome: string;
     campoEstimativaDesenvolvimentoId: string;
     campoEstimativaDesenvolvimentoNome: string;
     campoRevisadoPorId: string;
@@ -171,8 +178,10 @@ export interface SalvarConfiguracaoJiraRequest {
     urlDominio: string;
     email: string;
     apiToken?: string | null;
-    quadroId: number | null;
-    quadroNome: string | null;
+    quadroDevId: number | null;
+    quadroAnaliseId: number | null;
+    quadroDevNome: string | null;
+    quadroAnaliseNome: string | null;
     campoEstimativaDesenvolvimentoId: string;
     campoEstimativaDesenvolvimentoNome: string;
     campoRevisadoPorId: string;
@@ -286,6 +295,8 @@ export interface Sprint {
     margemPercentual: number;
     dataInicio: string;
     dataFim: string;
+    diasNaoUteis: number;
+    horasDeduzidas: Record<string, number>;
     fechado: boolean;
 }
 
@@ -295,6 +306,7 @@ export interface CriarSprintRequest {
     margemPercentual: number;
     dataInicio: string;
     dataFim: string;
+    diasNaoUteis?: number | null;
 }
 
 export interface EditarSprintRequest {
@@ -303,6 +315,11 @@ export interface EditarSprintRequest {
     margemPercentual?: number | null;
     dataInicio?: string | null;
     dataFim?: string | null;
+    diasNaoUteis?: number | null;
+}
+
+export interface AtualizarHorasDeduzidasRequest {
+    horasDeduzidas: Record<string, number>;
 }
 
 export interface CategoriasSprint {
@@ -396,6 +413,7 @@ export interface CabecalhoSprint {
     nome: string;
     horasPorDia: number;
     diasUteis: number;
+    diasNaoUteis: number;
     margem: number;
     dataInicio: string;
     dataFim: string;
@@ -406,30 +424,41 @@ export interface CabecalhoSprint {
 }
 
 export interface LinhaColaboradorSprint {
+    chave: string;
     nomeExibicao: string;
     sigla: string;
     cor: string;
     td: number;
+    horasDeduzidas: number;
     segundosRealizados: number;
     tarefasPendentes: number;
     tarefasConcluidas: number;
+}
+
+export interface TempoTagSprint {
+    tag: string;
+    segundos: number;
 }
 
 export interface ResultadoSprint {
     cabecalho: CabecalhoSprint;
     tarefas: LinhaTarefaSprint[];
     colaboradores: LinhaColaboradorSprint[];
+    tempoPorTag: TempoTagSprint[];
 }
 
+export type TipoQuadroJira = 'dev' | 'analise';
+
 export interface ConsultarPlanejamentoRequest {
-    chaveSprint: string;
+    quadro: TipoQuadroJira;
     forcar: boolean;
 }
 
 export interface ConsultaPlanejamentoResponse {
     veioDoCache: boolean;
     atualizadoEm: string;
-    quadroNome: string;
+    quadroDevNome: string;
+    quadroAnaliseNome: string;
     sprintJiraNome: string | null;
     quantidadeCartoes: number;
 }
@@ -477,4 +506,5 @@ export interface ResultadoPlanejamento {
     totaisPorColuna: number[];
     cartoes: CartaoPlanejamento[];
     colaboradores: ColaboradorPlanejamento[];
+    kanban: boolean;
 }

@@ -200,7 +200,7 @@ public class ClienteApiJira
         {
             while (true)
             {
-                using HttpResponseMessage resposta = await _http.GetAsync($"/rest/agile/1.0/board?type=scrum&startAt={startAt}&maxResults={tamanhoPagina}");
+                using HttpResponseMessage resposta = await _http.GetAsync($"/rest/agile/1.0/board?startAt={startAt}&maxResults={tamanhoPagina}");
 
                 if (resposta.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
                     return ResultadoApiJira<List<QuadroJira>>.Falha("Credenciais inválidas (e-mail ou API Token incorretos).");
@@ -226,10 +226,10 @@ public class ClienteApiJira
             }
 
             List<QuadroJira> quadros = quadrosBrutos
-                .Where(quadro => !string.IsNullOrWhiteSpace(quadro.Name))
+                .Where(quadro => !string.IsNullOrWhiteSpace(quadro.Name) && TipoQuadroSuportado(quadro.Type))
                 .GroupBy(quadro => quadro.Id)
                 .Select(grupo => grupo.First())
-                .Select(quadro => new QuadroJira(quadro.Id, quadro.Name!, quadro.Location?.ProjectKey))
+                .Select(quadro => new QuadroJira(quadro.Id, quadro.Name!, quadro.Location?.ProjectKey, quadro.Type))
                 .OrderBy(quadro => quadro.Nome, StringComparer.OrdinalIgnoreCase)
                 .ToList();
 
@@ -243,6 +243,25 @@ public class ClienteApiJira
         {
             return ResultadoApiJira<List<QuadroJira>>.Falha($"Não foi possível conectar ao Jira: {ex.Message}");
         }
+    }
+
+    public const string TipoQuadroKanban = "kanban";
+
+    private const string TipoQuadroScrum = "scrum";
+
+    private static bool TipoQuadroSuportado(string? tipo) =>
+        tipo is null
+        || tipo.Equals(TipoQuadroScrum, StringComparison.OrdinalIgnoreCase)
+        || tipo.Equals(TipoQuadroKanban, StringComparison.OrdinalIgnoreCase);
+
+    public async Task<ResultadoApiJira<string>> ObterTipoQuadroAsync(long quadroId)
+    {
+        ResultadoApiJira<QuadroJiraBruto> resultado = await ObterJsonAsync<QuadroJiraBruto>(
+            $"/rest/agile/1.0/board/{quadroId}",
+            "o quadro do Jira");
+        return resultado.Sucesso
+            ? ResultadoApiJira<string>.Ok(resultado.Dados!.Type ?? TipoQuadroScrum)
+            : ResultadoApiJira<string>.Falha(resultado.MensagemErro!);
     }
 
     public async Task<ResultadoApiJira<List<ColunaQuadroJira>>> ObterColunasQuadroAsync(long quadroId)
@@ -303,9 +322,9 @@ public class ClienteApiJira
         return ResultadoApiJira<List<SprintQuadroJira>>.Ok(sprints);
     }
 
-    public async Task<ResultadoApiJira<List<CartaoQuadroJira>>> BuscarCartoesSprintAsync(long quadroId, List<long> sprintIds, string campoAnalisadoPorId, string campoRevisadoPorId, string campoTimeId, string campoPrevisaoLiberacaoId = "", string campoEstimativaDesenvolvimentoId = "", string campoEstimativaRevisaoId = "")
+    public async Task<ResultadoApiJira<List<CartaoQuadroJira>>> BuscarCartoesQuadroAsync(long quadroId, List<long>? sprintIds, string campoAnalisadoPorId, string campoRevisadoPorId, string campoTimeId, string campoPrevisaoLiberacaoId = "", string campoEstimativaDesenvolvimentoId = "", string campoEstimativaRevisaoId = "")
     {
-        if (sprintIds.Count == 0)
+        if (sprintIds is { Count: 0 })
             return ResultadoApiJira<List<CartaoQuadroJira>>.Ok(new List<CartaoQuadroJira>());
 
         const int tamanhoPagina = 200;
@@ -324,8 +343,9 @@ public class ClienteApiJira
         if (!string.IsNullOrWhiteSpace(campoEstimativaRevisaoId))
             camposDesejados.Add(campoEstimativaRevisaoId);
 
-        string jql = sprintIds.Count == 1 ? $"sprint = {sprintIds[0]}" : $"sprint in ({string.Join(",", sprintIds)})";
-        string parametrosFixos = $"jql={Uri.EscapeDataString(jql)}&fields={Uri.EscapeDataString(string.Join(",", camposDesejados))}&maxResults={tamanhoPagina}";
+        string? jql = sprintIds is null ? null : sprintIds.Count == 1 ? $"sprint = {sprintIds[0]}" : $"sprint in ({string.Join(",", sprintIds)})";
+        string filtroJql = jql is null ? "" : $"jql={Uri.EscapeDataString(jql)}&";
+        string parametrosFixos = $"{filtroJql}fields={Uri.EscapeDataString(string.Join(",", camposDesejados))}&maxResults={tamanhoPagina}";
 
         List<IssueBrutaJira> issuesBrutas = new();
         int startAt = 0;

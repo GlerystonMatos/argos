@@ -1,6 +1,6 @@
 # argos  <img alt="argos" height="20" src="https://github.com/GlerystonMatos/argos/blob/main/argos.png">
 
-Conjunto de aplicações que geram relatórios de tempo trabalhado a partir da **API v9 do Toggl Track**, agrupando por descrição e/ou tag, por usuário, em um período informado — incluindo uma visualização em **Gráfico de Gant** por usuário/dia e uma visão de **Sprint** (capacidade por colaborador + acompanhamento de tarefas, com um **Planejamento** dos cartões do quadro de DEV do Jira), ambas só na versão web.
+Conjunto de aplicações que geram relatórios de tempo trabalhado a partir da **API v9 do Toggl Track**, agrupando por descrição e/ou tag, por usuário, em um período informado — incluindo uma visualização em **Gráfico de Gant** por usuário/dia e uma visão de **Sprint** (capacidade por colaborador + acompanhamento de tarefas, com um **Planejamento** dos cartões dos quadros de DEV e de Análise do Jira), ambas só na versão web.
 
 O nome **Argos** une duas figuras da mitologia grega: **Argos Panoptes**, o gigante de cem olhos que tudo vê (visão geral), e **Argos, o cão de Odisseu**, que esperou vinte anos pelo dono (lealdade absoluta) — o diálogo "Sobre" do frontend conta a história. A grafia é **única** em todas as camadas: marca "Argos", pastas `argos-*`, solução `Argos.slnx`, namespaces `Argos.*`, pacote npm `argos-front` e recursos de infra `argos-*` (nunca "Argus"). O projeto se chamava `toggl-report`; o ambiente GCP antigo é destruído, não migrado — ver [Destruir o ambiente antigo](./argos-infra/README.md#destruir-o-ambiente-antigo-toggl-report--argos).
 
@@ -14,7 +14,7 @@ Web API local (autenticação HTTP Basic opcional, documentada via Swagger) que 
 
 ## [`argos-front/`](./argos-front/README.md) — React + TypeScript + MUI
 
-Frontend web que consome a Web API acima, com o fluxo completo (usuários e configurações → consulta → relatório → busca) em uma interface gráfica local, navegada por um menu lateral (Toggl, Jira, Configurações, Relatório, Gant, Sprint e Dados).
+Frontend web que consome a Web API acima, com o fluxo completo (usuários e configurações → consulta → relatório → busca) em uma interface gráfica local, navegada por um menu lateral (Toggl, Jira, Configurações, Relatório, Gant, Sprint, Planejamento e Dados).
 
 ➡️ **[Documentação completa do frontend](./argos-front/README.md)**
 

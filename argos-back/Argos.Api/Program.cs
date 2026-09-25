@@ -116,20 +116,22 @@ app.Logger.LogInformation("Armazenamento de dados: {Armazenamento}", armazenamen
 
 CaminhosDados caminhos = new(armazenamento);
 
+ExecucaoMigracaoDados.Executar(app.Logger, caminhos);
+
 app.MapConfiguracaoEndpoints(caminhos);
 app.MapUsuariosTogglEndpoints(caminhos);
 app.MapTagsTogglEndpoints(caminhos);
 app.MapConsultasEndpoints(caminhos);
 app.MapRelatorioEndpoints(caminhos);
 app.MapBuscaEndpoints(caminhos);
-app.MapDadosEndpoints(armazenamento);
+app.MapDadosEndpoints(caminhos);
 app.MapGantEndpoints(caminhos);
 app.MapSprintsEndpoints(caminhos);
 app.MapSprintCategoriasEndpoints(caminhos);
 app.MapSprintResponsabilidadeEndpoints(caminhos);
 app.MapSprintStatusFinalEndpoints(caminhos);
 app.MapSprintConsultasEndpoints(caminhos);
-app.MapSprintPlanejamentoEndpoints(caminhos);
+app.MapPlanejamentoEndpoints(caminhos);
 app.MapSprintAcompanhamentoEndpoints(caminhos);
 app.MapJiraEndpoints(caminhos);
 

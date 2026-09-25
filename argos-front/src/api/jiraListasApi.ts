@@ -1,5 +1,5 @@
 import { http } from './http';
-import type { ListaJiraResponse, EpicosJiraResponse, QuadrosJiraResponse } from './tipos';
+import type { TipoQuadroJira, ListaJiraResponse, EpicosJiraResponse, QuadrosJiraResponse } from './tipos';
 
 export function listarStatusJira(forcarAtualizacao = false): Promise<ListaJiraResponse> {
     return http.get<ListaJiraResponse>('/api/jira/status', { forcarAtualizacao: String(forcarAtualizacao) });
@@ -9,8 +9,8 @@ export function listarPrioridadesJira(forcarAtualizacao = false): Promise<ListaJ
     return http.get<ListaJiraResponse>('/api/jira/prioridades', { forcarAtualizacao: String(forcarAtualizacao) });
 }
 
-export function listarColunasJira(forcarAtualizacao = false): Promise<ListaJiraResponse> {
-    return http.get<ListaJiraResponse>('/api/jira/colunas', { forcarAtualizacao: String(forcarAtualizacao) });
+export function listarColunasJira(quadro: TipoQuadroJira, forcarAtualizacao = false): Promise<ListaJiraResponse> {
+    return http.get<ListaJiraResponse>('/api/jira/colunas', { quadro, forcarAtualizacao: String(forcarAtualizacao) });
 }
 
 export function listarTimesJira(): Promise<ListaJiraResponse> {

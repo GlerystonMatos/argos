@@ -12,6 +12,7 @@ public static class CarregadorCacheListasJira
 
         return new CacheListaJira
         {
+            QuadroId = DocumentoJson.Obter<long?>(conteudo, "quadroId"),
             Nomes = DocumentoJson.ObterLista<string>(conteudo, "nomes"),
             AtualizadoEm = DocumentoJson.ObterTexto(conteudo, "atualizadoEm", "")
         };

@@ -18,7 +18,8 @@ public static class CarregadorConfiguracaoCoresJira
     {
         CoresStatus = ArquivoStatusJira.Carregar(caminhos.JiraStatus).Cores,
         CoresPrioridade = CarregarCores(caminhos.JiraPrioridades, PropriedadeNome),
-        CoresColuna = CarregarCores(caminhos.JiraColunas, PropriedadeNome),
+        CoresColunaDev = CarregarCores(caminhos.JiraColunas(TipoQuadroJira.Dev), PropriedadeNome),
+        CoresColunaAnalise = CarregarCores(caminhos.JiraColunas(TipoQuadroJira.Analise), PropriedadeNome),
         CoresTime = CarregarCores(caminhos.JiraTimes, PropriedadeNome),
         CoresEpico = CarregarCores(caminhos.JiraEpicos, PropriedadeChave)
     };
@@ -31,7 +32,8 @@ public static class CarregadorConfiguracaoCoresJira
         });
 
         DocumentoJson.Gravar(caminhos.JiraPrioridades, MontarDocumento(configuracao.CoresPrioridade, PropriedadeNome));
-        DocumentoJson.Gravar(caminhos.JiraColunas, MontarDocumento(configuracao.CoresColuna, PropriedadeNome));
+        DocumentoJson.Gravar(caminhos.JiraColunas(TipoQuadroJira.Dev), MontarDocumento(configuracao.CoresColunaDev, PropriedadeNome));
+        DocumentoJson.Gravar(caminhos.JiraColunas(TipoQuadroJira.Analise), MontarDocumento(configuracao.CoresColunaAnalise, PropriedadeNome));
         DocumentoJson.Gravar(caminhos.JiraTimes, MontarDocumento(configuracao.CoresTime, PropriedadeNome));
         DocumentoJson.Gravar(caminhos.JiraEpicos, MontarDocumento(configuracao.CoresEpico, PropriedadeChave));
     }

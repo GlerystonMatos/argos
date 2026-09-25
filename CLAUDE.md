@@ -81,7 +81,8 @@ Planejamento/    ServicoPlanejamento.Montar,
 Documentos JSON (camelCase) por nome; esquema no README da infra (seção Firestore). **Só JSON**.
 `ARMAZENAMENTO__PROJETO_FIRESTORE` preenchida → Firestore (coleção `dados`, banco `(default)`: cota
 grátis = 1 banco/projeto); vazia → `dados/*.json`. Contrato **síncrono** de propósito (sync-over-async
-no adaptador); sem migração de formato no código. **Firestore** (`argos-back/Argos.Armazenamento`): caches Toggl divididos em `usuarios/{chave}/blocos/`
+no adaptador). **Mudou formato → passo em `MigracaoDados`** (roda na subida e após restaurar: lê antigo, grava
+novo, **apaga o antigo** — nada de órfão no Firestore; backup restaurado prevalece); carregadores sem compatibilidade. **Firestore** (`argos-back/Argos.Armazenamento`): caches Toggl divididos em `usuarios/{chave}/blocos/`
 (≤1000 registros; doc máx. 1 MiB), `Apagar` recursivo, erro → `IOException`; inteiro vai como `long`
 (ternário `long : double` já virou double) e `double` inteiro volta `N.0`.
 
@@ -90,19 +91,20 @@ no adaptador); sem migração de formato no código. **Firestore** (`argos-back/
 | `TogglUsuarios` | usuários; token `enc:` |
 | `TogglConfiguracao` | `Agrupamento`/`CorTag` — **fonte única** do Relatório/Gant/Sprint |
 | `TogglTags` | por tag: `Categorias` (Dev,Rev,Qa) / `Detalhar` |
-| `JiraConexao` | URL/e-mail/token `enc:` + `QuadroId`/`QuadroNome` (DEV) |
+| `JiraConexao` | URL/e-mail/token `enc:` + `QuadroDev*`/`QuadroAnalise*` (Id/Nome) |
 | `JiraCampos` | campos customizados + janela da Previsão |
 | `JiraStatus` | por status: `Cor`/`Responsaveis`/`Final` (Concluido\|Ignorado) |
-| `JiraPrioridades`, `JiraColunas`, `JiraTimes`, `JiraEpicos` | cor por nome (épico: por chave) |
-| `JiraQuadro` | `ColunasOcultas` do Planejamento |
+| `JiraPrioridades`, `JiraColunasDev`/`Analise`, `JiraTimes`, `JiraEpicos` | cor por nome (épico: por chave) |
+| `JiraQuadro` | `ColunasOcultasDev`/`Analise` do Planejamento |
 | `JiraTogglMapeamento` | por `displayName` do Jira: `ChaveToggl`/`Sigla`/`Cor` |
-| `Sprints` | Nome/HorasPorDia/MargemPercentual/DataInicio/DataFim/`Fechado` |
+| `Sprints` | Nome/HorasPorDia/MargemPercentual/Datas/`DiasNaoUteis`/`HorasDeduzidas`/`Fechado` |
 | `RelatorioParametros`, `GantParametros` | só `DataInicio`/`DataFim` |
 | `RelatorioData`, `GantData` | cache **global** por período (sobrescreve ao trocar) |
-| `SprintData_`/`JiraSprintData_`/`JiraPlanejamentoData_<chave>` | cache **por sprint** |
-| `TogglTagsCache`, `Jira*Cache` | listagens reais |
+| `SprintData_`/`JiraSprintData_<chave>` | cache **por sprint** |
+| `JiraPlanejamentoGlobalDev`/`Analise` | cache **global** do Planejamento, por quadro |
+| `TogglTagsCache`, `Jira*Cache` | listagens reais (`JiraColunas{Dev,Analise}Cache` guardam o `quadroId`) |
 
-- **Cache por sprint**: `DELETE` do sprint apaga os três documentos; a referência só é montada a
+- **Cache por sprint**: `DELETE` do sprint apaga os dois documentos; a referência só é montada a
   partir de sprint **existente** em `Sprints` + validação de caracteres da chave
   (anti path-traversal) — `POST /api/sprint/consultas` com chave inexistente = 404,
   inválida = 400. Isolar por sprint é deliberado: consultar um não perde o cache de outro.
@@ -153,16 +155,17 @@ de sprint):
 
 **Cálculo de capacidade** (`ServicoSprint.Montar`):
 ```
-diasUteis  = dias úteis (seg–sex) em [DataInicio, DataFim] inclusive
+diasUteis  = seg–sex em [DataInicio, DataFim] inclusive − DiasNaoUteis
 tempoTotal = HorasPorDia * diasUteis
 margem     = floor(MargemPercentual/100 * tempoTotal)
-td         = floor(tempoTotal - margem)      # tempo por colaborador
-ct         = td * nº de colaboradores selecionados   # capacidade total
+td         = floor(tempoTotal - margem)              # tempo por colaborador
+td_i       = max(0, td - HorasDeduzidas[chaveToggl])  # férias/folga/atestado
+ct         = Σ td_i                                   # capacidade total
 ```
-Só a fórmula acima é válida (não é "70% do total" nem "70% de 70%"). `MargemPercentual`
-(`DadosSprint`, `Sprints`) é **obrigatória no cadastro/edição do sprint**, mesmo padrão
-de `HorasPorDia` (0 ≤ valor < 100; validada em `POST`/`PUT /api/sprints`); sprints salvos
-antes dessa mudança leem com fallback 30 (o valor fixo antigo) até serem editados.
+Só a fórmula acima é válida (não é "70% do total" nem "70% de 70%"). `HorasPorDia` e `MargemPercentual`
+obrigatórias (400 se ausentes; margem 0 ≤ valor < 100); `DiasNaoUteis` opcional (0..dias úteis).
+`HorasDeduzidas` (inteiras, por chave Toggl) via `PUT /api/sprints/{chave}/deducoes` (duplo clique no
+colaborador; 409 fechado). A capacidade só é calculada no backend.
 
 **Totalizadores do cabeçalho "Pendentes"/"Concluído"** (`CabecalhoSprint`): duas listas
 globais de status do Jira (`Final` = `Concluido`/`Ignorado` em `JiraStatus`),
@@ -196,13 +199,10 @@ Linhas de tag nunca contam.
   `<a>`: não herda de `TableCell`).
 - **Tachado (checkbox)** em `localStorage` (`sprint-tachados-<chaveSprint>`); reset só em
   **nova consulta real à API** (`veioDoCache === false`), nunca ao carregar do cache.
-- **Descrição trunca de forma responsiva** (`useLarguraColunaRestante`); texto completo no
-  tooltip e no duplo clique (`SprintDialogDetalheLinha`).
 - **Prioridade/Situação/PRE vêm do Jira** — sem integração ou issue não encontrada,
   Prioridade e Situação = "Nenhuma" (cinza) e PRE = "–"; nunca editáveis nem persistidos.
 - **Previsão (de liberação)**: após Descrição (`IssueJira.PrevisaoLiberacao`, opcional),
-  cor igual ao Planejamento (§2, `utils/previsaoLiberacao.ts`). A grid zera `borderRight`
-  nas 6 primeiras colunas; a Previsão tem `borderLeft` próprio (como o início dos grupos).
+  cor igual ao Planejamento (§2, `utils/previsaoLiberacao.ts`).
 
 **Integração Jira (opcional, por sprint)**: `POST /api/sprint/consultas` extrai os códigos
 TEL de **todos** os registros crus do Toggl recém-buscados (independe do `Agrupamento`),
@@ -246,8 +246,9 @@ usam o mesmo modal só com Nenhum/Toggl (não consultam Jira; `toggl` = `forcarC
 Filtros Prioridade, Status, Colaborador e Situação. **Situação + Colaborador**: sem
 colaborador, basta **qualquer** grupo bater; com colaborador(es), só os grupos **deles** —
 bloco combinado dedicado (dois `if` dariam falso positivo com "Inverter filtros", que faz os
-4 filtros **excluírem**; a busca por texto nunca inverte e também casa o código com zeros). "Limpar" e "Limpar ordenação"
-são independentes.
+4 filtros **excluírem**; a busca por texto nunca inverte e também casa o código com zeros). **Sem ordenação
+por coluna** (removida a pedido). **Gráficos** (modal lazy, `@mui/x-charts`): pizzas Pendente×Concluído e tempo
+por tag (`TempoPorTag` da API, `Tags[0]`, detalhadas agregadas) e barras por colaborador — só dado já carregado.
 
 **Prioridade/Situação — cores**: a busca de issues do Jira não expõe cor; vem de
 **mapeamento por nome exato** (`GET/PUT /api/jira/cores` → `Cor` em `JiraStatus`/
@@ -269,12 +270,14 @@ configurada, ou tarefa não achada, todo grupo com colaborador "Pendente".
 
 ### Planejamento (só Jira, sem Toggl)
 
-Botão "Planejar" do Sprint: cartões por **coluna do quadro Scrum de DEV** do Jira, com
-contagem por colaborador.
+Cartões por **coluna do quadro** do Jira (**DEV ou Análise**, seletor antes de "Atualizar"), com
+contagem por colaborador. **Global**: nada do sprint do app entra na composição —
+um cache por quadro, estado Fechado não se aplica, `DELETE` de sprint não mexe.
 - **Escopo = cartões do SPRINT ATIVO do quadro** (`board/{id}/sprint?state=active` →
   `jql=sprint in (ids)`), nunca o quadro inteiro. **Sem correlação** com o sprint do app (o
-  Jira agrupa por épicos); o cache por sprint do app só preserva o "retrato".
-  `maxResults=200` até `startAt >= total`; 429 com 1 retry (`Retry-After`).
+  Jira agrupa por épicos). Quadro **Kanban** (sem sprint) = tudo o que está no
+  quadro (`board/{id}/issue` sem JQL, `Kanban=true` no cache). Lista Scrum+Kanban.
+- **Identificar sempre o quadro** (`Dev`/`Analise`) em campo, documento e rótulo — nada sem sufixo.
 - **Campos customizados** (mesmo mecanismo de descoberta/seleção, sem field id hardcoded):
   **Time** (`ExtrairTextoCampo`: string ou objeto `value`/`name`/`title`/`displayName` —
   shape varia por instância, não validado ao vivo; sem bater → vazio, nunca quebra) e
@@ -284,28 +287,30 @@ contagem por colaborador.
   janela = laranja (`corPrazoProximo`); além = **verde** (`corConcluido`). Janela
   `JanelaAlertaPrevisaoLiberacaoDias` (padrão 5) em `JiraCampos`.
 - **Épico = `fields.parent`** (o campo Agile `epic` vem vazio — não usar); no backend
-  `GrupoChave`/`GrupoResumo`. Badge com cor **configurada no app** por **chave** do épico
-  (o título muda com o período).
+  `GrupoChave`/`GrupoResumo`. Badge com cor **configurada no app** por **chave** do épico.
 - **Coluna** = `status.id` ∈ `columnConfig.columns[].statuses[].id`; fora de todas →
-  "(sem coluna)" no fim. Na grid: badge com **nome completo** (cor em `JiraColunas`), sem
+  "(sem coluna)" no fim. Na grid: badge com **nome completo** (cor em `JiraColunasDev`/`Analise`), sem
   abreviar nem popover. **Só o cabeçalho do card "Colaboradores"** usa sigla
   (`abreviacaoColuna.ts`, reescrita 4x — regra e exemplos no README do front; não mudar sem
   pedido). ANP/RES/REP na grid de cartões = mapa fixo com `Tooltip`.
-- **Colunas ocultas** (`JiraQuadro`): `ServicoPlanejamento.Montar` **exclui por
+- **Colunas ocultas** (`JiraQuadro`, por quadro): `ServicoPlanejamento.Montar` **exclui por
   completo** esses cartões (grid, totais, contagens) — não é "(sem coluna)".
 - **Contagem**: 1 por cartão se a pessoa é Responsável OU Revisado por ("Analisado por" não
   conta). Pessoa = mapeamento Jira↔Toggl contra **todos** os usuários do Toggl; exclusivo do
   Jira usa Sigla/Cor da entrada; sem mapeamento → iniciais (até 3), `mapeado=false`. Chave
   de filtro = `displayName`. Código/Descrição via `ServicoCodigoTel`.
-- **Cache `JiraPlanejamentoData_<chave>`** (dado **cru**). Reutiliza, exceto: "Atualizar"
-  da tela; "Forçar nova consulta em: Jira/Ambos" (**2º `POST` em segundo plano**, falha =
-  aviso, "Toggl" sozinho não força; `atualizacoesPlanejamento.ts` guarda as promessas por
-  sprint); sem cache válido (ausente, `QuadroId` diferente ou `SprintJira` nulo). **Sprint
-  fechado nunca chama o Jira**. Falha do Jira → 502, cache anterior fica; `GET` sem cache = 409.
-- **Configuração**: quadro em Jira (Conexão), obrigatório no formulário, **não** no gate
-  global. Analisado por, Time e Previsão de liberação são o 5º–7º campos obrigatórios
-  (gate "N de 7") **só no frontend** — o backend (`ValidarConfiguracao`) exige só
-  Analisado/Revisado por.
+- **Cache `JiraPlanejamentoGlobal{Dev,Analise}`** (dado **cru**). Reutiliza, exceto "Atualizar"
+  (só o quadro selecionado), modal com "Jira" ou sem cache válido (ausente, `QuadroId` ≠ configurado
+  ou `SprintJira` nulo; o `GET` também dá 409 para outro quadro). Falha do Jira → 502, cache anterior fica.
+- **Três entradas, um modal próprio** (`ConsultaPlanejamentoDialog`: Nenhum/Jira, lembra a escolha na
+  sessão): menu lateral (o clique só abre o modal sobre a tela atual — menu e seção só mudam ao consultar,
+  cancelar não muda nada; sem nome de sprint, sem Voltar), "Planejar" da listagem (Voltar → listagem) e do
+  Acompanhamento (título com o sprint, Voltar → Acompanhamento). O **modal do Sprint não mexe no Planejamento**.
+  Abre sempre no Dev; Análise carrega em segundo plano e os dois ficam em memória (`usePlanejamento` no `App`),
+  troca instantânea; filtros resetam ao trocar de quadro.
+- **Configuração**: quadros DEV e Análise em Jira (Conexão), obrigatórios no formulário, **não** no gate
+  global (sem Análise, a opção fica desabilitada). Analisado por, Time e Previsão de liberação são o 5º–7º
+  campos obrigatórios (gate "N de 7") **só no frontend** — o backend exige só Analisado/Revisado por.
 
 ---
 
@@ -319,35 +324,28 @@ global, Swagger em `/swagger`. Sobe em `http://localhost:5180`; dados no Firesto
 | Método | Rota | Descrição |
 |---|---|---|
 | `GET/PUT` | `/api/configuracao` | agrupamento/tags (fonte única) + período do relatório (`RelatorioParametros`; datas opcionais no PUT — omitidas preservam o salvo) |
-| `GET/POST/PUT/DELETE` | `/api/usuarios-toggl` | CRUD de usuários do Toggl (inclui `administrador`); `POST .../validar-token` |
-| `GET` | `/api/usuarios-toggl/tags?forcarAtualizacao=` | tags reais do workspace (token do `Administrador`), cache `TogglTagsCache` |
 | `POST` | `/api/consultas` | cache-first via `ServicoConsulta`, grava `RelatorioData` |
 | `GET` | `/api/relatorio?dataInicio=&dataFim=` \| `/api/busca?termo=` | relatório agrupado / busca por descrição sobre o cache; 409 sem cache exato p/ o período |
-| `GET`/`POST` | `/api/dados/download` \| `/restaurar` | zip plano com um `<Documento>.json` por documento / restaura `.json` (sobrescreve só os presentes) |
 | `GET/PUT` | `/api/gant/parametros` | período do Gant (`GantParametros`, datas opcionais no PUT) + agrupamento/tags da fonte única |
-| `POST` | `/api/gant/consultas` | idem `/api/consultas`, grava `GantData` |
 | `GET` | `/api/gant?dataInicio=&dataFim=&termo=` | 409 sem cache; `termo` filtra antes de agrupar |
-| `GET/POST/PUT/DELETE` | `/api/sprints` | CRUD de sprints; `PUT` 409 se fechado; `DELETE` apaga os 3 caches do sprint |
-| `POST` | `/api/sprints/{chave}/fechar` \| `/reabrir` | trava/destrava edição e consulta |
-| `GET/PUT` | `/api/sprint/categorias` | mapeamento DEV/REV/QA + agrupamento + tags detalhadas + `CorTag` |
+| `GET/POST/PUT/DELETE` | `/api/sprints` | CRUD de sprints; `PUT` 409 se fechado; `DELETE` apaga os 2 caches do sprint; `PUT /{chave}/deducoes` horas deduzidas |
 | `GET/PUT` | `/api/sprint/responsabilidade` \| `/status-final` | status do Jira → DEV/REV/QA / Concluído\|Ignorado (`JiraStatus`); `status-final` `PUT` 400 se um status estiver nas duas listas |
 | `POST` | `/api/sprint/consultas` | cache-first via `ServicoConsulta`; `chaveSprint` obrigatório (404 inexistente, 400 inválida) isola os caches; `origem` (`nenhum`\|`toggl`\|`jira`\|`ambos`) escolhe o que forçar; fechado ignora `origem` e devolve 409 sem cache |
 | `GET` | `/api/sprint?chaveSprint=` | 409 sem cache p/ o período do sprint |
-| `GET/PUT` | `/api/jira/configuracao` | conexão + `quadroId`/`quadroNome` + campos (inclui `campoAnalisadoPor*`/`campoTime*`) (`JiraConexao`/`JiraCampos`); token sempre mascarado; `PUT` substitui tudo |
-| `POST` | `/api/jira/testar-conexao` \| `/campos` \| `/issues` | testa credenciais sem salvar (`GET /rest/api/3/myself`) / lista campos `custom: true` / busca em lote (`key in (...)`) com a config salva |
-| `GET` | `/api/jira/status?forcarAtualizacao=` \| `/prioridades?...` \| `/colunas?...` | nomes reais (`/rest/api/3/status`, `/priority`, colunas do quadro de DEV via `/rest/agile/1.0/board/{id}/configuration`), cacheados; `/colunas` 400 sem quadro configurado; `/times`/`/epicos` = caches do Planejamento (épicos só de sprints abertos; cor oculta é mantida) |
-| `GET/PUT` | `/api/jira/cores` | nome→cor de status, prioridade, coluna e time (badges do Sprint/Planejamento) |
-| `GET/PUT` | `/api/jira/quadro` | colunas do quadro que não aparecem no Planejamento (`ColunasOcultas`) |
-| `GET` | `/api/jira/usuarios?forcarAtualizacao=` | usuários reais (`/rest/api/3/users/search`, só `atlassian` ativos), cacheados |
-| `GET/PUT` | `/api/jira/usuarios-mapeamento` | `displayName` do Jira → `ChaveToggl`/`Sigla`/`Cor` (fallback DEV/REV do Sprint) |
-| `GET` | `/api/jira/quadros?forcarAtualizacao=` | quadros **Scrum** reais (`/rest/agile/1.0/board?type=scrum`), cacheados |
-| `POST` | `/api/sprint/planejamento/consultas` | `{chaveSprint, forcar}` → `{veioDoCache, atualizadoEm, quadroNome, sprintJiraNome, quantidadeCartoes}`; grava o cache; 400 sem quadro/conexão/campos, 404 sprint, 409 fechado sem cache, 502 Jira |
-| `GET` | `/api/sprint/planejamento?chaveSprint=` | resultado montado (colunas, totais, cartões, colaboradores, sprint do Jira); 409 sem cache |
+| `GET/PUT` | `/api/jira/configuracao` | conexão + `quadroDev*`/`quadroAnalise*` + campos (inclui `campoAnalisadoPor*`/`campoTime*`) (`JiraConexao`/`JiraCampos`); token sempre mascarado; `PUT` substitui tudo |
+| `GET` | `/api/jira/status?forcarAtualizacao=` \| `/prioridades?...` \| `/colunas?quadro=` | nomes reais (`/rest/api/3/status`, `/priority`, colunas do quadro via `/rest/agile/1.0/board/{id}/configuration`), cacheados; `/colunas` 400 sem quadro; `/times`/`/epicos` = união dos 2 caches globais do Planejamento |
+| `GET/PUT` | `/api/jira/cores` | nome→cor de status, prioridade, coluna (`coresColunaDev`/`Analise`) e time |
+| `GET/PUT` | `/api/jira/quadro` | `ColunasOcultasDev`/`ColunasOcultasAnalise` do Planejamento |
+| `POST` | `/api/planejamento/consultas` | `{quadro: dev\|analise, forcar}` → `{veioDoCache, atualizadoEm, quadroNome, sprintJiraNome, quantidadeCartoes}`; grava o cache global; 400 quadro inválido/sem quadro/conexão/campos, 502 Jira |
+| `GET` | `/api/planejamento?quadro=` | resultado montado (colunas, totais, cartões, colaboradores, sprint do Jira); sem `quadro` = dev; 409 sem cache do quadro configurado |
+
+Demais rotas (usuários/tags do Toggl, dados, `gant/consultas`, fechar/reabrir, categorias, testar-conexão/
+campos/issues, usuários/mapeamento/quadros do Jira): tabela completa no README do back.
 
 **Erros**: 400 (parâmetros/datas inválidos, agrupamento fora de `descricao`/`tag`/`ambos`),
 404, 409 (nome em uso; sem cache correspondente; sprint fechado sem cache), 500
 (`Results.Problem`, falha de I/O), 502 (falha do Jira). `GET /api/relatorio`/`/busca`/
-`/gant`/`/sprint`/`/sprint/planejamento` **exigem cache prévio** — nunca disparam consulta
+`/gant`/`/sprint`/`/planejamento` **exigem cache prévio** — nunca disparam consulta
 implícita (mantém explícito quando há chamada HTTP externa/rate limit).
 
 **`emAndamento` do relatório está em snake_case** (`workspace_id`, `duration`, etc.) — é o
@@ -375,7 +373,7 @@ npm run build   # tsc -b && vite build
 
 **Menu lateral** (`MenuLateral`: `Drawer` permanente em `md+`, que um botão no AppBar
 esconde/exibe — **sempre abre expandido** ao carregar, sem persistência; temporário em
-`xs`) com 7 seções — Toggl, Jira, Configurações, Relatório, Gant, Sprint, Dados. **Toda
+`xs`) com 8 itens em 3 grupos — Visualizações (Relatório, Gant), Sprint (Acompanhamento, Planejamento), Configuração (Toggl, Jira, Configurações, Dados). **Toda
 navegação (`navegarPara`) recolhe o menu automaticamente** em `md+` (só na sessão), dando a largura toda ao conteúdo — não é só ao clicar num item do menu, vale
 para qualquer chamada de `navegarPara` (atalhos internos, clique na logo etc.). O **Resumo
 da aplicação** é a página inicial e o destino do clique na logo (não é item de menu).
@@ -384,8 +382,8 @@ Relatório vive em `features/relatorio/` (espelha `features/gant/`).
 - **`useResumoConfiguracao` (`features/resumo`) é a fonte ÚNICA do gate** e das
   categorias/responsabilidade/status-final do Sprint (carrega também quadro e cores de coluna,
   só para exibição). Recarrega a cada troca de seção e após salvar (`onSalvo()` uma vez por
-  `salvarTudo`; `recarregar` coalesce chamadas concorrentes). Relatório/Gant/Sprint ficam
-  `disabled` até a configuração obrigatória estar completa (`configuracoes/completude.ts`):
+  `salvarTudo`; `recarregar` coalesce chamadas concorrentes). Relatório/Gant/Sprint/Planejamento ficam
+  `disabled` (mesmo gate; completo, o Resumo não mostra aviso) até a configuração obrigatória estar completa (`configuracoes/completude.ts`):
   Agrupamento, Tags detalhadas (exceto agrupamento "descricao"), Tags DEV/REV/QA, Status
   DEV/REV/QA **e** Concluído/Ignorado (≥1 em cada), os 7 Campos do Jira e o Mapeamento
   Jira↔Toggl. Usuários, conexão e quadro têm validação própria, fora desse cálculo.
@@ -393,7 +391,7 @@ Relatório vive em `features/relatorio/` (espelha `features/gant/`).
   completo (`avaliarMapeamentoJiraToggl`) = todo usuário do Toggl é alvo de ≥1 entrada **e**
   toda entrada é válida (usuário cadastrado, ou exclusivo do Jira com sigla).
 - **Toggl** = CRUD de usuários (≥1 `Administrador` libera Configurações). **Jira** = só a
-  conexão (URL/e-mail/token, quadro de DEV, "Testar conexão").
+  conexão (URL/e-mail/token, quadros de DEV e de Análise, "Testar conexão").
 - **Resumo** = 8 blocos (um por aba/conexão, com atalho; só Cores e Quadro opcionais),
   **colapsados por padrão** (`BlocoResumo`), sem rolagem interna.
 - **Configurações** = 6 abas (Toggl; Jira: Campos; Jira: Status; Jira: Cores; Jira: Quadro;
@@ -402,8 +400,6 @@ Relatório vive em `features/relatorio/` (espelha `features/gant/`).
   valida **tudo-ou-nada** (`onValidoChange`) e salva **em sequência** (corrida no
   `PUT /api/jira/configuracao`); toast agregado. Abas ficam montadas (`display:none`) após a
   1ª visita. **Gate próprio**: `Administrador` do Toggl **e** Jira com URL+e-mail.
-- **Sobre**: ícone `InfoOutlined` ao lado de `MarcaArgos` (alinhado à linha de base do
-  "ARGOS" via `mb`) abre `SobreDialog` (spinner até a logo carregar e decodificar, 1x por sessão).
 - **Carregamento "tudo ou nada"**: nenhuma tela exibe form/tabela/aviso de validação antes de
   **todas** as suas leituras terminarem (`EsqueletoCarregando`; hooks base expõem `carregado`
   aditivo — **não** mudar o `carregando` inicial `false`, há consumidores de `!carregando`);
@@ -412,42 +408,34 @@ Relatório vive em `features/relatorio/` (espelha `features/gant/`).
 - **Relatório/Gant**: tela de parâmetros (só período) e **Consultar** → `ConsultaDialog` com
   `SeletorOrigemConsulta` (Nenhum/Toggl; confirmação se Toggl) → salva, consulta e mostra a
   view (com "Voltar"). Busca por descrição inline.
-- **Sprint**: lista de sprints + "Selecionar" → abre na hora o modal `ConsultaSprintDialog`
-  (só nome do sprint + seletor "Forçar nova consulta em:", ou Alert de sprint fechado) →
-  se forçar Toggl, segundo diálogo de confirmação → Acompanhamento (`SprintView`, com
-  "Voltar" e **"Planejar"**). **"Informações"** (modal com abas explicando o cálculo) foi
-  **removida por completo** a pedido do usuário (ficou complexa demais) — não recriar.
-- **Planejamento** (visão `'planejamento'` do `App`; "Voltar" retorna ao Acompanhamento):
+- **Sprint**: lista (+ "Planejar") → "Selecionar" → modal `ConsultaSprintDialog` (nome + "Forçar nova
+  consulta em:", ou Alert de fechado; Toggl pede confirmação) → Acompanhamento (`SprintView`): Fechar ·
+  **Atualizar** (reabre o mesmo modal; `versaoConsulta` recarrega; desabilitado se fechado) · Gráficos ·
+  Planejar · Filtros · Voltar. **"Informações"** (modal explicando o cálculo) foi **removida** a pedido — não recriar.
+- **Planejamento** (§2; visões `'planejamento'`/`'planejamentoListagem'` e seção `'planejamento'` do `App`):
   card de colaboradores (colunas com sigla + tooltip — §2) e grid de cartões (Time/Épico:
   nomes via `/times`/`/epicos`, pois não há listagem confiável no Jira; PRE = estimativa
-  DEV/REV do Jira, cache antigo = "–" até "Atualizar"; pessoas = `BadgeSigla`). Só renderiza
-  quando consulta **e** cores do Jira estão prontas. Filtros: busca por código/descrição
+  DEV/REV do Jira; pessoas = `BadgeSigla`). Filtros: busca por código/descrição
   (fora da inversão, como no Sprint), Coluna, Status, Colaborador, Time, Épico e **Prazo**
-  (mesma função da cor), "Inverter", "Limpar" — E entre filtros, OU dentro; resetam ao trocar
-  de sprint.
+  (mesma função da cor), "Inverter", "Limpar" — E entre filtros, OU dentro.
   **Atualizar** pede confirmação. `SprintView` fica **montado e oculto** (preserva filtros).
-  Sem quadro, "Planejar" abre diálogo com atalho para Jira → Conexão.
+  Sem quadro de DEV, qualquer entrada abre diálogo com atalho para Jira → Conexão.
+- **Cores/status final** de Sprint e Planejamento vêm do `useResumoConfiguracao` (sem fetch próprio).
 - **Dados** = baixar/importar `.zip` + lista dos `.json` (`features/dados/arquivosDados.ts`,
   **manual**: §6). Sem usuário do Toggl, o 1º carregamento abre o diálogo de importação.
 - **Responsividade**: **a página nunca rola na horizontal** (só tabelas, em container com
-  `overflow-x`); gutter `px: { xs: 1, sm: 2 }`; dialogs largos `fullScreen` abaixo de `sm`.
+  `overflow-x`; medir com iframe de 360–400px); gutter `px: { xs: 1, sm: 2 }`; dialogs largos `fullScreen` abaixo de `sm`.
 - **Gant — colunas** (`useLargurasColunasGant`): larguras fixas medidas num passe
   `max-content`; sem `ResizeObserver` nem `auto` no passe final (a medição virava ponto fixo).
+- **Teste no Chrome (extensão) com a aba oculta**: timers estrangulados — transições não terminam
+  (diálogos ficam no DOM) e esperas longas em JS "vazam"; uma ação por chamada.
 
 ### Estrutura
 
-```
-src/api/        fetch tipado (http.ts) + tipos espelhando os DTOs/records C# (tipos.ts)
-src/features/   uma pasta por área: auth, usuarios-toggl, jira, configuracoes, resumo,
-                consulta, relatorio (inclui o form de parâmetros), busca, gant, sprint,
-                planejamento, dados
-src/components/ peças reusadas entre features
-src/hooks/      bases genéricas (useRecurso, useRecursoEditavel, useColecaoCrud,
-                useNotificacao, useExpansao), useLarguraColunaRestante, useLargurasColunasGant
-src/utils/      duracao, datas, rotulos, tipografia, consulta, previsaoLiberacao
-theme.ts        tema MUI único, claro — CORES (paleta) e ALTURA_CONTROLE exportados
-App.tsx         menu lateral + seção ativa + estado elevado (consultas concluídas, sprint)
-```
+`src/api` (fetch tipado + `tipos.ts`), `features/<área>`, `components`, `hooks`, `utils`, `theme.ts`, `App.tsx`
+(menu + seção ativa + estado elevado). **Imports**: caminhos relativos, sem alias/extensão, só export nomeado
+(default só `App`), `import type` obrigatório; 1º bloco = imports de uma linha em **ordem crescente de
+comprimento** (pirâmide), depois os multilinha (`@mui/material` por último).
 
 **Componentes compartilhados a preferir antes de duplicar**: `BadgeSigla` (tooltip com nome
 completo; texto `text.primary`; cantos retos, `borderRadius: 1` só em Usuários do Toggl,
@@ -458,7 +446,7 @@ Tooltip; selecionadas **ficam na lista marcadas**, `disableCloseOnSelect`, sem
 `filterSelectedOptions`), `MapaCoresLista`, `ParametrosFormBase`, `SelectAgrupamento`,
 `CabecalhoView`, `MarcaArgos`, `CreditoApp`, `SobreDialog`, `AvisoCache`,
 `EsqueletoCarregando`, `DialogoConfirmacao`, `BotaoComCarregamento`, `IconeAjuda`,
-`ConsultaDialog`/`SeletorOrigemConsulta` (modal de consulta do Sprint/Relatório/Gant), `LinkJira`.
+`ConsultaDialog`/`SeletorOrigemConsulta` (modal de consulta do Sprint/Relatório/Gant/Planejamento), `LinkJira`.
 
 ### Decisões técnicas importantes
 
@@ -490,9 +478,11 @@ Tooltip; selecionadas **ficam na lista marcadas**, `disableCloseOnSelect`, sem
 ### Tema
 
 Tema único claro (`theme.ts`) — o escuro foi **removido por completo**; não reintroduzir.
-`CORES` é a paleta central (nenhum hex solto fora de `theme.ts`); `error` fica o vermelho
+`CORES` é a paleta central (nenhum hex solto fora de `theme.ts`; `CORES_GRAFICO` = categórica dos
+gráficos, ordem fixa validada para daltonismo); `@mui/x-charts` fica fora do chunk `mui` (`vite.config.ts`) e
+só carrega no modal Gráficos (`lazy`); `error` fica o vermelho
 padrão do MUI. **`ALTURA_CONTROLE = 40`**: `size: 'small'` é default de `TextField`/`Select`/
-`Autocomplete`/`FormControl` e `Button`/`ToggleButton` também têm 40px — controles
+`Autocomplete`/`FormControl` e `Button`/`ToggleButton` também têm 40px (`ToggleButtonGroup` sempre `size="small"`; o de "Forçar" é compacto, 30px) — controles
 **nivelados lado a lado**; não sobrescrever `size` em controles de linha (exceções:
 `Button size="small"`, `IconButton` de tabela, swatch de 24px).
 
@@ -531,7 +521,6 @@ por pronta uma mudança.
   projetos sempre relativo à pasta irmã (`..\Argos.Nucleo\...` — caminho que sobe até a raiz quebra no container).
 - **`features/dados/arquivosDados.ts` é lista manual** dos documentos (tipo, explicação, selo de
   token): ao criar/renomear/remover um documento em `CaminhosDados`, atualize-a junto.
-- **Medir overflow mobile** com iframe de 360–400px.
 - **"Gant" (um "t" só)** é a nomenclatura correta neste projeto, mesmo que pedidos digam "Gantt".
 - **Tags reais do Toggl**: `default_workspace_id` de `GET /me` pode vir `null` com token
   válido — `ObterTagsAsync` cai para o 1º de `GET /workspaces`.

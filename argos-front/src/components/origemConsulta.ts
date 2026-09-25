@@ -2,6 +2,7 @@ import type { OrigemConsultaSprint } from '../api/tipos';
 
 export type OrigemConsulta = OrigemConsultaSprint;
 export type OrigemConsultaToggl = Extract<OrigemConsulta, 'nenhum' | 'toggl'>;
+export type OrigemConsultaPlanejamento = Extract<OrigemConsulta, 'nenhum' | 'jira'>;
 
 export const ROTULO_CONSULTAR: Record<OrigemConsulta, string> = {
     nenhum: 'Consultar',

@@ -53,21 +53,25 @@ export interface ResumoConfiguracao {
     jiraConfigurado: boolean;
     jiraUrlDominio: string;
     jiraEmail: string;
-    jiraQuadro: string | null;
+    jiraQuadroDev: string | null;
+    jiraQuadroAnalise: string | null;
     quantidadeCamposJiraDefinidos: number;
     previsaoLiberacaoConfigurada: boolean;
     janelaAlertaPrevisaoLiberacaoDias: number;
     coresStatus: Record<string, string>;
     coresPrioridade: Record<string, string>;
-    coresColuna: Record<string, string>;
+    coresColunaDev: Record<string, string>;
+    coresColunaAnalise: Record<string, string>;
     coresTime: Record<string, string>;
     coresEpico: Record<string, string>;
     quantidadeCoresStatus: number;
     quantidadeCoresPrioridade: number;
-    quantidadeCoresColuna: number;
+    quantidadeCoresColunaDev: number;
+    quantidadeCoresColunaAnalise: number;
     quantidadeCoresTime: number;
     quantidadeCoresEpico: number;
-    colunasOcultasPlanejamento: string[];
+    colunasOcultasDev: string[];
+    colunasOcultasAnalise: string[];
     quantidadeMapeamentosJira: number;
     mapeamentoJira: Record<string, EntradaMapeamentoJiraToggl>;
     usuariosToggl: UsuarioTogglResumo[];
@@ -166,8 +170,11 @@ export function useResumoConfiguracao(): ResumoConfiguracao {
     const administrador = usuariosToggl.find((usuario) => usuario.administrador);
     const jiraUrlDominio = configuracaoJira?.urlDominio ?? '';
     const jiraEmail = configuracaoJira?.email ?? '';
-    const jiraQuadro = configuracaoJira?.quadroId != null
-        ? rotularQuadroJira(configuracaoJira.quadroId, configuracaoJira.quadroNome)
+    const jiraQuadroDev = configuracaoJira?.quadroDevId != null
+        ? rotularQuadroJira(configuracaoJira.quadroDevId, configuracaoJira.quadroDevNome)
+        : null;
+    const jiraQuadroAnalise = configuracaoJira?.quadroAnaliseId != null
+        ? rotularQuadroJira(configuracaoJira.quadroAnaliseId, configuracaoJira.quadroAnaliseNome)
         : null;
     const camposJiraCompletos = jiraCamposCompleto(configuracaoJira);
     const mapeamento = mapeamentoJira?.mapeamento ?? MAPEAMENTO_VAZIO;
@@ -192,21 +199,25 @@ export function useResumoConfiguracao(): ResumoConfiguracao {
         jiraConfigurado: jiraUrlDominio.trim() !== '' && jiraEmail.trim() !== '',
         jiraUrlDominio,
         jiraEmail,
-        jiraQuadro,
+        jiraQuadroDev,
+        jiraQuadroAnalise,
         quantidadeCamposJiraDefinidos: contarCamposJiraDefinidos(configuracaoJira),
         previsaoLiberacaoConfigurada: (configuracaoJira?.campoPrevisaoLiberacaoId ?? '').trim() !== '',
         janelaAlertaPrevisaoLiberacaoDias: configuracaoJira?.janelaAlertaPrevisaoLiberacaoDias || 5,
         coresStatus: coresJira?.coresStatus ?? CORES_VAZIAS,
         coresPrioridade: coresJira?.coresPrioridade ?? CORES_VAZIAS,
-        coresColuna: coresJira?.coresColuna ?? CORES_VAZIAS,
+        coresColunaDev: coresJira?.coresColunaDev ?? CORES_VAZIAS,
+        coresColunaAnalise: coresJira?.coresColunaAnalise ?? CORES_VAZIAS,
         coresTime: coresJira?.coresTime ?? CORES_VAZIAS,
         coresEpico: coresJira?.coresEpico ?? CORES_VAZIAS,
         quantidadeCoresStatus: coresJira ? Object.keys(coresJira.coresStatus).length : 0,
         quantidadeCoresPrioridade: coresJira ? Object.keys(coresJira.coresPrioridade).length : 0,
-        quantidadeCoresColuna: coresJira ? Object.keys(coresJira.coresColuna).length : 0,
+        quantidadeCoresColunaDev: coresJira ? Object.keys(coresJira.coresColunaDev).length : 0,
+        quantidadeCoresColunaAnalise: coresJira ? Object.keys(coresJira.coresColunaAnalise).length : 0,
         quantidadeCoresTime: coresJira ? Object.keys(coresJira.coresTime).length : 0,
         quantidadeCoresEpico: coresJira ? Object.keys(coresJira.coresEpico).length : 0,
-        colunasOcultasPlanejamento: quadroPlanejamento?.colunasOcultas ?? COLUNAS_OCULTAS_VAZIAS,
+        colunasOcultasDev: quadroPlanejamento?.colunasOcultasDev ?? COLUNAS_OCULTAS_VAZIAS,
+        colunasOcultasAnalise: quadroPlanejamento?.colunasOcultasAnalise ?? COLUNAS_OCULTAS_VAZIAS,
         quantidadeMapeamentosJira: Object.keys(mapeamento).length,
         mapeamentoJira: mapeamento,
         usuariosToggl,

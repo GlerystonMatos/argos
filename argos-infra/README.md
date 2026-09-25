@@ -221,20 +221,23 @@ Banco `(default)` → coleção raiz **`dados`** → um documento por nome lógi
 | `TogglConfiguracao` | `{agrupamento,corTag}` |
 | `TogglTags` | `{tags:[{nome,categorias:["Dev"],detalhar}]}` |
 | `RelatorioParametros`, `GantParametros` | `{dataInicio,dataFim}` (`yyyy-MM-dd`) |
-| `Sprints` | `{sprints:[{chave,nome,horasPorDia,margemPercentual,dataInicio,dataFim,fechado}]}` |
-| `JiraConexao` | `{urlDominio,email,apiToken:"enc:…",quadroId,quadroNome}` |
+| `Sprints` | `{sprints:[{chave,nome,horasPorDia,margemPercentual,dataInicio,dataFim,diasNaoUteis,horasDeduzidas:{<chaveToggl>:horas},fechado}]}` |
+| `JiraConexao` | `{urlDominio,email,apiToken:"enc:…",quadroDevId,quadroDevNome,quadroAnaliseId,quadroAnaliseNome}` |
 | `JiraCampos` | `{campos:[{tipo,id,nome}],janelaAlertaPrevisaoLiberacaoDias}` |
 | `JiraStatus` | `{status:[{nome,cor,responsaveis:[],final}]}` |
-| `JiraPrioridades`, `JiraColunas`, `JiraTimes` | `{itens:[{nome,cor}]}` |
+| `JiraPrioridades`, `JiraColunasDev`, `JiraColunasAnalise`, `JiraTimes` | `{itens:[{nome,cor}]}` |
 | `JiraEpicos` | `{itens:[{chave,cor}]}` |
-| `JiraQuadro` | `{colunasOcultas:[]}` |
+| `JiraQuadro` | `{colunasOcultasDev:[],colunasOcultasAnalise:[]}` |
 | `JiraTogglMapeamento` | `{usuarios:[{displayName,chaveToggl?,sigla?,cor?}]}` |
 | `TogglTagsCache` | `{tags:[],atualizadoEm}` |
-| `JiraStatusCache`, `JiraPrioridadesCache`, `JiraColunasCache`, `JiraUsuariosCache` | `{nomes:[],atualizadoEm}` |
+| `JiraStatusCache`, `JiraPrioridadesCache`, `JiraUsuariosCache` | `{nomes:[],atualizadoEm}` |
+| `JiraColunasDevCache`, `JiraColunasAnaliseCache` | `{quadroId,nomes:[],atualizadoEm}` (descartado se o quadro configurado mudar) |
 | `JiraQuadrosCache` | `{quadros:[{id,nome,projeto}],atualizadoEm}` |
 | `RelatorioData`, `GantData`, `SprintData_<chave>` | cache cru do Toggl: `{dataInicio,dataFim,usuarios:[{chave,nomeExibicao,tokenApi,registros:[…]}]}` (registros no formato da API do Toggl, snake_case) |
 | `JiraSprintData_<chave>` | `{issues:[…]}` |
-| `JiraPlanejamentoData_<chave>` | `{quadroId,quadroNome,atualizadoEm,sprintJira,colunas,cartoes}` |
+| `JiraPlanejamentoGlobalDev`, `JiraPlanejamentoGlobalAnalise` | `{quadroId,quadroNome,atualizadoEm,sprintJira,colunas,cartoes,kanban}` (global, independente do sprint do app) |
+
+**Migração de formato**: ao subir e logo após "Importar" (Dados), a API converte documentos e campos de formatos antigos para os atuais — lê o antigo, grava o novo e **apaga o antigo**, para não deixar órfãos no Firestore (`MigracaoDados`, idempotente; falha só vai para o log). Hoje: `JiraConexao.quadroId/quadroNome` → `quadroDev*`, `JiraQuadro.colunasOcultas` → `colunasOcultasDev`, `JiraColunas` → `JiraColunasDev`, `JiraColunasCache` apagado, `JiraPlanejamentoData_<chave>` → o mais recente vira `JiraPlanejamentoGlobalDev` e os demais são apagados, sprint sem `margemPercentual` recebe 30.
 
 **Caches do Toggl divididos**: um documento do Firestore tem no máximo **1 MiB**, e esses caches crescem com o período e o número de usuários. No Firestore o documento principal guarda só `{dataInicio,dataFim,usuarios:[chaves]}`; cada usuário vai para a subcoleção `usuarios/{chave}` e os registros para `blocos/{0000,0001…}`, até 1.000 por bloco. `Ler` remonta o JSON completo; `Gravar` substitui tudo; `Apagar` remove as subcoleções (o Firestore não apaga em cascata). No `.zip` de download cada documento vem **inteiro**, num `.json` só.
 

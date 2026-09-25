@@ -8,9 +8,13 @@ public class ConfiguracaoJira
 
     public string ApiToken { get; set; } = "";
 
-    public long? QuadroId { get; set; }
+    public long? QuadroDevId { get; set; }
 
-    public string QuadroNome { get; set; } = "";
+    public string QuadroDevNome { get; set; } = "";
+
+    public long? QuadroAnaliseId { get; set; }
+
+    public string QuadroAnaliseNome { get; set; } = "";
 
     public string CampoEstimativaDesenvolvimentoId { get; set; } = "";
 
@@ -41,4 +45,8 @@ public class ConfiguracaoJira
     public string CampoPrevisaoLiberacaoNome { get; set; } = "";
 
     public int JanelaAlertaPrevisaoLiberacaoDias { get; set; } = 5;
+
+    public long? QuadroId(TipoQuadroJira quadro) => quadro == TipoQuadroJira.Dev ? QuadroDevId : QuadroAnaliseId;
+
+    public string QuadroNome(TipoQuadroJira quadro) => quadro == TipoQuadroJira.Dev ? QuadroDevNome : QuadroAnaliseNome;
 }

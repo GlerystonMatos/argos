@@ -29,12 +29,14 @@ function GrupoCores({ cores }: GrupoCoresProps): ReactNode {
 interface ListaCoresResumoProps {
     quantidadeCoresStatus: number;
     quantidadeCoresPrioridade: number;
-    quantidadeCoresColuna: number;
+    quantidadeCoresColunaDev: number;
+    quantidadeCoresColunaAnalise: number;
     quantidadeCoresTime: number;
     quantidadeCoresEpico: number;
     coresStatus: Record<string, string>;
     coresPrioridade: Record<string, string>;
-    coresColuna: Record<string, string>;
+    coresColunaDev: Record<string, string>;
+    coresColunaAnalise: Record<string, string>;
     coresTime: Record<string, string>;
     coresEpico: Record<string, string>;
 }
@@ -42,16 +44,18 @@ interface ListaCoresResumoProps {
 export function ListaCoresResumo({
     quantidadeCoresStatus,
     quantidadeCoresPrioridade,
-    quantidadeCoresColuna,
+    quantidadeCoresColunaDev,
+    quantidadeCoresColunaAnalise,
     quantidadeCoresTime,
     quantidadeCoresEpico,
     coresStatus,
     coresPrioridade,
-    coresColuna,
+    coresColunaDev,
+    coresColunaAnalise,
     coresTime,
     coresEpico,
 }: ListaCoresResumoProps): ReactNode {
-    if (Object.keys(coresStatus).length === 0 && Object.keys(coresPrioridade).length === 0 && Object.keys(coresColuna).length === 0 && Object.keys(coresTime).length === 0 && Object.keys(coresEpico).length === 0) return null;
+    if (Object.keys(coresStatus).length === 0 && Object.keys(coresPrioridade).length === 0 && Object.keys(coresColunaDev).length === 0 && Object.keys(coresColunaAnalise).length === 0 && Object.keys(coresTime).length === 0 && Object.keys(coresEpico).length === 0) return null;
 
     return (
         <Stack spacing={1}>
@@ -64,9 +68,13 @@ export function ListaCoresResumo({
             </Typography>
             <GrupoCores cores={coresPrioridade} />
             <Typography variant="body2" color="text.secondary">
-                {quantidadeCoresColuna} {quantidadeCoresColuna === 1 ? 'coluna do quadro' : 'colunas do quadro'} com cor mapeada (opcional)
+                {quantidadeCoresColunaDev} {quantidadeCoresColunaDev === 1 ? 'coluna do quadro de DEV' : 'colunas do quadro de DEV'} com cor mapeada (opcional)
             </Typography>
-            <GrupoCores cores={coresColuna} />
+            <GrupoCores cores={coresColunaDev} />
+            <Typography variant="body2" color="text.secondary">
+                {quantidadeCoresColunaAnalise} {quantidadeCoresColunaAnalise === 1 ? 'coluna do quadro de Análise' : 'colunas do quadro de Análise'} com cor mapeada (opcional)
+            </Typography>
+            <GrupoCores cores={coresColunaAnalise} />
             <Typography variant="body2" color="text.secondary">
                 {quantidadeCoresTime} {quantidadeCoresTime === 1 ? 'time' : 'times'} com cor mapeada (opcional)
             </Typography>

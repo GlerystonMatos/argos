@@ -42,12 +42,15 @@ public static class ServicoSprint
         ConfiguracaoMapeamentoJiraToggl? mapeamento = null,
         ConfiguracaoStatusFinalSprint? statusFinal = null)
     {
-        int diasUteis = ContarDiasUteis(sprint.DataInicio, sprint.DataFim);
+        int diasUteis = Math.Max(0, ContarDiasUteis(sprint.DataInicio, sprint.DataFim) - sprint.DiasNaoUteis);
 
         decimal tempoTotal = sprint.HorasPorDia * diasUteis;
         int margem = (int)Math.Floor(sprint.MargemPercentual / 100m * tempoTotal);
         int tdPorColaborador = (int)Math.Floor(tempoTotal - margem);
-        int ct = tdPorColaborador * usuariosSelecionados.Count;
+        Dictionary<string, int> tdPorUsuario = usuariosSelecionados.ToDictionary(
+            u => u.Chave,
+            u => Math.Max(0, tdPorColaborador - HorasDeduzidasDe(sprint, u.Chave)));
+        int ct = tdPorUsuario.Values.Sum();
 
         List<List<string>> listasCategoria = new() { categorias.Dev, categorias.Rev, categorias.Qa };
 
@@ -80,6 +83,7 @@ public static class ServicoSprint
 
         Dictionary<(string Chave, string NomeExibicao, bool Agrupada), long[]> segundosPorChave = new();
         Dictionary<string, long> segundosRealizadosPorUsuario = new();
+        Dictionary<string, long> segundosPorTag = new(StringComparer.OrdinalIgnoreCase);
 
         foreach ((string nomeExibicao, List<RegistroTempoDto> registros) in consulta.RegistrosPorUsuario)
         {
@@ -93,6 +97,9 @@ public static class ServicoSprint
 
                 segundosRealizadosPorUsuario.TryGetValue(nomeExibicao, out long realizadoAcumulado);
                 segundosRealizadosPorUsuario[nomeExibicao] = realizadoAcumulado + registro.Duracao;
+
+                string tagPrincipal = TagPrincipal(registro);
+                segundosPorTag[tagPrincipal] = segundosPorTag.GetValueOrDefault(tagPrincipal) + registro.Duracao;
 
                 (string chave, bool agrupada) = ChaveAgrupamento(registro, categorias);
 
@@ -269,6 +276,7 @@ public static class ServicoSprint
             sprint.Nome,
             sprint.HorasPorDia,
             diasUteis,
+            sprint.DiasNaoUteis,
             margem,
             sprint.DataInicio,
             sprint.DataFim,
@@ -287,21 +295,36 @@ public static class ServicoSprint
             int concluidasColaborador = concluidasPorColaborador.GetValueOrDefault(usuario.NomeExibicao);
 
             colaboradores.Add(new LinhaColaboradorSprint(
+                usuario.Chave,
                 usuario.NomeExibicao,
                 usuario.Sigla,
                 usuario.Cor,
-                tdPorColaborador,
+                tdPorUsuario[usuario.Chave],
+                HorasDeduzidasDe(sprint, usuario.Chave),
                 segundosRealizados,
                 pendentesColaborador,
                 concluidasColaborador));
         }
 
-        return new ResultadoSprint(cabecalho, tarefasOrdenadas, colaboradores);
+        List<TempoTagSprint> tempoPorTag = segundosPorTag
+            .Where(par => par.Value > 0)
+            .Select(par => new TempoTagSprint(par.Key, par.Value))
+            .OrderByDescending(t => t.Segundos)
+            .ThenBy(t => t.Tag, ComparadorNomes.Instancia)
+            .ToList();
+
+        return new ResultadoSprint(cabecalho, tarefasOrdenadas, colaboradores, tempoPorTag);
     }
+
+    private static int HorasDeduzidasDe(DadosSprint sprint, string chaveUsuario) =>
+        Math.Max(0, sprint.HorasDeduzidas.GetValueOrDefault(chaveUsuario));
+
+    private static string TagPrincipal(RegistroTempoDto registro) =>
+        registro.Tags is { Count: > 0 } ? registro.Tags[0] : "(sem tag)";
 
     private static (string Chave, bool Agrupada) ChaveAgrupamento(RegistroTempoDto registro, ConfiguracaoCategoriasSprint categorias)
     {
-        string tagPrincipal = registro.Tags is { Count: > 0 } ? registro.Tags[0] : "(sem tag)";
+        string tagPrincipal = TagPrincipal(registro);
 
         bool detalharPorDescricao = categorias.Agrupamento switch
         {

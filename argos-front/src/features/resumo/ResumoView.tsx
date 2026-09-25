@@ -60,12 +60,14 @@ export function ResumoView({ resumo, onNavegar }: ResumoViewProps): ReactNode {
         statusFinal,
         jiraUrlDominio,
         jiraEmail,
-        jiraQuadro,
+        jiraQuadroDev,
+        jiraQuadroAnalise,
         nomeAdministrador,
         quantidadeUsuarios,
         coresStatus,
         coresPrioridade,
-        coresColuna,
+        coresColunaDev,
+        coresColunaAnalise,
         coresTime,
         coresEpico,
         configuracaoCompleta,
@@ -75,10 +77,12 @@ export function ResumoView({ resumo, onNavegar }: ResumoViewProps): ReactNode {
         previsaoLiberacaoConfigurada,
         janelaAlertaPrevisaoLiberacaoDias,
         quantidadeCoresPrioridade,
-        quantidadeCoresColuna,
+        quantidadeCoresColunaDev,
+        quantidadeCoresColunaAnalise,
         quantidadeCoresTime,
         quantidadeCoresEpico,
-        colunasOcultasPlanejamento,
+        colunasOcultasDev,
+        colunasOcultasAnalise,
         mapeamentoJira,
         usuariosToggl,
         usuariosTogglSemMapeamento,
@@ -129,11 +133,9 @@ export function ResumoView({ resumo, onNavegar }: ResumoViewProps): ReactNode {
                 <Stack spacing={2}>
                     <Stack direction="row" spacing={1} useFlexGap sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
                         <Typography variant="h6" >Resumo da aplicação</Typography>
-                        {!carregado ? undefined : configuracaoCompleta ? (
-                            <Alert severity="success" sx={{ py: 0 }}>Relatório, Gant e Sprint estão liberados.</Alert>
-                        ) : (
+                        {!carregado || configuracaoCompleta ? undefined : (
                             <Alert severity="warning" sx={{ py: 0 }}>
-                                Complete as configurações obrigatórias para liberar Relatório, Gant e Sprint.
+                                Complete as configurações obrigatórias para liberar Relatório, Gant, Sprint e Planejamento.
                                 {pendenciasObrigatorias.length > 0 ? ` Pendente: ${listarPendencias(pendenciasObrigatorias)}.` : ''}
                             </Alert>
                         )}
@@ -211,8 +213,16 @@ export function ResumoView({ resumo, onNavegar }: ResumoViewProps): ReactNode {
                                             E-mail: {jiraEmail}
                                         </Typography>
                                         <Typography variant="body2" color="text.secondary">
-                                            {jiraQuadro !== null ? `Quadro de DEV: ${jiraQuadro}` : 'Quadro de DEV não configurado.'}
+                                            {jiraQuadroDev !== null ? `Quadro de DEV: ${jiraQuadroDev}` : 'Quadro de DEV não configurado.'}
                                         </Typography>
+                                        <Typography variant="body2" color="text.secondary">
+                                            {jiraQuadroAnalise !== null ? `Quadro de Análise: ${jiraQuadroAnalise}` : 'Quadro de Análise não configurado.'}
+                                        </Typography>
+                                        {jiraQuadroDev === null || jiraQuadroAnalise === null ? (
+                                            <Alert severity="warning" sx={{ py: 0 }}>
+                                                Configure os quadros de DEV e de Análise para usar o Planejamento com os dois quadros.
+                                            </Alert>
+                                        ) : undefined}
                                     </>
                                 ) : (
                                     <Alert severity="warning" sx={{ py: 0 }}>Jira não configurado.</Alert>
@@ -271,12 +281,14 @@ export function ResumoView({ resumo, onNavegar }: ResumoViewProps): ReactNode {
                                 <ListaCoresResumo
                                     quantidadeCoresStatus={quantidadeCoresStatus}
                                     quantidadeCoresPrioridade={quantidadeCoresPrioridade}
-                                    quantidadeCoresColuna={quantidadeCoresColuna}
+                                    quantidadeCoresColunaDev={quantidadeCoresColunaDev}
+                                    quantidadeCoresColunaAnalise={quantidadeCoresColunaAnalise}
                                     quantidadeCoresTime={quantidadeCoresTime}
                                     quantidadeCoresEpico={quantidadeCoresEpico}
                                     coresStatus={coresStatus}
                                     coresPrioridade={coresPrioridade}
-                                    coresColuna={coresColuna}
+                                    coresColunaDev={coresColunaDev}
+                                    coresColunaAnalise={coresColunaAnalise}
                                     coresTime={coresTime}
                                     coresEpico={coresEpico} />
                             </BlocoResumo>
@@ -288,9 +300,14 @@ export function ResumoView({ resumo, onNavegar }: ResumoViewProps): ReactNode {
                                 onAlternarExpandido={() => alternar('jira-quadro')}
                                 acao={<BotaoConfigurar titulo="Jira: Quadro" onClick={() => onNavegar('configuracoes', 'jira-quadro')} />}>
                                 <Typography variant="body2" color="text.secondary">
-                                    {colunasOcultasPlanejamento.length === 0
-                                        ? 'Nenhuma coluna oculta no Planejamento (opcional)'
-                                        : `Colunas ocultas no Planejamento: ${colunasOcultasPlanejamento.join(', ')}`}
+                                    {colunasOcultasDev.length === 0
+                                        ? 'Quadro de DEV: nenhuma coluna oculta no Planejamento (opcional)'
+                                        : `Quadro de DEV — colunas ocultas no Planejamento: ${colunasOcultasDev.join(', ')}`}
+                                </Typography>
+                                <Typography variant="body2" color="text.secondary">
+                                    {colunasOcultasAnalise.length === 0
+                                        ? 'Quadro de Análise: nenhuma coluna oculta no Planejamento (opcional)'
+                                        : `Quadro de Análise — colunas ocultas no Planejamento: ${colunasOcultasAnalise.join(', ')}`}
                                 </Typography>
                             </BlocoResumo>
 

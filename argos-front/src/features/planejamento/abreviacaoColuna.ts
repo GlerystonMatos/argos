@@ -4,7 +4,7 @@ const PALAVRAS_IGNORADAS = new Set([
 ]);
 
 const TAMANHO_PRIMEIRA_PALAVRA = 5;
-const TAMANHO_ULTIMA_PALAVRA = 4;
+const TAMANHO_ULTIMA_PALAVRA = 5;
 
 function normalizar(nome: string): string {
     return nome.normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();

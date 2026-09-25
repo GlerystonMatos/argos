@@ -9,4 +9,5 @@ public sealed record ResultadoPlanejamento(
     List<string> Colunas,
     List<int> TotaisPorColuna,
     List<CartaoPlanejamento> Cartoes,
-    List<ColaboradorPlanejamento> Colaboradores);
+    List<ColaboradorPlanejamento> Colaboradores,
+    bool Kanban);

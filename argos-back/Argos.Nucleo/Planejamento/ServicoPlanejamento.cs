@@ -9,7 +9,7 @@ public static class ServicoPlanejamento
     private const string ColunaSemColuna = "(sem coluna)";
 
     public static List<string> ListarTimes(CaminhosDados caminhos) =>
-        CartoesDosCaches(caminhos, somenteSprintsAbertos: false)
+        CartoesDosCaches(caminhos)
             .Where(cartao => !string.IsNullOrWhiteSpace(cartao.Time))
             .Select(cartao => cartao.Time!.Trim())
             .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -20,7 +20,7 @@ public static class ServicoPlanejamento
     {
         Dictionary<string, string> resumosPorChave = new(StringComparer.OrdinalIgnoreCase);
 
-        foreach (CartaoQuadroJira cartao in CartoesDosCaches(caminhos, somenteSprintsAbertos: true))
+        foreach (CartaoQuadroJira cartao in CartoesDosCaches(caminhos))
         {
             if (string.IsNullOrWhiteSpace(cartao.GrupoChave))
                 continue;
@@ -37,18 +37,11 @@ public static class ServicoPlanejamento
             .ToList();
     }
 
-    private static IEnumerable<CartaoQuadroJira> CartoesDosCaches(CaminhosDados caminhos, bool somenteSprintsAbertos)
+    private static IEnumerable<CartaoQuadroJira> CartoesDosCaches(CaminhosDados caminhos)
     {
-        foreach (DadosSprint sprint in CarregadorSprints.Carregar(caminhos.Sprints))
+        foreach (TipoQuadroJira quadro in TiposQuadroJira.Todos)
         {
-            if (somenteSprintsAbertos && sprint.Fechado)
-                continue;
-
-            DocumentoDados? documentoCache = caminhos.CacheJiraPlanejamento(sprint);
-            if (documentoCache is null)
-                continue;
-
-            CachePlanejamentoJira? cache = CarregadorCachePlanejamentoJira.Ler(documentoCache);
+            CachePlanejamentoJira? cache = CarregadorCachePlanejamentoJira.Ler(caminhos.CacheJiraPlanejamento(quadro));
             if (cache is null)
                 continue;
 
@@ -171,7 +164,8 @@ public static class ServicoPlanejamento
             colunas,
             totaisPorColuna.ToList(),
             cartoesOrdenados,
-            colaboradores);
+            colaboradores,
+            cache.Kanban);
     }
 
     private static PessoaPlanejamento CriarPessoa(
